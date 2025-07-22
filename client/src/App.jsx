@@ -3,8 +3,8 @@ import { io } from 'socket.io-client';
 import './App.css';
 import CryptoJS from 'crypto-js';
 
-const SOCKET_URL = 'http://localhost:5000';
-const UPLOAD_URL = 'http://localhost:5000/upload';
+const SOCKET_URL = 'https://shadow-talk-kryk.onrender.com';
+const UPLOAD_URL = 'https://shadow-talk-kryk.onrender.com/upload';
 
 const HACKER_ALIASES = [
   'ShadowFox', 'NeonSpectre', 'ByteGhost', 'ZeroTrace', 'CipherWolf',
