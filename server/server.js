@@ -34,6 +34,12 @@ app.use('/upload', uploadRouter);
 // Socket.IO connection
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
+  io.emit('userCount', io.engine.clientsCount);
+
+  socket.on('disconnect', () => {
+    console.log('A user disconnected:', socket.id);
+    io.emit('userCount', io.engine.clientsCount);
+  });
 
   // Send current messages to new user
   socket.emit('init', messages);

@@ -15,12 +15,22 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-router.post('/', upload.single('image'), (req, res) => {
+const handleUpload = (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
-  const imageUrl = `/uploads/${req.file.filename}`;
-  res.json({ imageUrl, filename: req.file.filename, uploadedAt: Date.now() });
-});
+  const fileUrl = `/uploads/${req.file.filename}`;
+  res.json({
+    fileUrl,
+    imageUrl: fileUrl,
+    fileName: req.file.originalname,
+    fileType: req.file.mimetype,
+    fileSize: req.file.size,
+    uploadedAt: Date.now()
+  });
+};
+
+router.post('/', upload.single('file'), handleUpload);
+router.post('/image', upload.single('image'), handleUpload);
 
 module.exports = router; 
