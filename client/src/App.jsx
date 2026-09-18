@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { io } from 'socket.io-client';
 import CryptoJS from 'crypto-js';
 import {
@@ -31,7 +31,13 @@ import {
   ArrowRight,
   ArrowLeft,
   HelpCircle,
-  Mail
+  Mail,
+  Play,
+  Pause,
+  Trash2,
+  Ban,
+  Code2,
+  Copy
 } from 'lucide-react';
 import { PRESET_AVATARS } from './avatars';
 import './App.css';
@@ -184,20 +190,25 @@ function getOrCreateIdentity() {
       const parsed = JSON.parse(identity);
       if (parsed.alias) {
         const cleanAlias = parsed.alias.replace(/\s*#\d+$/, '');
-        return {
+        const updated = {
           ...parsed,
+          userId: parsed.userId || ('usr_' + Math.random().toString(36).substring(2, 11)),
           alias: cleanAlias,
           bio: parsed.bio || 'Encrypted mesh developer',
           status: parsed.status || 'Online',
           isVerified: !!parsed.isVerified
         };
+        localStorage.setItem('bbx_identity', JSON.stringify(updated));
+        return updated;
       }
     } catch { /* ignore */ }
   }
   const alias = generateRealUsername();
+  const userId = 'usr_' + Math.random().toString(36).substring(2, 11);
   const color = HACKER_COLORS[Math.floor(Math.random() * HACKER_COLORS.length)];
   const randomAvatar = PRESET_AVATARS[Math.floor(Math.random() * PRESET_AVATARS.length)].svg;
   identity = {
+    userId,
     alias,
     color,
     avatar: randomAvatar,
@@ -232,6 +243,414 @@ function renderAvatar(dmsgAlias, dmsgColor, dmsgAvatar, size = 24) {
   );
 }
 
+function VoiceWaveformPlayer({ audioUrl, isOwn, onDelete }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const audioRef = useRef(null);
+
+  // Generate deterministic speech-like waveform bar heights
+  const bars = useMemo(() => {
+    const count = 28;
+    const result = [];
+    let seed = 42;
+    if (audioUrl) {
+      for (let i = 0; i < audioUrl.length; i++) {
+        seed = (seed + audioUrl.charCodeAt(i) * (i + 1)) % 10000;
+      }
+    }
+    for (let i = 0; i < count; i++) {
+      const envelope = Math.sin((i / (count - 1)) * Math.PI);
+      const pseudo = ((seed * (i + 5) * 9301 + 49297) % 233280) / 233280;
+      const height = Math.max(20, Math.min(100, Math.floor((envelope * 0.55 + pseudo * 0.45) * 80 + 20)));
+      result.push(height);
+    }
+    return result;
+  }, [audioUrl]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleLoadedMetadata = () => {
+      if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+        setDuration(audio.duration);
+      }
+    };
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+      if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration) && duration === 0) {
+        setDuration(audio.duration);
+      }
+    };
+
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    };
+
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('ended', handleEnded);
+
+    return () => {
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('ended', handleEnded);
+    };
+  }, [duration]);
+
+  const togglePlay = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (isPlaying) {
+      audio.pause();
+      setIsPlaying(false);
+    } else {
+      audio.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+    }
+  };
+
+  const handleSeek = (index) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const dur = (duration > 0 && isFinite(duration)) ? duration : (audio.duration && isFinite(audio.duration) ? audio.duration : 0);
+    if (dur > 0) {
+      const progress = index / (bars.length - 1);
+      const newTime = progress * dur;
+      audio.currentTime = newTime;
+      setCurrentTime(newTime);
+    }
+  };
+
+  const progressPercent = (duration > 0 && isFinite(duration)) ? (currentTime / duration) : 0;
+  const currentBarIndex = Math.floor(progressPercent * bars.length);
+
+  const formatSecs = (secs) => {
+    if (!secs || isNaN(secs) || !isFinite(secs)) return '0:00';
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div className={`voice-waveform-player ${isPlaying ? 'playing' : ''} ${isOwn ? 'own' : ''}`}>
+      <audio ref={audioRef} src={audioUrl} preload="metadata" />
+
+      {/* Play/Pause Button */}
+      <button
+        type="button"
+        className="waveform-play-btn"
+        onClick={togglePlay}
+        title={isPlaying ? 'Pause Voice Note' : 'Play Voice Note'}
+      >
+        {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" style={{ marginLeft: 2 }} />}
+      </button>
+
+      {/* Waveform Bars Track */}
+      <div className="waveform-bars-track">
+        <div className="waveform-bars-list" title="Click to seek">
+          {bars.map((h, i) => {
+            const isPassed = i <= currentBarIndex && currentTime > 0;
+            return (
+              <div
+                key={i}
+                className={`waveform-bar ${isPassed ? 'played' : ''} ${isPlaying && isPassed ? 'pulse' : ''}`}
+                style={{ height: `${h}%` }}
+                onClick={() => handleSeek(i)}
+              />
+            );
+          })}
+        </div>
+
+        {/* Timestamp Row */}
+        <div className="waveform-time-row">
+          <span className="waveform-current-time">
+            {formatSecs(currentTime)}
+          </span>
+          <span className="waveform-duration">
+            {duration > 0 && isFinite(duration) ? formatSecs(duration) : (currentTime > 0 ? formatSecs(currentTime) : 'Voice Note')}
+          </span>
+        </div>
+      </div>
+
+      {/* Sender Delete Voice Note Button */}
+      {isOwn && onDelete && (
+        <button
+          type="button"
+          className="waveform-delete-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          title="Delete voice transmission"
+        >
+          <Trash2 size={13} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// --- VS Code Dark+ Syntax Tokenizer ---
+const VSCODE_KEYWORDS = new Set([
+  'if', 'else', 'elif', 'for', 'while', 'do', 'switch', 'case', 'default', 'break', 'continue',
+  'return', 'yield', 'try', 'except', 'catch', 'finally', 'throw', 'raise', 'with', 'as',
+  'import', 'from', 'export', 'pass', 'assert', 'await', 'async', 'def', 'function', 'class',
+  'const', 'let', 'var', 'new', 'typeof', 'instanceof', 'public', 'private', 'protected',
+  'static', 'final', 'void', 'int', 'float', 'double', 'char', 'boolean', 'interface',
+  'implements', 'extends', 'package', 'lambda', 'global', 'nonlocal', 'in', 'is', 'not',
+  'and', 'or', 'SELECT', 'FROM', 'WHERE', 'INSERT', 'UPDATE', 'DELETE'
+]);
+
+const VSCODE_CONSTANTS = new Set([
+  'true', 'false', 'True', 'False', 'null', 'None', 'undefined', 'NaN', 'self', 'this'
+]);
+
+const VSCODE_BUILTINS = new Set([
+  'print', 'len', 'range', 'str', 'dict', 'list', 'set', 'tuple', 'int', 'float', 'bool',
+  'console', 'log', 'error', 'warn', 'info', 'map', 'filter', 'reduce', 'parseInt', 'parseFloat',
+  'Math', 'JSON', 'Promise', 'Array', 'Object', 'String', 'Number', 'Boolean', 'System', 'out', 'println'
+]);
+
+function tokenizeCodeLine(line, lang = '') {
+  if (!line) return [<span key="empty">&nbsp;</span>];
+
+  const tokens = [];
+  let remaining = line;
+  let keyIdx = 0;
+  const isPyOrBash = /^(py|python|sh|bash|shell|yaml|yml)/i.test(lang);
+
+  while (remaining.length > 0) {
+    // 1. Comments
+    if ((isPyOrBash && remaining.startsWith('#')) || remaining.startsWith('//')) {
+      tokens.push(
+        <span key={`c-${keyIdx++}`} className="vs-tok-comment">
+          {remaining}
+        </span>
+      );
+      break;
+    }
+
+    // 2. Strings
+    const strMatch = remaining.match(/^("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)/);
+    if (strMatch) {
+      tokens.push(
+        <span key={`s-${keyIdx++}`} className="vs-tok-string">
+          {strMatch[0]}
+        </span>
+      );
+      remaining = remaining.slice(strMatch[0].length);
+      continue;
+    }
+
+    // 3. Numbers
+    const numMatch = remaining.match(/^(\b\d+(\.\d+)?\b)/);
+    if (numMatch) {
+      tokens.push(
+        <span key={`n-${keyIdx++}`} className="vs-tok-number">
+          {numMatch[0]}
+        </span>
+      );
+      remaining = remaining.slice(numMatch[0].length);
+      continue;
+    }
+
+    // 4. Identifiers / Keywords / Functions / Types
+    const wordMatch = remaining.match(/^([a-zA-Z_$][a-zA-Z0-9_$]*)/);
+    if (wordMatch) {
+      const word = wordMatch[0];
+      const nextChar = remaining.slice(word.length).trimStart()[0];
+
+      if (VSCODE_CONSTANTS.has(word)) {
+        tokens.push(
+          <span key={`w-${keyIdx++}`} className="vs-tok-constant">
+            {word}
+          </span>
+        );
+      } else if (VSCODE_KEYWORDS.has(word)) {
+        tokens.push(
+          <span key={`w-${keyIdx++}`} className="vs-tok-keyword">
+            {word}
+          </span>
+        );
+      } else if (VSCODE_BUILTINS.has(word)) {
+        tokens.push(
+          <span key={`w-${keyIdx++}`} className="vs-tok-builtin">
+            {word}
+          </span>
+        );
+      } else if (nextChar === '(') {
+        tokens.push(
+          <span key={`w-${keyIdx++}`} className="vs-tok-function">
+            {word}
+          </span>
+        );
+      } else if (/^[A-Z]/.test(word)) {
+        tokens.push(
+          <span key={`w-${keyIdx++}`} className="vs-tok-type">
+            {word}
+          </span>
+        );
+      } else {
+        tokens.push(
+          <span key={`w-${keyIdx++}`} className="vs-tok-variable">
+            {word}
+          </span>
+        );
+      }
+
+      remaining = remaining.slice(word.length);
+      continue;
+    }
+
+    // 5. Operators & Punctuation
+    const opMatch = remaining.match(/^([+\-*/%=<>!&|^~?:;,.()\[\]{}]+)/);
+    if (opMatch) {
+      tokens.push(
+        <span key={`o-${keyIdx++}`} className="vs-tok-operator">
+          {opMatch[0]}
+        </span>
+      );
+      remaining = remaining.slice(opMatch[0].length);
+      continue;
+    }
+
+    // 6. Whitespace
+    const wsMatch = remaining.match(/^(\s+)/);
+    if (wsMatch) {
+      tokens.push(<span key={`ws-${keyIdx++}`}>{wsMatch[0]}</span>);
+      remaining = remaining.slice(wsMatch[0].length);
+      continue;
+    }
+
+    tokens.push(<span key={`ch-${keyIdx++}`}>{remaining[0]}</span>);
+    remaining = remaining.slice(1);
+  }
+
+  return tokens;
+}
+
+function CodeBlock({ code, language = '' }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async (e) => {
+    e.stopPropagation();
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(code);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = code;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.warn('Copy failed:', err);
+    }
+  };
+
+  const cleanLang = (language || 'code').trim().toUpperCase();
+  const lines = (code || '').split(/\r?\n/);
+
+  return (
+    <div className="chat-code-block vscode-editor-container">
+      <div className="code-block-header vscode-editor-header">
+        <div className="vscode-window-controls">
+          <span className="window-dot red" />
+          <span className="window-dot yellow" />
+          <span className="window-dot green" />
+          <div className="code-lang-badge">
+            <Code2 size={12} />
+            <span>{cleanLang}</span>
+          </div>
+        </div>
+        <button
+          type="button"
+          className={`code-copy-btn ${copied ? 'copied' : ''}`}
+          onClick={handleCopy}
+          title="Copy Code to Clipboard"
+        >
+          {copied ? (
+            <>
+              <Check size={12} />
+              <span>Copied!</span>
+            </>
+          ) : (
+            <>
+              <Copy size={12} />
+              <span>Copy</span>
+            </>
+          )}
+        </button>
+      </div>
+
+      <div className="vscode-editor-body">
+        <div className="vscode-gutter" aria-hidden="true">
+          {lines.map((_, i) => (
+            <div key={i} className="vscode-gutter-line-num">
+              {i + 1}
+            </div>
+          ))}
+        </div>
+        <pre className="code-content-pre vscode-code-pre">
+          <code>
+            {lines.map((line, idx) => (
+              <div key={idx} className="vscode-line-row">
+                {tokenizeCodeLine(line, cleanLang)}
+              </div>
+            ))}
+          </code>
+        </pre>
+      </div>
+    </div>
+  );
+}
+
+function TypewriterMessage({ text, isJames, msgId, animatedIdsSet, onFinishAnimation, renderFn }) {
+  const isAlreadyAnimated = !isJames || (animatedIdsSet && animatedIdsSet.has(msgId));
+  const [displayedLength, setDisplayedLength] = useState(() => isAlreadyAnimated ? text.length : 0);
+
+  useEffect(() => {
+    if (isAlreadyAnimated) {
+      setDisplayedLength(text.length);
+      return;
+    }
+
+    let current = 0;
+    // Fast, smooth step calculation
+    const step = Math.max(2, Math.floor(text.length / 32));
+    const interval = setInterval(() => {
+      current += step;
+      if (current >= text.length) {
+        current = text.length;
+        clearInterval(interval);
+        if (onFinishAnimation && msgId) {
+          onFinishAnimation(msgId);
+        }
+      }
+      setDisplayedLength(current);
+    }, 18);
+
+    return () => clearInterval(interval);
+  }, [text, msgId, isAlreadyAnimated]);
+
+  const visibleText = displayedLength >= text.length ? text : text.slice(0, displayedLength);
+  const isStillTyping = !isAlreadyAnimated && displayedLength < text.length;
+
+  return (
+    <div className={`typewriter-container ${isStillTyping ? 'typing-in-progress' : ''}`}>
+      {renderFn(visibleText)}
+      {isStillTyping && <span className="typewriter-cursor">▎</span>}
+    </div>
+  );
+}
+
 function App() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -244,12 +663,26 @@ function App() {
   // File Download & Permission States
   const [downloadingFileId, setDownloadingFileId] = useState(null);
 
+  // Dynamic James Activity Status & Typewriter Animation Tracking
+  const [jamesStatus, setJamesStatus] = useState(null); // { alias, status: 'thinking'|'searching'|'typing', text }
+  const [animatedMessageIds, setAnimatedMessageIds] = useState(() => new Set());
+  const animatedMessageIdsRef = useRef(new Set());
+
+  const markMessageAnimated = (id) => {
+    animatedMessageIdsRef.current.add(id);
+    setAnimatedMessageIds(new Set(animatedMessageIdsRef.current));
+  };
+
+  // Expanded Sources Popover State
+  const [expandedSourcesMsgId, setExpandedSourcesMsgId] = useState(null);
+
   // @ Mention Autocomplete States
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
 
   // Selected User Profile Popup Modal State
   const [selectedUserProfile, setSelectedUserProfile] = useState(null);
+  const [userProfilesMap, setUserProfilesMap] = useState({});
 
   // --- Real Email 4-Digit OTP Verification States ---
   const [showOtpModal, setShowOtpModal] = useState(false);
@@ -273,6 +706,17 @@ function App() {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recordingTimerRef = useRef(null);
+  const audioCtxRef = useRef(null);
+  const analyserRef = useRef(null);
+  const audioCanvasRef = useRef(null);
+
+  const cleanupAudioVisualizer = () => {
+    if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
+      audioCtxRef.current.close().catch(() => { });
+    }
+    audioCtxRef.current = null;
+    analyserRef.current = null;
+  };
 
   const [identity, setIdentity] = useState(getOrCreateIdentity());
   const [passphrase, setPassphrase] = useState(localStorage.getItem('bbx_passphrase') || '');
@@ -284,6 +728,7 @@ function App() {
   const [showIdentityModal, setShowIdentityModal] = useState(false);
   const [showVaultModal, setShowVaultModal] = useState(false);
   const [lightboxImage, setLightboxImage] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   const [hoveredMsgId, setHoveredMsgId] = useState(null);
   const [activeReactionMsgId, setActiveReactionMsgId] = useState(null);
@@ -306,24 +751,58 @@ function App() {
   }, [identity]);
 
   function encryptMsg(obj) {
-    if (!passphrase) return obj;
+    if (!passphrase) {
+      return {
+        ...obj,
+        userId: obj.userId || identity.userId
+      };
+    }
     const payload = JSON.stringify(obj);
-    return { encrypted: CryptoJS.AES.encrypt(payload, passphrase).toString() };
+    return {
+      encrypted: CryptoJS.AES.encrypt(payload, passphrase).toString(),
+      fileUrl: obj.fileUrl || null,
+      userId: obj.userId || identity.userId,
+      alias: obj.alias || identity.alias
+    };
   }
 
   function decryptMsg(msg) {
-    if (!msg.encrypted) return msg;
+    if (!msg.encrypted) return { ...msg, userId: msg.userId, sources: msg.sources || [] };
     if (!passphrase) {
-      return { text: '🔒 Encrypted Payload (Enter Passphrase in Vault)', alias: msg.alias || 'Encrypted', color: '#ffaa00', timestamp: msg.timestamp };
+      return {
+        text: '🔒 Encrypted Payload (Enter Passphrase in Vault)',
+        userId: msg.userId,
+        alias: msg.alias || 'Encrypted',
+        color: '#ffaa00',
+        timestamp: msg.timestamp,
+        sources: msg.sources || []
+      };
     }
     try {
       const bytes = CryptoJS.AES.decrypt(msg.encrypted, passphrase);
       const decryptedStr = bytes.toString(CryptoJS.enc.Utf8);
       if (!decryptedStr) throw new Error('Bad key');
       const decrypted = JSON.parse(decryptedStr);
-      return { ...decrypted, id: msg.id, timestamp: msg.timestamp, reactions: msg.reactions };
+      return {
+        ...decrypted,
+        userId: decrypted.userId || msg.userId,
+        id: msg.id,
+        timestamp: msg.timestamp,
+        reactions: msg.reactions,
+        fileUrl: decrypted.fileUrl || msg.fileUrl,
+        isFileDeleted: msg.isFileDeleted !== undefined ? msg.isFileDeleted : decrypted.isFileDeleted,
+        deletedType: msg.deletedType || decrypted.deletedType,
+        allowDownload: msg.allowDownload !== undefined ? msg.allowDownload : decrypted.allowDownload,
+        sources: msg.sources || decrypted.sources || []
+      };
     } catch {
-      return { text: '⚠️ [Decryption Failed - Invalid Passphrase Key]', alias: msg.alias || 'Unknown', color: '#ff0055', timestamp: msg.timestamp };
+      return {
+        text: '⚠️ [Decryption Failed - Invalid Passphrase Key]',
+        userId: msg.userId,
+        alias: msg.alias || 'Unknown',
+        color: '#ff0055',
+        timestamp: msg.timestamp
+      };
     }
   }
 
@@ -339,18 +818,117 @@ function App() {
     }
   };
 
+  const identityRef = useRef(identity);
+  useEffect(() => {
+    identityRef.current = identity;
+  }, [identity]);
+
   useEffect(() => {
     socketRef.current = io(SOCKET_URL);
 
     socketRef.current.on('connect', () => {
-      socketRef.current.emit('userJoined', { alias: identity.alias, isVerified: identity.isVerified });
+      socketRef.current.emit('userJoined', {
+        alias: identityRef.current.alias,
+        userId: identityRef.current.userId,
+        color: identityRef.current.color,
+        avatar: identityRef.current.avatar,
+        bio: identityRef.current.bio,
+        status: identityRef.current.status,
+        isVerified: identityRef.current.isVerified
+      });
     });
 
-    socketRef.current.on('init', (msgs) => setMessages(msgs));
+    socketRef.current.on('profilesSync', (profiles) => {
+      if (profiles && typeof profiles === 'object') {
+        setUserProfilesMap((prev) => ({ ...prev, ...profiles }));
+      }
+    });
+
+    socketRef.current.on('userProfileUpdated', (profile) => {
+      if (profile) {
+        setUserProfilesMap((prev) => {
+          const next = { ...prev };
+          if (profile.userId) next[profile.userId] = profile;
+          if (profile.alias) next[profile.alias.toLowerCase()] = profile;
+          return next;
+        });
+      }
+    });
+
+    socketRef.current.on('init', (msgs) => {
+      setMessages(msgs);
+      if (Array.isArray(msgs)) {
+        msgs.forEach((m) => {
+          if (m && m.id) {
+            animatedMessageIdsRef.current.add(m.id);
+          }
+        });
+        setAnimatedMessageIds(new Set(animatedMessageIdsRef.current));
+
+        setUserProfilesMap((prev) => {
+          const updated = { ...prev };
+          msgs.forEach((m) => {
+            try {
+              const dmsg = decryptMsg(m);
+              if (dmsg && (dmsg.alias || dmsg.userId) && (dmsg.bio !== undefined || dmsg.status)) {
+                const key = (dmsg.alias || '').toLowerCase();
+                const uId = dmsg.userId;
+                const p = {
+                  alias: dmsg.alias,
+                  userId: uId,
+                  color: dmsg.color,
+                  avatar: dmsg.avatar,
+                  bio: dmsg.bio,
+                  status: dmsg.status,
+                  isVerified: dmsg.isVerified
+                };
+                if (key) updated[key] = { ...(updated[key] || {}), ...p };
+                if (uId) updated[uId] = { ...(updated[uId] || {}), ...p };
+              }
+            } catch {}
+          });
+          return updated;
+        });
+      }
+    });
+
     socketRef.current.on('userCount', (count) => setOnlineCount(count || 1));
+
+    socketRef.current.on('jamesStatus', (payload) => {
+      if (payload && payload.status && payload.status !== 'idle') {
+        setJamesStatus(payload);
+      } else {
+        setJamesStatus(null);
+      }
+    });
 
     socketRef.current.on('message', (msg) => {
       setMessages((prev) => [...prev, msg]);
+      if (msg.alias === 'James' || msg.userId === 'bot_james') {
+        setJamesStatus(null);
+      }
+      try {
+        const dmsg = decryptMsg(msg);
+        if (dmsg && (dmsg.alias || dmsg.userId) && (dmsg.bio !== undefined || dmsg.status)) {
+          const key = (dmsg.alias || '').toLowerCase();
+          const uId = dmsg.userId;
+          const p = {
+            alias: dmsg.alias,
+            userId: uId,
+            color: dmsg.color,
+            avatar: dmsg.avatar,
+            bio: dmsg.bio,
+            status: dmsg.status,
+            isVerified: dmsg.isVerified
+          };
+          setUserProfilesMap((prev) => {
+            const next = { ...prev };
+            if (key) next[key] = { ...(next[key] || {}), ...p };
+            if (uId) next[uId] = { ...(next[uId] || {}), ...p };
+            return next;
+          });
+        }
+      } catch {}
     });
 
     socketRef.current.on('reaction', ({ messageId, reactions }) => {
@@ -360,6 +938,16 @@ function App() {
     // Real-time sync for file download permissions
     socketRef.current.on('fileDownloadToggled', ({ messageId, allowDownload }) => {
       setMessages(prev => prev.map(m => m.id === messageId ? { ...m, allowDownload } : m));
+    });
+
+    // Real-time sync for message deletion across all clients
+    socketRef.current.on('messageDeleted', ({ messageId }) => {
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    });
+
+    // Real-time sync for file attachment deletion across all clients
+    socketRef.current.on('fileAttachmentDeleted', ({ messageId, updatedMessage }) => {
+      setMessages((prev) => prev.map((m) => (m.id === messageId ? updatedMessage : m)));
     });
 
     socketRef.current.on('typing', ({ alias }) => {
@@ -372,8 +960,48 @@ function App() {
       }, 2500);
     });
 
-    return () => socketRef.current.disconnect();
-  }, [passphrase, identity]);
+    // Notify server immediately if user closes browser window or tab
+    const handleBeforeUnload = () => {
+      if (socketRef.current?.connected && identityRef.current?.alias) {
+        socketRef.current.emit('userLeaving', {
+          userId: identityRef.current.userId,
+          alias: identityRef.current.alias
+        });
+        socketRef.current.disconnect();
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      socketRef.current?.disconnect();
+    };
+  }, []);
+
+  // Synchronize identity updates (alias, bio, status, avatar, color, verification) with server in real time
+  useEffect(() => {
+    if (socketRef.current?.connected && identity?.alias) {
+      const payload = {
+        alias: identity.alias,
+        userId: identity.userId,
+        color: identity.color,
+        avatar: identity.avatar,
+        bio: identity.bio,
+        status: identity.status,
+        isVerified: identity.isVerified
+      };
+      socketRef.current.emit('userJoined', payload);
+      socketRef.current.emit('userProfileUpdate', payload);
+    }
+  }, [
+    identity.alias,
+    identity.userId,
+    identity.color,
+    identity.avatar,
+    identity.bio,
+    identity.status,
+    identity.isVerified
+  ]);
 
   useEffect(() => {
     const viewport = messagesEndRef.current?.parentNode;
@@ -390,11 +1018,174 @@ function App() {
     if (atBottom) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, atBottom]);
+  }, [messages, jamesStatus, atBottom]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  // Mobile Visual Viewport & Dial Pad / Virtual Keyboard Adaptation
+  useEffect(() => {
+    const handleViewportChange = () => {
+      if (window.visualViewport) {
+        const height = window.visualViewport.height;
+        document.documentElement.style.setProperty('--visual-viewport-height', `${height}px`);
+        const kbHeight = Math.max(0, window.innerHeight - height);
+        document.documentElement.style.setProperty('--keyboard-height', `${kbHeight}px`);
+        if (kbHeight > 80) {
+          setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+          }, 80);
+        }
+      } else {
+        document.documentElement.style.setProperty('--visual-viewport-height', `${window.innerHeight}px`);
+      }
+    };
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleViewportChange);
+      window.visualViewport.addEventListener('scroll', handleViewportChange);
+    }
+    window.addEventListener('resize', handleViewportChange);
+    handleViewportChange();
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleViewportChange);
+        window.visualViewport.removeEventListener('scroll', handleViewportChange);
+      }
+      window.removeEventListener('resize', handleViewportChange);
+    };
+  }, []);
+
+  const handleInputFocus = () => {
+    // When virtual keyboard opens on mobile, automatically scroll messages and keep composer pinned
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 120);
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 300);
+  };
+
+  // Real-time Audio Pitch & Waveform Live Visualizer Animation Loop
+  useEffect(() => {
+    if (!isRecording) return;
+
+    let animId;
+    let barHeights = [];
+
+    const render = () => {
+      const canvas = audioCanvasRef.current;
+      const analyser = analyserRef.current;
+
+      if (canvas && analyser) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          const dpr = window.devicePixelRatio || 1;
+          const rect = canvas.getBoundingClientRect();
+          const w = rect.width;
+          const h = rect.height;
+
+          if (w > 0 && h > 0) {
+            if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
+              canvas.width = Math.floor(w * dpr);
+              canvas.height = Math.floor(h * dpr);
+            }
+
+            ctx.save();
+            ctx.scale(dpr, dpr);
+            ctx.clearRect(0, 0, w, h);
+
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            analyser.getByteFrequencyData(dataArray);
+
+            // Compute overall volume
+            let totalVol = 0;
+            for (let i = 0; i < bufferLength; i++) {
+              totalVol += dataArray[i];
+            }
+            const avgVol = totalVol / (bufferLength * 255); // 0 to 1
+
+            // Dynamic number of bars according to width
+            const barWidth = 3;
+            const minGap = 3;
+            const numBars = Math.max(12, Math.min(32, Math.floor(w / (barWidth + minGap))));
+            const gap = (w - (numBars * barWidth)) / Math.max(1, numBars - 1);
+            const minH = 3.5;
+            const maxH = Math.max(minH, h - 4);
+
+            if (barHeights.length !== numBars) {
+              barHeights = new Array(numBars).fill(minH);
+            }
+
+            // Frequency range for speech: bins 1 to 40
+            const minBin = 1;
+            const maxBin = Math.min(bufferLength - 1, 40);
+
+            for (let i = 0; i < numBars; i++) {
+              // Musical pitch distribution from low pitch (left) to high pitch (right)
+              const binIdx = Math.floor(minBin + Math.pow(i / (numBars - 1), 1.3) * (maxBin - minBin));
+              const freqVal = (dataArray[binIdx] || 0) / 255;
+
+              // Voice energy combines specific pitch frequency (75%) and overall volume (25%)
+              const energy = (freqVal * 0.75) + (avgVol * 0.25);
+              const targetH = Math.max(minH, energy * maxH);
+
+              // Snappy attack, smooth gravity decay
+              if (targetH > barHeights[i]) {
+                barHeights[i] = targetH;
+              } else {
+                barHeights[i] = Math.max(minH, barHeights[i] * 0.88 - 0.35);
+              }
+
+              const currentH = barHeights[i];
+              const x = i * (barWidth + gap);
+              const y = (h - currentH) / 2; // Vertically centered
+
+              const isActive = currentH > minH + 2;
+              const grad = ctx.createLinearGradient(0, y, 0, y + currentH);
+              if (isActive) {
+                grad.addColorStop(0, '#ff0055');
+                grad.addColorStop(0.5, '#ff3388');
+                grad.addColorStop(1, '#ff0055');
+                ctx.shadowColor = 'rgba(255, 0, 85, 0.6)';
+                ctx.shadowBlur = 5;
+              } else {
+                grad.addColorStop(0, 'rgba(255, 0, 85, 0.45)');
+                grad.addColorStop(1, 'rgba(255, 0, 85, 0.3)');
+                ctx.shadowBlur = 0;
+              }
+
+              ctx.fillStyle = grad;
+              const radius = Math.min(barWidth / 2, currentH / 2);
+              ctx.beginPath();
+              if (ctx.roundRect) {
+                ctx.roundRect(x, y, barWidth, currentH, radius);
+              } else {
+                ctx.rect(x, y, barWidth, currentH);
+              }
+              ctx.fill();
+            }
+
+            ctx.restore();
+          }
+        }
+      }
+
+      animId = requestAnimationFrame(render);
+    };
+
+    animId = requestAnimationFrame(render);
+
+    return () => {
+      if (animId) cancelAnimationFrame(animId);
+    };
+  }, [isRecording]);
 
   // --- Real Email 4-Digit OTP Verification Logic ---
   const startEmailVerification = () => {
@@ -621,10 +1412,89 @@ function App() {
     setTimeout(() => setDownloadingFileId(null), 1000);
   };
 
+  // Trigger Delete Confirm Modal for file or voice attachment (Sender only)
+  const promptDeleteFile = (msgId, fileUrl, isVoice = false, fileName = '') => {
+    setHoveredMsgId(null);
+    setActiveReactionMsgId(null);
+    setDeleteConfirm({
+      type: isVoice ? 'voice' : 'file',
+      messageId: msgId,
+      fileUrl: fileUrl || null,
+      fileName: fileName || (isVoice ? 'Voice Transmission' : 'File Attachment')
+    });
+  };
+
+  // Execute Confirmed Deletion of file / voice transmission
+  const executeDeleteConfirm = () => {
+    if (!deleteConfirm) return;
+    const { type, messageId, fileUrl } = deleteConfirm;
+
+    if (navigator.vibrate) {
+      try { navigator.vibrate(35); } catch { }
+    }
+
+    const targetMsg = messages.find(m => m.id === messageId);
+    let newEncryptedPayload = null;
+    if (targetMsg && targetMsg.encrypted && passphrase) {
+      try {
+        const bytes = CryptoJS.AES.decrypt(targetMsg.encrypted, passphrase);
+        const decryptedStr = bytes.toString(CryptoJS.enc.Utf8);
+        if (decryptedStr) {
+          const parsed = JSON.parse(decryptedStr);
+          parsed.fileUrl = null;
+          parsed.imageUrl = null;
+          parsed.videoUrl = null;
+          parsed.audioUrl = null;
+          parsed.fileName = null;
+          parsed.fileType = null;
+          parsed.fileSize = null;
+          parsed.isVoiceNote = false;
+          parsed.allowDownload = undefined;
+          parsed.isFileDeleted = true;
+          parsed.deletedType = type;
+          newEncryptedPayload = CryptoJS.AES.encrypt(JSON.stringify(parsed), passphrase).toString();
+        }
+      } catch (e) {
+        console.error('Failed to re-encrypt after file deletion:', e);
+      }
+    }
+
+    if (socketRef.current) {
+      socketRef.current.emit('deleteFileAttachment', {
+        messageId,
+        fileUrl,
+        isVoice: type === 'voice',
+        newEncryptedPayload
+      });
+    }
+
+    // Optimistically update message in state to show placeholder
+    setMessages(prev => prev.map(m => {
+      if (m.id !== messageId) return m;
+      return {
+        ...m,
+        isFileDeleted: true,
+        deletedType: type,
+        fileUrl: null,
+        imageUrl: null,
+        videoUrl: null,
+        audioUrl: null,
+        fileName: null,
+        fileType: null,
+        fileSize: null,
+        allowDownload: undefined,
+        ...(newEncryptedPayload ? { encrypted: newEncryptedPayload } : {})
+      };
+    }));
+
+    setDeleteConfirm(null);
+  };
+
   // Compute mentionable users for @ autocomplete
   const mentionCandidates = Array.from(
     new Set([
       'James',
+      ...Object.values(userProfilesMap).map(p => p?.alias).filter(Boolean),
       ...messages.map(m => m.alias).filter(Boolean),
       identity.alias
     ])
@@ -697,6 +1567,27 @@ function App() {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // Initialize Web Audio API Analyser for real-time live pitch & volume detection
+      try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          const audioCtx = new AudioContextClass();
+          if (audioCtx.state === 'suspended') {
+            await audioCtx.resume();
+          }
+          audioCtxRef.current = audioCtx;
+          const source = audioCtx.createMediaStreamSource(stream);
+          const analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 256;
+          analyser.smoothingTimeConstant = 0.72;
+          source.connect(analyser);
+          analyserRef.current = analyser;
+        }
+      } catch (audioErr) {
+        console.warn('AudioContext visualizer init failed:', audioErr);
+      }
+
       mediaRecorderRef.current = new MediaRecorder(stream);
       audioChunksRef.current = [];
 
@@ -705,6 +1596,7 @@ function App() {
       };
 
       mediaRecorderRef.current.onstop = async () => {
+        cleanupAudioVisualizer();
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const audioFile = new File([audioBlob], `voice-note-${Date.now()}.webm`, { type: 'audio/webm' });
 
@@ -737,13 +1629,18 @@ function App() {
           fileUrl: audioUrl,
           fileType: 'audio/webm',
           fileName: 'Voice Transmission.webm',
+          isVoiceNote: true,
+          userId: identity.userId,
           alias: identity.alias,
           color: identity.color,
           avatar: identity.avatar,
+          bio: identity.bio || '',
+          status: identity.status || 'Online',
           isVerified: identity.isVerified,
-          allowDownload: true,
+          allowDownload: false,
           replyTo: replyingTo ? {
             id: replyingTo.id,
+            userId: replyingTo.userId,
             alias: replyingTo.alias,
             color: replyingTo.color,
             text: replyingTo.text,
@@ -771,6 +1668,7 @@ function App() {
     if (mediaRecorderRef.current && isRecording) {
       clearInterval(recordingTimerRef.current);
       setIsRecording(false);
+      cleanupAudioVisualizer();
       mediaRecorderRef.current.stop();
     }
   };
@@ -779,6 +1677,7 @@ function App() {
     if (mediaRecorderRef.current && isRecording) {
       clearInterval(recordingTimerRef.current);
       setIsRecording(false);
+      cleanupAudioVisualizer();
       mediaRecorderRef.current.onstop = null;
       if (mediaRecorderRef.current.stream) {
         mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
@@ -841,13 +1740,17 @@ function App() {
         fileName: finalFileName,
         fileType: finalFileType,
         fileSize: finalFileSize,
+        userId: identity.userId,
         alias: identity.alias,
         color: identity.color,
         avatar: identity.avatar,
+        bio: identity.bio || '',
+        status: identity.status || 'Online',
         isVerified: identity.isVerified,
         allowDownload: true,
         replyTo: replyingTo ? {
           id: replyingTo.id,
+          userId: replyingTo.userId,
           alias: replyingTo.alias,
           color: replyingTo.color,
           text: replyingTo.text,
@@ -865,12 +1768,16 @@ function App() {
     if (input.trim()) {
       socketRef.current.emit('message', encryptMsg({
         text: input.trim(),
+        userId: identity.userId,
         alias: identity.alias,
         color: identity.color,
         avatar: identity.avatar,
+        bio: identity.bio || '',
+        status: identity.status || 'Online',
         isVerified: identity.isVerified,
         replyTo: replyingTo ? {
           id: replyingTo.id,
+          userId: replyingTo.userId,
           alias: replyingTo.alias,
           color: replyingTo.color,
           text: replyingTo.text,
@@ -910,60 +1817,313 @@ function App() {
   const startReply = (msg, dmsg, msgId) => {
     setReplyingTo({
       id: msgId,
-      alias: dmsg.alias,
-      color: dmsg.color,
-      text: dmsg.text,
-      fileName: dmsg.fileName,
-      fileType: dmsg.fileType
+      userId: dmsg?.userId || null,
+      alias: dmsg?.alias || 'User',
+      color: dmsg?.color,
+      text: dmsg?.text,
+      fileName: dmsg?.fileName,
+      fileType: dmsg?.fileType
     });
     setTimeout(() => textareaRef.current?.focus(), 50);
   };
 
-  const openUserProfile = (alias, color, avatar, isVerified, bio, status) => {
+  const getUserProfile = (alias, fallbackColor, fallbackAvatar, fallbackVerified, fallbackBio, fallbackStatus, userId) => {
+    if (!alias && !userId) return null;
+    const cleanAlias = (alias || '').replace(/^@/, '');
+    const key = cleanAlias.toLowerCase();
+
+    // 1. If own alias or userId, always return current live identity
+    const isSelf = Boolean(
+      (userId && identity?.userId && userId === identity.userId) ||
+      (cleanAlias && identity?.alias && cleanAlias.toLowerCase() === identity.alias.toLowerCase())
+    );
+    if (isSelf) {
+      return {
+        alias: identity.alias,
+        userId: identity.userId,
+        color: identity.color || '#00f3ff',
+        avatar: identity.avatar !== undefined ? identity.avatar : null,
+        isVerified: !!identity.isVerified,
+        bio: identity.bio || 'Encrypted mesh developer',
+        status: identity.status || 'Online',
+        isOnline: true
+      };
+    }
+
+    // 2. If James Bot
+    if (key === 'james' || userId === 'bot_james') {
+      return {
+        alias: 'James',
+        userId: 'bot_james',
+        color: '#00f3ff',
+        avatar: null,
+        isVerified: true,
+        bio: "Full-stack engineer & verified community member. Always around!",
+        status: 'Online',
+        isOnline: true
+      };
+    }
+
+    // 3. Lookup in synchronized userProfilesMap by userId, alias, or previousAliases
+    let cached = null;
+    if (userId && userProfilesMap[userId]) {
+      cached = userProfilesMap[userId];
+    } else if (key && userProfilesMap[key]) {
+      cached = userProfilesMap[key];
+    } else {
+      for (const p of Object.values(userProfilesMap)) {
+        if (!p) continue;
+        if (userId && p.userId === userId) {
+          cached = p;
+          break;
+        }
+        if (p.alias && p.alias.toLowerCase() === key) {
+          cached = p;
+          break;
+        }
+        if (p.previousAliases && p.previousAliases.some(a => a.toLowerCase() === key)) {
+          cached = p;
+          break;
+        }
+      }
+    }
+
+    const isOnline = cached?.isOnline !== undefined ? Boolean(cached.isOnline) : (cached?.status ? cached.status !== 'Offline' : false);
+    const resolvedStatus = cached?.status ? cached.status : (isOnline ? (fallbackStatus || 'Online') : 'Offline');
+    const resolvedColor = cached?.color || fallbackColor || '#00f3ff';
+    const resolvedAvatar = cached?.avatar !== undefined ? cached.avatar : (fallbackAvatar || null);
+    const resolvedVerified = cached?.isVerified !== undefined ? cached.isVerified : !!fallbackVerified;
+    const resolvedBio = cached?.bio || fallbackBio || 'Encrypted mesh user';
+
+    return {
+      alias: cached?.alias || cleanAlias,
+      userId: cached?.userId || userId,
+      color: resolvedColor,
+      avatar: resolvedAvatar,
+      isVerified: resolvedVerified,
+      bio: resolvedBio,
+      status: resolvedStatus,
+      isOnline
+    };
+  };
+
+  const openUserProfile = (alias, color, avatar, isVerified, bio, status, userId) => {
+    if (!alias && !userId) return;
+    const cleanAlias = (alias || '').replace(/^@/, '');
+    const profile = getUserProfile(cleanAlias, color, avatar, isVerified, bio, status, userId);
     setSelectedUserProfile({
-      alias: alias || 'Anonymous',
-      color: color || '#00f3ff',
-      avatar: avatar || null,
-      isVerified: !!isVerified || alias === 'James',
-      bio: alias === 'James' ? 'Full-stack engineer & tech enthusiast. Always around!' : (bio || 'Encrypted mesh user'),
-      status: status || 'Online'
+      ...profile,
+      clickedAlias: cleanAlias
     });
+  };
+
+  const renderMarkdownTable = (tableText, key) => {
+    if (!tableText) return null;
+    const lines = tableText.trim().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (lines.length < 2) return null;
+
+    const parseRow = (rowStr) => {
+      return rowStr
+        .replace(/^\|/, '')
+        .replace(/\|$/, '')
+        .split('|')
+        .map(cell => cell.trim());
+    };
+
+    const headers = parseRow(lines[0]);
+    // Filter out delimiter line (e.g. |---|---|)
+    const dataLines = lines.slice(1).filter(l => !l.match(/^\|?\s*[:\-]+(?:\s*\|\s*[:\-]+)*\s*\|?$/));
+    const rows = dataLines.map(parseRow);
+
+    return (
+      <div key={key} className="chat-markdown-table-wrapper">
+        <table className="chat-markdown-table">
+          <thead>
+            <tr>
+              {headers.map((h, i) => (
+                <th key={i}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, rIdx) => (
+              <tr key={rIdx}>
+                {row.map((cell, cIdx) => (
+                  <td key={cIdx}>{cell}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
   };
 
   const renderFormattedMessage = (text) => {
     if (!text) return null;
-    const parts = text.split(/(https?:\/\/[^\s]+|@[a-zA-Z0-9._-]+)/gi);
-    return parts.map((part, index) => {
-      if (part.match(URL_REGEX)) {
-        return (
-          <a
-            key={index}
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="chat-link"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {part}
-          </a>
-        );
+
+    // 1. Split text into code blocks (```lang ... ```) and regular text segments
+    const codeBlockRegex = /```(?:([a-zA-Z0-9_#-]+)?\r?\n)?([\s\S]*?)```/g;
+    const segments = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = codeBlockRegex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        segments.push({
+          type: 'text',
+          content: text.slice(lastIndex, match.index)
+        });
       }
-      if (part.startsWith('@') && part.length > 1) {
-        const username = part.slice(1);
-        return (
-          <span
-            key={index}
-            className="mention-tag"
-            onClick={(e) => {
-              e.stopPropagation();
-              openUserProfile(username, '#00f3ff', null, username === 'James', '', 'Online');
-            }}
-          >
-            {part}
-          </span>
-        );
+      segments.push({
+        type: 'code',
+        language: match[1] || 'code',
+        code: match[2].trim()
+      });
+      lastIndex = codeBlockRegex.lastIndex;
+    }
+
+    if (lastIndex < text.length) {
+      segments.push({
+        type: 'text',
+        content: text.slice(lastIndex)
+      });
+    }
+
+    // Clean whitespace around code blocks so no unnecessary blank lines appear
+    const cleanedSegments = [];
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      if (seg.type === 'code') {
+        cleanedSegments.push(seg);
+      } else {
+        let content = seg.content;
+        const prevSeg = segments[i - 1];
+        const nextSeg = segments[i + 1];
+
+        if (prevSeg && prevSeg.type === 'code') {
+          content = content.replace(/^\r?\n+/, '');
+        }
+        if (nextSeg && nextSeg.type === 'code') {
+          content = content.replace(/\r?\n+$/, '');
+        }
+
+        if (content.length > 0) {
+          cleanedSegments.push({ type: 'text', content });
+        }
       }
-      return part;
+    }
+
+    // 1.5 Sub-split text segments into Markdown Tables and plain text
+    const tableRegex = /((?:^|\n)\|[^\n]+\|\r?\n\|[\s\-:|]+\|\r?\n(?:\|[^\n]+\|\r?\n?)+)/g;
+    const finalSegments = [];
+
+    for (const seg of cleanedSegments) {
+      if (seg.type === 'code') {
+        finalSegments.push(seg);
+        continue;
+      }
+
+      const str = seg.content;
+      let lastTblIdx = 0;
+      let tblMatch;
+      while ((tblMatch = tableRegex.exec(str)) !== null) {
+        if (tblMatch.index > lastTblIdx) {
+          finalSegments.push({
+            type: 'text',
+            content: str.slice(lastTblIdx, tblMatch.index)
+          });
+        }
+        finalSegments.push({
+          type: 'table',
+          content: tblMatch[1].trim()
+        });
+        lastTblIdx = tableRegex.lastIndex;
+      }
+
+      if (lastTblIdx < str.length) {
+        finalSegments.push({
+          type: 'text',
+          content: str.slice(lastTblIdx)
+        });
+      }
+    }
+
+    return finalSegments.map((seg, segIdx) => {
+      if (seg.type === 'code') {
+        return <CodeBlock key={`cb-${segIdx}`} code={seg.code} language={seg.language} />;
+      }
+
+      if (seg.type === 'table') {
+        return renderMarkdownTable(seg.content, `tbl-${segIdx}`);
+      }
+
+      // 2. Parse inline tokens: bold (**text**), inline code (`code`), URLs, mentions
+      const inlineRegex = /(\*\*[^*]+\*\*|`[^`\n]+`|https?:\/\/[^\s]+|@[a-zA-Z0-9._-]+)/g;
+      const parts = seg.content.split(inlineRegex);
+
+      return (
+        <span key={`seg-${segIdx}`}>
+          {parts.map((part, pIdx) => {
+            if (!part) return null;
+
+            // Bold block highlight: **text**
+            if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+              const boldText = part.slice(2, -2);
+              return (
+                <strong key={`b-${pIdx}`} className="chat-highlight">
+                  {boldText}
+                </strong>
+              );
+            }
+
+            // Inline code: `code`
+            if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
+              const codeText = part.slice(1, -1);
+              return (
+                <code key={`c-${pIdx}`} className="chat-inline-code">
+                  {codeText}
+                </code>
+              );
+            }
+
+            // Clickable URL
+            if (part.match(URL_REGEX)) {
+              return (
+                <a
+                  key={`u-${pIdx}`}
+                  href={part}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="chat-link"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {part}
+                </a>
+              );
+            }
+
+            // Interactive @Mention
+            if (part.startsWith('@') && part.length > 1) {
+              const username = part.slice(1);
+              return (
+                <span
+                  key={`m-${pIdx}`}
+                  className="mention-tag"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openUserProfile(username, '#00f3ff', null, username === 'James', '', 'Online');
+                  }}
+                >
+                  {part}
+                </span>
+              );
+            }
+
+            return part;
+          })}
+        </span>
+      );
     });
   };
 
@@ -1023,10 +2183,10 @@ function App() {
           >
             <div style={{ position: 'relative', display: 'inline-flex' }}>
               {renderAvatar(identity.alias, identity.color, identity.avatar, 24)}
-              <span className="status-indicator-dot online" title="Online" />
+              <span className={`status-indicator-dot ${(identity.status || 'online').toLowerCase().replace(/\s+/g, '-')}`} title={identity.status || 'Online'} />
             </div>
             <span className="profile-btn-alias">{identity.alias}</span>
-            {identity.isVerified && <VerifiedBlueTick size={14} />}
+            {identity.isVerified && <VerifiedBlueTick size={14} className="header-verified-tick" />}
           </button>
         </div>
       </header>
@@ -1071,8 +2231,11 @@ function App() {
           ) : (
             filteredMessages.map((msg, idx) => {
               const dmsg = decryptMsg(msg);
-              const isOwn = dmsg.alias === identity.alias;
-              const isJames = dmsg.alias === 'James';
+              const isOwn = Boolean(
+                (dmsg.userId && identity.userId && dmsg.userId === identity.userId) ||
+                (dmsg.alias && identity.alias && dmsg.alias.toLowerCase() === identity.alias.toLowerCase())
+              );
+              const isJames = dmsg.alias === 'James' || dmsg.userId === 'bot_james';
               const isVerified = dmsg.isVerified || isJames;
               const msgId = msg.id || idx;
               const isPopoverVisible = hoveredMsgId === msgId || activeReactionMsgId === msgId;
@@ -1080,10 +2243,15 @@ function App() {
               const reactionEntries = Object.entries(msg.reactions || {}).filter(([, users]) => users.length > 0);
               const hasActiveReactions = reactionEntries.length > 0;
 
+              const isVoiceNote = Boolean(
+                dmsg.isVoiceNote ||
+                dmsg.fileName === 'Voice Transmission.webm' ||
+                (dmsg.audioUrl && (!dmsg.fileName || dmsg.fileName.startsWith('voice-note-')))
+              );
               const isImage = dmsg.imageUrl || dmsg.fileType?.startsWith('image/');
               const isVideo = dmsg.videoUrl || dmsg.fileType?.startsWith('video/');
-              const isAudio = dmsg.audioUrl || dmsg.fileType?.startsWith('audio/');
-              const isOtherFile = dmsg.fileUrl && !isImage && !isVideo && !isAudio;
+              const isAudio = !isVoiceNote && (dmsg.audioUrl || dmsg.fileType?.startsWith('audio/'));
+              const isOtherFile = dmsg.fileUrl && !isImage && !isVideo && !isAudio && !isVoiceNote;
               const hasFile = isImage || isVideo || isAudio || isOtherFile;
 
               // File Download Permission: default true
@@ -1140,7 +2308,7 @@ function App() {
                       </div>
                     )}
 
-                    {/* If own message: Reply button permanently visible on the left beside message (desktop only) */}
+                    {/* If own message: Reply button always, and Delete button ONLY for file or live voice recording */}
                     {isOwn && (
                       <div className="msg-side-actions left permanent">
                         <button
@@ -1150,6 +2318,16 @@ function App() {
                         >
                           <Reply size={13} />
                         </button>
+                        {(hasFile || isVoiceNote) && !dmsg.isFileDeleted && !msg.isFileDeleted && (
+                          <button
+                            type="button"
+                            className="msg-side-delete-btn always-visible"
+                            onClick={() => promptDeleteFile(msgId, dmsg.fileUrl || dmsg.audioUrl || dmsg.imageUrl || dmsg.videoUrl, isVoiceNote, dmsg.fileName)}
+                            title={isVoiceNote ? "Delete voice recording" : "Delete file"}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -1162,32 +2340,35 @@ function App() {
                     >
                       {/* Message Header */}
                       <div className="message-header">
-                        {!isOwn ? (
-                          <div
-                            className="message-user-info clickable-profile"
-                            onClick={() => openUserProfile(dmsg.alias, dmsg.color, dmsg.avatar, isVerified, dmsg.bio, dmsg.status)}
-                            title="Click to view profile"
-                          >
-                            {renderAvatar(dmsg.alias, dmsg.color, dmsg.avatar, 24)}
-                            <span className="user-alias-name" style={{ color: dmsg.color || '#00f3ff' }}>
-                              {dmsg.alias || 'Anonymous'}
-                            </span>
-
-                            {/* Official Twitter/Telegram-style Blue Tick */}
-                            {isVerified && (
-                              <span className="verified-blue-tick-badge" title="Verified Profile">
-                                <VerifiedBlueTick size={14} />
+                        {!isOwn ? (() => {
+                          const authorProf = getUserProfile(dmsg.alias, dmsg.color, dmsg.avatar, isVerified, dmsg.bio, dmsg.status, dmsg.userId);
+                          return (
+                            <div
+                              className="message-user-info clickable-profile"
+                              onClick={() => openUserProfile(dmsg.alias, authorProf.color, authorProf.avatar, authorProf.isVerified, authorProf.bio, authorProf.status, dmsg.userId)}
+                              title="Click to view profile"
+                            >
+                              {renderAvatar(dmsg.alias, authorProf.color, authorProf.avatar, 24)}
+                              <span className="user-alias-name" style={{ color: authorProf.color || '#00f3ff' }}>
+                                {dmsg.alias || 'Anonymous'}
                               </span>
-                            )}
 
-                            <span className="time-stamp">{formatTime(dmsg.timestamp)}</span>
-                            {msg.encrypted && (
-                              <span className="encrypted-tag" title="AES-256 Encrypted">
-                                <Lock size={10} /> E2EE
-                              </span>
-                            )}
-                          </div>
-                        ) : (
+                              {/* Official Twitter/Telegram-style Blue Tick */}
+                              {authorProf.isVerified && (
+                                <span className="verified-blue-tick-badge" title="Verified Profile">
+                                  <VerifiedBlueTick size={14} />
+                                </span>
+                              )}
+
+                              <span className="time-stamp">{formatTime(dmsg.timestamp)}</span>
+                              {msg.encrypted && (
+                                <span className="encrypted-tag" title="AES-256 Encrypted">
+                                  <Lock size={10} /> E2EE
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })() : (
                           <div
                             className="message-user-info own clickable-profile"
                             onClick={() => setShowIdentityModal(true)}
@@ -1232,10 +2413,132 @@ function App() {
                           </div>
                         )}
 
-                        {/* Message Text with Interactive Clickable URLs and @Mentions */}
+                        {/* Compact Single-Row ChatGPT-Style Web Search Badge (Deduplicated, No Tall Pills) */}
+                        {(() => {
+                          if (!dmsg.sources || !Array.isArray(dmsg.sources) || dmsg.sources.length === 0) return null;
+                          const seen = new Set();
+                          const uniqueSources = [];
+                          for (const s of dmsg.sources) {
+                            const d = (s.domain || '').replace(/^https?:\/\//, '').split('/')[0].replace(/^www\./, '').toLowerCase().trim();
+                            if (d && !seen.has(d)) {
+                              seen.add(d);
+                              uniqueSources.push({ ...s, domain: d });
+                            }
+                          }
+                          if (uniqueSources.length === 0) return null;
+
+                          return (
+                            <div className="chat-sources-wrapper-rel">
+                              <div
+                                className="chat-compact-search-badge"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExpandedSourcesMsgId(expandedSourcesMsgId === msgId ? null : msgId);
+                                }}
+                                title="Click to browse visited sites"
+                              >
+                                <div className="chat-sources-favicons-cluster">
+                                  {uniqueSources.slice(0, 4).map((src, sIdx) => (
+                                    <a
+                                      key={sIdx}
+                                      href={src.url || `https://${src.domain}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="source-circle-avatar clickable"
+                                      title={`Visit ${src.domain}: ${src.title || src.url}`}
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <img
+                                        src={`https://www.google.com/s2/favicons?domain=${src.domain}&sz=64`}
+                                        alt=""
+                                        className="source-circle-img"
+                                        onError={(e) => {
+                                          e.target.style.display = 'none';
+                                          if (e.target.nextElementSibling) {
+                                            e.target.nextElementSibling.style.display = 'flex';
+                                          }
+                                        }}
+                                      />
+                                      <span className="source-fallback-letter" style={{ display: 'none' }}>
+                                        {(src.domain || '?')[0].toUpperCase()}
+                                      </span>
+                                    </a>
+                                  ))}
+                                </div>
+                                <span className="chat-sources-count-label">
+                                  Searched {uniqueSources.length} {uniqueSources.length === 1 ? 'site' : 'sites'}
+                                </span>
+                                <ChevronDown
+                                  size={12}
+                                  className={`sources-chevron-icon ${expandedSourcesMsgId === msgId ? 'rotated' : ''}`}
+                                />
+                              </div>
+
+                              {/* Expandable Dropdown Popover to Go Through All Visited Sites */}
+                              {expandedSourcesMsgId === msgId && (
+                                <div className="chat-sources-dropdown-popover" onClick={(e) => e.stopPropagation()}>
+                                  <div className="popover-sources-header">
+                                    <div className="popover-sources-title-row">
+                                      <Globe size={13} className="popover-header-icon" />
+                                      <span>Visited {uniqueSources.length} {uniqueSources.length === 1 ? 'Site' : 'Sites'}</span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      className="popover-sources-close-btn"
+                                      onClick={() => setExpandedSourcesMsgId(null)}
+                                      title="Close"
+                                    >
+                                      <X size={12} />
+                                    </button>
+                                  </div>
+                                  <div className="popover-sources-list">
+                                    {uniqueSources.map((src, sIdx) => (
+                                      <a
+                                        key={sIdx}
+                                        href={src.url || `https://${src.domain}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="popover-source-item"
+                                      >
+                                        <span className="source-circle-avatar mini">
+                                          <img
+                                            src={`https://www.google.com/s2/favicons?domain=${src.domain}&sz=64`}
+                                            alt=""
+                                            className="source-circle-img"
+                                            onError={(e) => {
+                                              e.target.style.display = 'none';
+                                              if (e.target.nextElementSibling) e.target.nextElementSibling.style.display = 'flex';
+                                            }}
+                                          />
+                                          <span className="source-fallback-letter" style={{ display: 'none' }}>
+                                            {(src.domain || '?')[0].toUpperCase()}
+                                          </span>
+                                        </span>
+                                        <div className="popover-source-info">
+                                          <span className="popover-source-domain">{src.domain}</span>
+                                          <span className="popover-source-title">{src.title || src.snippet || src.url}</span>
+                                        </div>
+                                        <ExternalLink size={12} className="popover-external-icon" />
+                                      </a>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+
+                        {/* Message Text with Interactive Clickable URLs, Mentions, Code Blocks & Typewriter Writing */}
                         {dmsg.text && (
                           <div className="message-text-content">
-                            {renderFormattedMessage(dmsg.text)}
+                            <TypewriterMessage
+                              text={dmsg.text}
+                              isJames={isJames}
+                              msgId={msgId}
+                              animatedIdsSet={animatedMessageIds}
+                              onFinishAnimation={markMessageAnimated}
+                              renderFn={renderFormattedMessage}
+                            />
                           </div>
                         )}
 
@@ -1264,8 +2567,20 @@ function App() {
                           </div>
                         )}
 
+                        {/* If file or voice recording was deleted, show stylish placeholder banner */}
+                        {(dmsg.isFileDeleted || msg.isFileDeleted) && (
+                          <div className="deleted-attachment-placeholder">
+                            <Ban size={14} className="deleted-attachment-icon" />
+                            <span className="deleted-attachment-text">
+                              {(dmsg.deletedType === 'voice' || isVoiceNote)
+                                ? (isOwn ? 'You deleted this record' : `${dmsg.alias || 'User'} deleted this record`)
+                                : (isOwn ? 'You deleted this file' : `${dmsg.alias || 'User'} deleted this file`)}
+                            </span>
+                          </div>
+                        )}
+
                         {/* Image Attachment */}
-                        {isImage && (
+                        {!dmsg.isFileDeleted && !msg.isFileDeleted && isImage && (
                           <div className="media-attachment-wrapper">
                             <div
                               className="message-image-container"
@@ -1277,7 +2592,7 @@ function App() {
                         )}
 
                         {/* Video Attachment */}
-                        {isVideo && (
+                        {!dmsg.isFileDeleted && !msg.isFileDeleted && isVideo && (
                           <div className="media-attachment-container">
                             <video
                               controls
@@ -1290,8 +2605,19 @@ function App() {
                           </div>
                         )}
 
-                        {/* Audio / Voice Transmission */}
-                        {isAudio && (
+                        {/* Voice Note Waveform Player (Zero Native Download Controls) */}
+                        {!dmsg.isFileDeleted && !msg.isFileDeleted && isVoiceNote && (
+                          <div className="voice-waveform-wrapper">
+                            <VoiceWaveformPlayer
+                              audioUrl={resolveMediaUrl(dmsg.audioUrl || dmsg.fileUrl)}
+                              isOwn={isOwn}
+                              onDelete={() => promptDeleteFile(msgId, dmsg.audioUrl || dmsg.fileUrl, true, dmsg.fileName)}
+                            />
+                          </div>
+                        )}
+
+                        {/* Audio / Song File Attachment (non-voice) */}
+                        {!dmsg.isFileDeleted && !msg.isFileDeleted && isAudio && (
                           <div className="audio-attachment-container">
                             <audio
                               controls
@@ -1304,7 +2630,7 @@ function App() {
                         )}
 
                         {/* Document / Other File Attachment */}
-                        {isOtherFile && (
+                        {!dmsg.isFileDeleted && !msg.isFileDeleted && isOtherFile && (
                           <div className="file-attachment-card">
                             <FileText size={20} color="var(--accent-cyan)" />
                             <div className="file-info-col">
@@ -1314,11 +2640,11 @@ function App() {
                           </div>
                         )}
 
-                        {/* File Action Toolbar: Download Animation + Owner Permission Toggle */}
-                        {hasFile && (
+                        {/* File Action Toolbar: Download for Receivers (if unlocked) OR Sleek Lock/Unlock Toggle for Sender */}
+                        {!dmsg.isFileDeleted && !msg.isFileDeleted && hasFile && (
                           <div className="file-actions-row">
-                            {/* If other user: show Download button (if allowed) OR Preview Only badge (if restricted) */}
                             {!isOwn ? (
+                              /* For other users: show Download button ONLY if unlocked by sender. If locked (preview only), show NOTHING! */
                               isDownloadAllowed ? (
                                 <button
                                   type="button"
@@ -1339,31 +2665,35 @@ function App() {
                                     </>
                                   )}
                                 </button>
-                              ) : (
-                                <span className="file-preview-only-badge" title="Downloads restricted by sender">
-                                  <Lock size={12} /> Preview Only
-                                </span>
-                              )
+                              ) : null
                             ) : (
-                              /* If owner: render interactive toggle switch without duplicate badge */
-                              <button
-                                type="button"
-                                className={`file-owner-toggle ${isDownloadAllowed ? 'allowed' : 'restricted'}`}
-                                onClick={() => handleToggleFileDownload(msgId, isDownloadAllowed)}
-                                title={isDownloadAllowed ? 'Click to make this file Preview Only' : 'Click to allow others to Download'}
-                              >
-                                {isDownloadAllowed ? (
-                                  <>
-                                    <Unlock size={12} />
-                                    <span>Downloads Allowed</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Lock size={12} />
-                                    <span>Preview Only</span>
-                                  </>
-                                )}
-                              </button>
+                              /* For owner: interactive Lock/Unlock toggle switch and Delete File button */
+                              <div className="file-owner-controls">
+                                <button
+                                  type="button"
+                                  className={`file-lock-toggle-btn ${isDownloadAllowed ? 'unlocked' : 'locked'}`}
+                                  onClick={() => handleToggleFileDownload(msgId, isDownloadAllowed)}
+                                  title={isDownloadAllowed ? 'File is Unlocked (Click to Lock / Preview Only)' : 'File is Locked (Click to Unlock for Download)'}
+                                >
+                                  <span className="toggle-indicator-track">
+                                    <span className="toggle-indicator-thumb">
+                                      {isDownloadAllowed ? <Unlock size={10} /> : <Lock size={10} />}
+                                    </span>
+                                  </span>
+                                  <span className="toggle-label-text">
+                                    {isDownloadAllowed ? 'Unlocked' : 'Locked'}
+                                  </span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="file-delete-action-btn"
+                                  onClick={() => promptDeleteFile(msgId, dmsg.fileUrl || dmsg.imageUrl || dmsg.videoUrl || dmsg.audioUrl, false, dmsg.fileName)}
+                                  title="Delete file attachment"
+                                >
+                                  <Trash2 size={11} />
+                                  <span>Delete File</span>
+                                </button>
+                              </div>
                             )}
                           </div>
                         )}
@@ -1408,6 +2738,122 @@ function App() {
               );
             })
           )}
+
+          {/* In-Chat Live Dynamic Status Bubble from James */}
+          {jamesStatus && (
+            <div className="message-item left james-in-chat-status-bubble" id="james-live-status-card">
+              <div className="message-content-wrapper">
+                <div className="message-header-row left">
+                  <div
+                    className="message-user-info other clickable-profile"
+                    onClick={() => openUserProfile('James', '#00f3ff', null, true, 'Full-stack engineer & verified community member. Always around!', 'Online', 'bot_james')}
+                    title="View James's profile"
+                  >
+                    {renderAvatar('James', '#00f3ff', null, 24)}
+                    <span className="user-alias-name" style={{ color: '#00f3ff' }}>James</span>
+                    <span className="verified-blue-tick-badge" title="Verified Profile">
+                      <VerifiedBlueTick size={14} />
+                    </span>
+                    <span className="time-stamp">Live</span>
+                  </div>
+                </div>
+
+                <div className="message-body james-status-body">
+                  {jamesStatus.status === 'searching' && (
+                    <div className="james-live-indicator-card searching">
+                      <div className="indicator-top-row">
+                        <div className="indicator-icon-pulse globe">
+                          <Globe size={15} className="status-spin-globe" />
+                        </div>
+                        <div className="indicator-text-col">
+                          <span className="indicator-headline">
+                            {jamesStatus.text || 'Searching the live web...'}
+                          </span>
+                          {jamesStatus.query && (
+                            <span className="indicator-query-tag">Query: &quot;{jamesStatus.query}&quot;</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {jamesStatus.sources && jamesStatus.sources.length > 0 && (
+                        <div className="live-sources-preview-box compact">
+                          <div className="chat-sources-favicons-cluster">
+                            {jamesStatus.sources.slice(0, 5).map((src, sIdx) => (
+                              <span key={sIdx} className="source-circle-avatar" title={src.domain}>
+                                <img
+                                  src={`https://www.google.com/s2/favicons?domain=${src.domain}&sz=64`}
+                                  alt=""
+                                  className="source-circle-img"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    if (e.target.nextElementSibling) e.target.nextElementSibling.style.display = 'flex';
+                                  }}
+                                />
+                                <span className="source-fallback-letter" style={{ display: 'none' }}>
+                                  {(src.domain || '?')[0].toUpperCase()}
+                                </span>
+                              </span>
+                            ))}
+                          </div>
+                          <span className="sources-preview-title">
+                            Visited {jamesStatus.sources.length} {jamesStatus.sources.length === 1 ? 'site' : 'sites'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {jamesStatus.status === 'thinking' && (
+                    <div className="james-live-indicator-card thinking">
+                      <div className="indicator-top-row">
+                        <div className="indicator-icon-pulse sparkle">
+                          <Sparkles size={15} className="status-pulse-sparkle" />
+                        </div>
+                        <div className="indicator-text-col">
+                          <span className="indicator-headline">
+                            {jamesStatus.text || 'James is thinking...'}
+                          </span>
+                          <span className="indicator-subtext">Synthesizing information & formulating response...</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {jamesStatus.status === 'typing' && (
+                    <div className="james-live-indicator-card typing">
+                      <div className="indicator-top-row">
+                        <div className="typing-dots in-bubble">
+                          <span />
+                          <span />
+                          <span />
+                        </div>
+                        <span className="typing-in-bubble-text">
+                          {jamesStatus.text || 'James is drafting a response...'}
+                        </span>
+                      </div>
+                      {jamesStatus.sources && jamesStatus.sources.length > 0 && (
+                        <div className="live-sources-mini-row">
+                          <span className="mini-sources-label">Sources:</span>
+                          {jamesStatus.sources.slice(0, 4).map((src, sIdx) => (
+                            <span key={sIdx} className="mini-source-favicon-circle" title={src.domain}>
+                              <img
+                                src={src.favicon || `https://www.google.com/s2/favicons?domain=${src.domain}&sz=64`}
+                                alt=""
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                }}
+                              />
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div ref={messagesEndRef} />
         </div>
 
@@ -1418,17 +2864,44 @@ function App() {
           </button>
         )}
 
-        {/* Typing Bar */}
-        {typingUsers.length > 0 && (
-          <div className="typing-bar">
-            <div className="typing-dots">
-              <span />
-              <span />
-              <span />
-            </div>
-            <span>
-              {typingUsers.join(', ')} {typingUsers.length > 1 ? 'are' : 'is'} typing...
-            </span>
+        {/* Dynamic Activity / Thinking / Searching / Typing Bar */}
+        {(jamesStatus || typingUsers.length > 0) && (
+          <div className={`typing-bar ${jamesStatus ? `james-status-${jamesStatus.status}` : ''}`}>
+            {jamesStatus ? (
+              <div className="james-live-status-row">
+                {jamesStatus.status === 'thinking' && (
+                  <div className="status-icon-badge thinking">
+                    <Sparkles size={14} className="status-pulse-sparkle" />
+                  </div>
+                )}
+                {jamesStatus.status === 'searching' && (
+                  <div className="status-icon-badge searching">
+                    <Globe size={14} className="status-spin-globe" />
+                  </div>
+                )}
+                {jamesStatus.status === 'typing' && (
+                  <div className="typing-dots">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                )}
+                <span className="james-status-text">
+                  {jamesStatus.text || `${jamesStatus.alias || 'James'} is working...`}
+                </span>
+              </div>
+            ) : (
+              <>
+                <div className="typing-dots">
+                  <span />
+                  <span />
+                  <span />
+                </div>
+                <span>
+                  {typingUsers.join(', ')} {typingUsers.length > 1 ? 'are' : 'is'} typing...
+                </span>
+              </>
+            )}
           </div>
         )}
 
@@ -1496,18 +2969,24 @@ function App() {
             </div>
           )}
 
-          {/* Voice Recording Live Bar */}
+          {/* Voice Recording Live Bar with Real-time Pitch & Waveform Visualizer */}
           {isRecording ? (
             <div className="voice-recording-row">
               <div className="recording-status">
                 <span className="recording-dot" />
                 <span>REC {Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}</span>
               </div>
+
+              {/* Dynamic Live Audio Pitch & Voice Waveform Visualizer */}
+              <div className="voice-visualizer-container">
+                <canvas ref={audioCanvasRef} className="voice-visualizer-canvas" />
+              </div>
+
               <div className="voice-actions">
                 <button type="button" className="icon-btn cancel-btn" onClick={cancelRecording} title="Cancel Recording">
                   <X size={16} />
                 </button>
-                <button type="button" className="icon-btn composer-tool-btn send-btn active" onClick={stopAndSendRecording} title="Send Voice Transmission">
+                <button type="button" className="icon-btn composer-tool-btn send-btn active record-send-btn" onClick={stopAndSendRecording} title="Send Voice Transmission">
                   <ArrowRight size={18} strokeWidth={2.2} />
                 </button>
               </div>
@@ -1523,12 +3002,13 @@ function App() {
                     : attachedFile
                       ? 'Add caption or send file...'
                       : passphrase
-                        ? 'Type encrypted transmission (type @ to mention)...'
-                        : 'Type a message (type @ to mention, paste link)...'
+                        ? 'Type encrypted transmission...'
+                        : 'Type a message...'
                 }
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
+                onFocus={handleInputFocus}
                 rows={1}
                 disabled={uploading}
               />
@@ -1579,60 +3059,92 @@ function App() {
       </main>
 
       {/* --- Other User Profile Popup Modal --- */}
-      {selectedUserProfile && (
-        <div className="modal-overlay" onClick={() => setSelectedUserProfile(null)}>
-          <div className="modal-content user-popup-modal" onClick={e => e.stopPropagation()}>
-            <div className="user-popup-header">
-              <button className="icon-btn popup-close" onClick={() => setSelectedUserProfile(null)}>
-                <X size={18} />
-              </button>
-            </div>
-            <div className="user-popup-body">
-              <div className="user-popup-avatar-ring">
-                {renderAvatar(selectedUserProfile.alias, selectedUserProfile.color, selectedUserProfile.avatar, 72)}
-              </div>
-              <div className="user-popup-name-row">
-                <h3 className="user-popup-name" style={{ color: selectedUserProfile.color || '#00f3ff' }}>
-                  @{selectedUserProfile.alias}
-                </h3>
-                {selectedUserProfile.isVerified && (
-                  <VerifiedBlueTick size={19} className="verified-blue-tick" />
-                )}
-              </div>
-              <span className="user-popup-status-badge">
-                <span className="status-dot-sm online" /> {selectedUserProfile.status || 'Active on Mesh'}
-              </span>
-              <p className="user-popup-bio">
-                {selectedUserProfile.bio || 'Encrypted mesh user'}
-              </p>
+      {selectedUserProfile && (() => {
+        const activeProfile = getUserProfile(
+          selectedUserProfile.alias,
+          selectedUserProfile.color,
+          selectedUserProfile.avatar,
+          selectedUserProfile.isVerified,
+          selectedUserProfile.bio,
+          selectedUserProfile.status,
+          selectedUserProfile.userId
+        ) || selectedUserProfile;
+        const isOffline = activeProfile.status === 'Offline' || activeProfile.isOnline === false;
+        const displayStatus = isOffline ? 'Offline' : (activeProfile.status || 'Online');
+        const statusSlug = displayStatus.toLowerCase().replace(/\s+/g, '-');
+        const hasRenamed = Boolean(
+          selectedUserProfile.clickedAlias &&
+          activeProfile.alias &&
+          selectedUserProfile.clickedAlias.toLowerCase() !== activeProfile.alias.toLowerCase()
+        );
 
-              <div className="user-popup-actions">
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={() => {
-                    setInput(prev => `${prev ? prev + ' ' : ''}@${selectedUserProfile.alias} `);
-                    setSelectedUserProfile(null);
-                    setTimeout(() => textareaRef.current?.focus(), 50);
+        return (
+          <div className="modal-overlay" onClick={() => setSelectedUserProfile(null)}>
+            <div className="modal-content user-popup-modal" onClick={e => e.stopPropagation()}>
+              <div className="user-popup-header">
+                <button className="icon-btn popup-close" onClick={() => setSelectedUserProfile(null)}>
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="user-popup-body">
+                <div
+                  className="user-popup-avatar-ring"
+                  style={{
+                    borderColor: activeProfile.color || '#00f3ff',
+                    boxShadow: `0 0 16px ${activeProfile.color ? activeProfile.color + '66' : 'rgba(0, 243, 255, 0.45)'}`
                   }}
                 >
-                  <AtSign size={14} /> Mention @{selectedUserProfile.alias}
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => {
-                    startReply(null, selectedUserProfile, Date.now());
-                    setSelectedUserProfile(null);
-                  }}
-                >
-                  <Reply size={14} /> Reply
-                </button>
+                  {renderAvatar(activeProfile.alias, activeProfile.color, activeProfile.avatar, 72)}
+                </div>
+                <div className="user-popup-name-row">
+                  <h3 className="user-popup-name" style={{ color: activeProfile.color || '#00f3ff' }}>
+                    @{activeProfile.alias}
+                  </h3>
+                  {activeProfile.isVerified && (
+                    <VerifiedBlueTick size={19} className="verified-blue-tick" />
+                  )}
+                </div>
+                {hasRenamed && (
+                  <span className="user-popup-renamed-tag" title={`Sent earlier messages as @${selectedUserProfile.clickedAlias}`}>
+                    (in this message: @{selectedUserProfile.clickedAlias})
+                  </span>
+                )}
+                <span className={`user-popup-status-badge ${statusSlug}`}>
+                  <span className={`status-dot-sm ${statusSlug}`} />
+                  <span>{displayStatus}</span>
+                </span>
+                <p className="user-popup-bio">
+                  {activeProfile.bio || 'Encrypted mesh user'}
+                </p>
+
+                <div className="user-popup-actions">
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => {
+                      setInput(prev => `${prev ? prev + ' ' : ''}@${activeProfile.alias} `);
+                      setSelectedUserProfile(null);
+                      setTimeout(() => textareaRef.current?.focus(), 50);
+                    }}
+                  >
+                    <AtSign size={14} /> Mention @{activeProfile.alias}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => {
+                      startReply(null, activeProfile, Date.now());
+                      setSelectedUserProfile(null);
+                    }}
+                  >
+                    <Reply size={14} /> Reply
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* --- Real Email 4-Digit OTP Verification Modal --- */}
       {showOtpModal && (
@@ -1856,7 +3368,7 @@ function App() {
 
               {/* Username & Randomize */}
               <div className="form-group">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                <div className="form-label-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
                   <label className="form-label" style={{ margin: 0 }}>USERNAME</label>
                   <button
                     type="button"
@@ -1978,19 +3490,17 @@ function App() {
                         </p>
                       </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.7rem' }}>
+                    <div className="verified-active-actions">
                       <button
                         type="button"
-                        className="btn-secondary"
-                        style={{ padding: '0.4rem 0.85rem', fontSize: '0.78rem', borderColor: '#00f3ff', color: '#00f3ff' }}
+                        className="btn-secondary verify-different-btn"
                         onClick={startEmailVerification}
                       >
-                        <Mail size={14} style={{ marginRight: 5 }} /> Verify Different Email
+                        <Mail size={14} /> Verify Different Email
                       </button>
                       <button
                         type="button"
-                        className="btn-secondary"
-                        style={{ padding: '0.4rem 0.85rem', fontSize: '0.78rem' }}
+                        className="btn-secondary revoke-btn"
                         onClick={() => setIdentity(prev => ({ ...prev, isVerified: false, verifiedEmail: null }))}
                       >
                         Revoke
@@ -2097,6 +3607,68 @@ function App() {
 
               <button className="btn-primary" style={{ marginTop: '0.5rem' }} onClick={() => setShowVaultModal(false)}>
                 <Lock size={15} /> Save Encryption Key
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- Purge / Deletion Confirmation Modal --- */}
+      {deleteConfirm && (
+        <div className="modal-overlay purge-modal-overlay" onClick={() => setDeleteConfirm(null)}>
+          <div className="modal-content purge-modal-card" onClick={e => e.stopPropagation()}>
+            <div className="purge-modal-header">
+              <div className="purge-modal-icon-badge">
+                <Trash2 size={18} />
+              </div>
+              <div className="purge-modal-title-wrap">
+                <h3 className="purge-modal-title">
+                  {deleteConfirm.type === 'voice'
+                    ? 'Delete Voice Transmission'
+                    : 'Delete File Attachment'}
+                </h3>
+                <span className="purge-modal-badge">Network Action</span>
+              </div>
+              <button
+                className="icon-btn purge-modal-close"
+                onClick={() => setDeleteConfirm(null)}
+                title="Cancel"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div className="purge-modal-body">
+              <p className="purge-modal-desc">
+                {deleteConfirm.type === 'voice'
+                  ? 'Delete this live voice recording from the chat? The audio file will be shredded and a notice will indicate you deleted this record.'
+                  : 'Delete this file attachment from the chat? The file will be shredded and a notice will indicate you deleted this file.'}
+              </p>
+              {deleteConfirm.fileName && (
+                <div className="purge-file-chip">
+                  <FileText size={13} />
+                  <span>{deleteConfirm.fileName}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="purge-modal-actions">
+              <button
+                type="button"
+                className="purge-cancel-btn"
+                onClick={() => setDeleteConfirm(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="purge-confirm-btn"
+                onClick={executeDeleteConfirm}
+              >
+                <Trash2 size={14} />
+                <span>
+                  {deleteConfirm.type === 'voice' ? 'Delete Record' : 'Delete File'}
+                </span>
               </button>
             </div>
           </div>
