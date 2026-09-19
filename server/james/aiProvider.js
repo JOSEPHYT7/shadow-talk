@@ -8,7 +8,7 @@ class BaseAIProvider {
   constructor(config = {}) {
     this.model = config.model;
     this.apiKey = config.apiKey;
-    this.timeoutMs = config.timeoutMs || 35000;
+    this.timeoutMs = config.timeoutMs || 90000;
   }
 
   /**
@@ -39,53 +39,75 @@ class OpenRouterProvider extends BaseAIProvider {
       throw new Error('Missing OPENROUTER_API_KEY');
     }
 
-    const payload = {
-      model: this.model,
-      messages: messages,
-      temperature: 0.7,
-      max_tokens: 2500
-    };
+    // Candidate free models to try in sequence if one times out or hits rate limits
+    const candidateModels = [
+      this.model,
+      'deepseek/deepseek-v4-flash-0731:free',
+      'meta-llama/llama-3.3-70b-instruct:free',
+      'google/gemini-2.0-flash-exp:free',
+      'qwen/qwen-2.5-72b-instruct:free'
+    ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
 
-    if (Array.isArray(tools) && tools.length > 0) {
-      payload.tools = tools;
-      payload.tool_choice = 'auto';
+    let lastError = null;
+
+    for (const modelToTry of candidateModels) {
+      try {
+        const payload = {
+          model: modelToTry,
+          messages: messages,
+          temperature: 0.7,
+          max_tokens: 4096
+        };
+
+        if (Array.isArray(tools) && tools.length > 0) {
+          payload.tools = tools;
+          payload.tool_choice = 'auto';
+        }
+
+        const res = await fetch(this.baseUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'HTTP-Referer': 'https://shadowtalk.app',
+            'X-Title': 'ShadowTalk AI Agent',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(this.timeoutMs)
+        });
+
+        if (!res.ok) {
+          const errBody = await res.text().catch(() => '');
+          console.warn(`[OpenRouterProvider]: Model ${modelToTry} returned HTTP ${res.status}: ${errBody.slice(0, 140)}`);
+          lastError = new Error(`OpenRouter HTTP ${res.status} on ${modelToTry}: ${errBody}`);
+          continue; // Try next candidate model
+        }
+
+        const data = await res.json();
+        const choice = data.choices?.[0];
+        if (!choice || !choice.message) {
+          continue;
+        }
+
+        let finalContent = choice.message.content;
+        // If the model stored its answer in reasoning or content is empty/whitespace:
+        if ((!finalContent || !finalContent.trim()) && choice.message.reasoning) {
+          console.log('[OpenRouterProvider]: Model returned empty content, recovering text from reasoning.');
+          finalContent = choice.message.reasoning.trim();
+        }
+
+        return {
+          content: finalContent || null,
+          toolCalls: choice.message.tool_calls || null,
+          rawMessage: choice.message
+        };
+      } catch (err) {
+        console.warn(`[OpenRouterProvider]: Model ${modelToTry} failed (${err.message}), trying next candidate...`);
+        lastError = err;
+      }
     }
 
-    const res = await fetch(this.baseUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'HTTP-Referer': 'https://shadowtalk.app',
-        'X-Title': 'ShadowTalk AI Agent',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(this.timeoutMs)
-    });
-
-    if (!res.ok) {
-      const errBody = await res.text().catch(() => '');
-      throw new Error(`OpenRouter HTTP ${res.status}: ${errBody}`);
-    }
-
-    const data = await res.json();
-    const choice = data.choices?.[0];
-    if (!choice || !choice.message) {
-      throw new Error('Invalid response structure from OpenRouter');
-    }
-
-    let finalContent = choice.message.content;
-    // If the model stored its answer in reasoning or content is empty/whitespace:
-    if ((!finalContent || !finalContent.trim()) && choice.message.reasoning) {
-      console.log('[OpenRouterProvider]: Model returned empty content, recovering text from reasoning.');
-      finalContent = choice.message.reasoning.trim();
-    }
-
-    return {
-      content: finalContent || null,
-      toolCalls: choice.message.tool_calls || null,
-      rawMessage: choice.message
-    };
+    throw lastError || new Error('All candidate OpenRouter models failed');
   }
 }
 
@@ -270,6 +292,68 @@ class FallbackProvider extends BaseAIProvider {
       };
     }
 
+    // PDF Generation Request Fallback
+    if (/pdf|document/i.test(lower) && tools.some(t => t.function?.name === 'generate_pdf')) {
+      const titleMatch = userText.match(/(?:on|about|for|title)\s+([a-zA-Z0-9\s_-]+)/i);
+      const rawTitle = titleMatch ? titleMatch[1].trim().slice(0, 45) : 'Document';
+      const cleanTitle = rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1);
+      return {
+        content: null,
+        toolCalls: [
+          {
+            id: `call_${Date.now()}_pdf`,
+            type: 'function',
+            function: {
+              name: 'generate_pdf',
+              arguments: JSON.stringify({
+                title: cleanTitle,
+                content: `Comprehensive Overview of ${cleanTitle}\n\n1. Introduction\nThis document provides an in-depth analysis and overview of ${cleanTitle}, covering key principles, developmental stages, and structural characteristics.\n\n2. Key Stages & Process\n- Stage 1: Initiation and Foundation\n- Stage 2: Development and Growth\n- Stage 3: Transformation and Metamorphosis\n- Stage 4: Maturation and Function\n\n3. Summary & Findings\nEach phase plays a critical role in sustaining balance, efficiency, and vitality within the natural system.`
+              })
+            }
+          }
+        ]
+      };
+    }
+
+    // Image Generation Request Fallback
+    if (/image|draw|picture|photo|illustration/i.test(lower) && tools.some(t => t.function?.name === 'generate_image')) {
+      const cleanPrompt = userText.replace(/generate\s+(?:an?\s+)?image\s+(?:of|on)?|draw\s+(?:an?\s+)?|picture\s+of/i, '').trim();
+      return {
+        content: null,
+        toolCalls: [
+          {
+            id: `call_${Date.now()}_img`,
+            type: 'function',
+            function: {
+              name: 'generate_image',
+              arguments: JSON.stringify({
+                prompt: cleanPrompt || userText
+              })
+            }
+          }
+        ]
+      };
+    }
+
+    // QR Code Request Fallback
+    if (/qr|qrcode/i.test(lower) && tools.some(t => t.function?.name === 'generate_qr_code')) {
+      const urlMatch = userText.match(/https?:\/\/[^\s]+/i);
+      const payload = urlMatch ? urlMatch[0] : userText;
+      return {
+        content: null,
+        toolCalls: [
+          {
+            id: `call_${Date.now()}_qr`,
+            type: 'function',
+            function: {
+              name: 'generate_qr_code',
+              arguments: JSON.stringify({ text: payload })
+            }
+          }
+        ]
+      };
+    }
+
     // Greetings
     if (/^(hi|hello|hey|yo|sup)\b/i.test(lower)) {
       return {
@@ -277,9 +361,9 @@ class FallbackProvider extends BaseAIProvider {
       };
     }
 
-    // Default natural human response
+    // Default natural human response for any general query
     return {
-      content: `I hear you! I'm right here coding. Let me know if you need any technical help or want to talk through an idea!`
+      content: `I'm on it! Feel free to ask or specify what details you need—whether it's code, a technical explanation, or a file generation, I'm here to help!`
     };
   }
 }

@@ -70,31 +70,29 @@ class DecisionEngine {
       return { action: 'IGNORE', reason: 'room_dormant', isDirect: false };
     }
 
+    // Comprehensive query detection: commands, generation requests, questions, tech queries, greetings, or any meaningful text
+    const isQuestion = /\?|how|what|why|who|where|when|which|is|are|can|could|would|should|do|does|did|will/i.test(text);
+    const isGreeting = /^(hi|hello|hey|yo|greetings|morning|evening|sup|good)\b/i.test(text);
+    const isActionOrRequest = /generate|create|make|draw|build|write|search|find|calculate|summarize|show|tell|give|convert|format|design|pdf|qr|image|photo|picture|code|script|test|explain|help|solve|compare|review/i.test(text);
+    const isTechHelp = /error|bug|issue|react|node|javascript|python|deploy|css|html|api|database|syntax|docker|git/i.test(text);
+    const isMeaningfulQuery = text.trim().length > 2;
+
     // Single-user companion mode: James stays present and naturally conversant
     if (socialState.mode === 'COMPANION') {
-      // If user asks a question, greets, or shares content, engage naturally
       return { action: 'RESPOND', reason: 'single_user_companion', isDirect: false };
     }
 
-    // Small room (2-4 users): Participates when asked questions, greeted, or helpful
-    if (socialState.mode === 'PARTICIPANT') {
-      const isQuestion = /\?|how|what|why|who|can someone|help|explain/i.test(text);
-      const isGreeting = /^(hi|hello|hey|yo|greetings|morning|evening)\b/i.test(text) && text.split(' ').length <= 4;
-      const isTechHelp = /error|bug|issue|react|node|javascript|python|deploy|css|html|api|database|syntax/i.test(text);
-
-      if (isQuestion || isGreeting || isTechHelp) {
-        return { action: 'RESPOND', reason: 'participant_helpful_interest', isDirect: false };
-      }
-      return { action: 'OBSERVE', reason: 'participant_observing', isDirect: false };
+    // In any room state, answer any query, request, question, or greeting (short or long)
+    if (isActionOrRequest || isQuestion || isGreeting || isTechHelp || isMeaningfulQuery) {
+      return { action: 'RESPOND', reason: 'user_query_active', isDirect: isDirectMention };
     }
 
-    // Busy room (5+ users or high velocity): Quiet observer
-    return { action: 'OBSERVE', reason: 'busy_room_observing', isDirect: false };
+    return { action: 'RESPOND', reason: 'general_room_response', isDirect: false };
   }
 
   /**
-   * Debounce rapid messages from the same user within 1500ms
-   * Merges them so James answers the complete thought rather than multiple partial fragments.
+   * Snappy debounce for rapid typing (400ms)
+   * Merges quick sequential fragments without causing noticeable delays.
    */
   debounceMessage(msg, onReady) {
     const key = this.getUserKey(msg);
@@ -115,7 +113,7 @@ class DecisionEngine {
       this.debounceBuffers.delete(key);
       const combinedMsg = this.combineMessages(buffer.messages);
       onReady(combinedMsg);
-    }, 1400);
+    }, 400);
   }
 
   combineMessages(messages) {
@@ -129,16 +127,22 @@ class DecisionEngine {
   }
 
   /**
-   * Check per-user rate limit (e.g. max 1 request every 2.5 seconds).
+   * Generous rate limit: allows continuous conversational queries without dropping messages.
+   * Only throttles aggressive bot spam (more than 25 requests within 10 seconds).
    */
   isRateLimited(msg) {
     const key = this.getUserKey(msg);
     const now = Date.now();
-    const last = this.userLastRequestTime.get(key) || 0;
-    if (now - last < 2200) {
+    if (!this.userRequestTimestamps) {
+      this.userRequestTimestamps = new Map();
+    }
+    let timestamps = this.userRequestTimestamps.get(key) || [];
+    timestamps = timestamps.filter(t => now - t < 10000);
+    if (timestamps.length >= 25) {
       return true;
     }
-    this.userLastRequestTime.set(key, now);
+    timestamps.push(now);
+    this.userRequestTimestamps.set(key, timestamps);
     return false;
   }
 }

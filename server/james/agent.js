@@ -283,14 +283,16 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
       ...conversationHistory
     ];
 
-    // Append latest prompt if not already in history
-    const userPromptContent = msg.replyTo
-      ? `[In reply to @${msg.replyTo.alias}: "${(msg.replyTo.text || '').substring(0, 120)}"] [@${sender}]: ${text}`
-      : `[@${sender}]: ${text}`;
-
-    if (!messages.some(m => m.content.includes(text))) {
-      messages.push({ role: 'user', content: userPromptContent });
+    // Append latest prompt (resolve reply-to intent if user simply tagged @James)
+    let promptInstruction = text;
+    if (msg.replyTo && (/^@?james$/i.test(text.trim()) || !text.trim())) {
+      promptInstruction = `Please handle my request from this reply: "${msg.replyTo.text || ''}"`;
     }
+    const userPromptContent = msg.replyTo
+      ? `[In reply to @${msg.replyTo.alias}: "${(msg.replyTo.text || '').substring(0, 250)}"] [@${sender}]: ${promptInstruction}`
+      : `[@${sender}]: ${promptInstruction}`;
+
+    messages.push({ role: 'user', content: userPromptContent });
 
     let finalResponseText = '';
     let collectedSources = [];
