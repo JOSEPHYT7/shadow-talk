@@ -30,8 +30,11 @@ class OpenRouterProvider extends BaseAIProvider {
   constructor(config = {}) {
     super(config);
     this.apiKey = config.apiKey || process.env.OPENROUTER_API_KEY;
-    this.model = config.model || process.env.JAMES_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
+    // Default to Gemini 2.0 Flash for lightning-fast sub-second to 2s responses
+    this.model = config.model || process.env.JAMES_MODEL || 'google/gemini-2.0-flash-exp:free';
     this.baseUrl = config.baseUrl || 'https://openrouter.ai/api/v1/chat/completions';
+    // 20s timeout per candidate model so failover happens quickly if a model is queued
+    this.timeoutMs = config.timeoutMs || 20000;
   }
 
   async chatCompletion(messages, tools = []) {
@@ -39,12 +42,13 @@ class OpenRouterProvider extends BaseAIProvider {
       throw new Error('Missing OPENROUTER_API_KEY');
     }
 
-    // Candidate free models to try in sequence if one times out or hits rate limits
+    // Candidate free models ordered from fastest to largest/fallback
     const candidateModels = [
       this.model,
-      'deepseek/deepseek-v4-flash-0731:free',
-      'meta-llama/llama-3.3-70b-instruct:free',
       'google/gemini-2.0-flash-exp:free',
+      'meta-llama/llama-3.1-8b-instruct:free',
+      'google/gemini-2.0-flash-001',
+      'meta-llama/llama-3.3-70b-instruct:free',
       'qwen/qwen-2.5-72b-instruct:free'
     ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
 

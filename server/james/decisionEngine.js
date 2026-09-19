@@ -91,10 +91,17 @@ class DecisionEngine {
   }
 
   /**
-   * Snappy debounce for rapid typing (400ms)
-   * Merges quick sequential fragments without causing noticeable delays.
+   * Ultra-fast debounce for rapid typing
+   * Direct mentions/replies are dispatched immediately with 0ms delay.
+   * General messages are buffered for only 100ms to combine rapid multi-line pastes.
    */
-  debounceMessage(msg, onReady) {
+  debounceMessage(msg, onReady, isDirect = false) {
+    if (isDirect) {
+      // Zero delay for direct user queries or replies
+      onReady(msg);
+      return;
+    }
+
     const key = this.getUserKey(msg);
     let buffer = this.debounceBuffers.get(key);
 
@@ -113,7 +120,7 @@ class DecisionEngine {
       this.debounceBuffers.delete(key);
       const combinedMsg = this.combineMessages(buffer.messages);
       onReady(combinedMsg);
-    }, 400);
+    }, 100);
   }
 
   combineMessages(messages) {

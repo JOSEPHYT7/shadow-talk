@@ -203,10 +203,10 @@ class JamesAgent {
     }
 
     // 5. Handle Response with Debounce
-    // If the user sends rapid successive messages, debounce and combine
+    // Direct queries respond with 0ms delay; rapid pastes are cleanly merged
     this.decisionEngine.debounceMessage(msg, (debouncedMsg) => {
       this.processMessageToAI(debouncedMsg, decision.isDirect);
-    });
+    }, decision.isDirect);
   }
 
   // --- AI Reasoning & Response Generation ---
@@ -348,20 +348,15 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
       sources: collectedSources
     });
 
-    // Dynamic natural typing delay
-    const wordsCount = finalResponseText.split(/\s+/).length;
-    const typingDuration = Math.min(Math.max(600, wordsCount * 20), 1500);
-
-    setTimeout(() => {
-      this.broadcastMessage(finalResponseText, {
-        id: msg.id,
-        alias: msg.alias,
-        color: msg.color,
-        text: msg.text,
-        fileName: msg.fileName,
-        fileType: msg.fileType
-      }, collectedSources, capturedAttachment);
-    }, typingDuration);
+    // Broadcast response immediately with 0 artificial delay for maximum speed
+    this.broadcastMessage(finalResponseText, {
+      id: msg.id,
+      alias: msg.alias,
+      color: msg.color,
+      text: msg.text,
+      fileName: msg.fileName,
+      fileType: msg.fileType
+    }, collectedSources, capturedAttachment);
   }
 
   /**
@@ -402,82 +397,89 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
           tool_calls: result.toolCalls
         });
 
-        for (const toolCall of result.toolCalls) {
-          const fnName = toolCall.function?.name;
-          let parsedArgs = {};
-          try {
-            parsedArgs = JSON.parse(toolCall.function?.arguments || '{}');
-          } catch (e) {
-            parsedArgs = {};
-          }
-
-          if (fnName === 'web_search') {
-            const query = parsedArgs.query || 'information';
-            this.io.emit('jamesStatus', {
-              alias: 'James',
-              status: 'searching',
-              text: `Searching the web for "${query}"...`,
-              query,
-              sources: collectedSources
-            });
-          } else if (fnName === 'web_fetch') {
-            const url = parsedArgs.url || '';
+        // Execute all requested tool calls in parallel for ultra-fast concurrent processing
+        const executedTools = await Promise.all(
+          result.toolCalls.map(async (toolCall) => {
+            const fnName = toolCall.function?.name;
+            let parsedArgs = {};
             try {
-              const u = new URL(url);
-              const domain = u.hostname.replace(/^www\./, '');
-              if (domain && !seenDomains.has(domain)) {
-                seenDomains.add(domain);
-                collectedSources.push({
-                  title: domain,
-                  url,
-                  domain,
-                  favicon: `https://www.google.com/s2/favicons?domain=${domain}&sz=64`,
-                  snippet: 'Direct site fetch'
-                });
-              }
-            } catch (e) {}
-            this.io.emit('jamesStatus', {
-              alias: 'James',
-              status: 'searching',
-              text: `Visiting ${url}...`,
-              sources: collectedSources
-            });
-          } else if (fnName === 'generate_image') {
-            this.io.emit('jamesStatus', {
-              alias: 'James',
-              status: 'generating_image',
-              generatingType: 'image',
-              text: `Creating image: "${(parsedArgs.prompt || '').slice(0, 50)}..."`,
-              prompt: parsedArgs.prompt
-            });
-          } else if (fnName === 'generate_pdf') {
-            this.io.emit('jamesStatus', {
-              alias: 'James',
-              status: 'generating_pdf',
-              generatingType: 'pdf',
-              text: `Compiling PDF: "${parsedArgs.title || 'Document'}"...`,
-              title: parsedArgs.title
-            });
-          } else if (fnName === 'generate_qr_code') {
-            this.io.emit('jamesStatus', {
-              alias: 'James',
-              status: 'generating_qr',
-              generatingType: 'qr',
-              text: `Generating QR code matrix...`,
-              textPayload: parsedArgs.text
-            });
-          } else if (fnName === 'get_weather') {
-            this.io.emit('jamesStatus', {
-              alias: 'James',
-              status: 'searching',
-              text: `Checking live weather conditions for ${parsedArgs.location}...`,
-              sources: collectedSources
-            });
-          }
+              parsedArgs = JSON.parse(toolCall.function?.arguments || '{}');
+            } catch (e) {
+              parsedArgs = {};
+            }
 
-          console.log(`[JamesAgent]: Executing tool "${fnName}" with args:`, parsedArgs);
-          const toolOutput = await this.toolRegistry.executeTool(fnName, parsedArgs);
+            if (fnName === 'web_search') {
+              const query = parsedArgs.query || 'information';
+              this.io.emit('jamesStatus', {
+                alias: 'James',
+                status: 'searching',
+                text: `Searching the web for "${query}"...`,
+                query,
+                sources: collectedSources
+              });
+            } else if (fnName === 'web_fetch') {
+              const url = parsedArgs.url || '';
+              try {
+                const u = new URL(url);
+                const domain = u.hostname.replace(/^www\./, '');
+                if (domain && !seenDomains.has(domain)) {
+                  seenDomains.add(domain);
+                  collectedSources.push({
+                    title: domain,
+                    url,
+                    domain,
+                    favicon: `https://www.google.com/s2/favicons?domain=${domain}&sz=64`,
+                    snippet: 'Direct site fetch'
+                  });
+                }
+              } catch (e) {}
+              this.io.emit('jamesStatus', {
+                alias: 'James',
+                status: 'searching',
+                text: `Visiting ${url}...`,
+                sources: collectedSources
+              });
+            } else if (fnName === 'generate_image') {
+              this.io.emit('jamesStatus', {
+                alias: 'James',
+                status: 'generating_image',
+                generatingType: 'image',
+                text: `Creating image: "${(parsedArgs.prompt || '').slice(0, 50)}..."`,
+                prompt: parsedArgs.prompt
+              });
+            } else if (fnName === 'generate_pdf') {
+              this.io.emit('jamesStatus', {
+                alias: 'James',
+                status: 'generating_pdf',
+                generatingType: 'pdf',
+                text: `Compiling PDF: "${parsedArgs.title || 'Document'}"...`,
+                title: parsedArgs.title
+              });
+            } else if (fnName === 'generate_qr_code') {
+              this.io.emit('jamesStatus', {
+                alias: 'James',
+                status: 'generating_qr',
+                generatingType: 'qr',
+                text: `Generating QR code matrix...`,
+                textPayload: parsedArgs.text
+              });
+            } else if (fnName === 'get_weather') {
+              this.io.emit('jamesStatus', {
+                alias: 'James',
+                status: 'searching',
+                text: `Checking live weather conditions for ${parsedArgs.location}...`,
+                sources: collectedSources
+              });
+            }
 
+            console.log(`[JamesAgent]: Executing tool "${fnName}" with args:`, parsedArgs);
+            const toolOutput = await this.toolRegistry.executeTool(fnName, parsedArgs);
+
+            return { toolCall, fnName, parsedArgs, toolOutput };
+          })
+        );
+
+        for (const { toolCall, fnName, toolOutput } of executedTools) {
           // Handle Attachment Extraction for generate_image, generate_pdf, generate_qr_code
           if (fnName === 'generate_image') {
             try {

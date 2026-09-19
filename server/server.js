@@ -1,4 +1,9 @@
 // Automatically load environment variables from .env if present
+const dns = require('dns');
+if (typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder('ipv4first');
+}
+
 try {
   if (typeof process.loadEnvFile === 'function') {
     process.loadEnvFile();
