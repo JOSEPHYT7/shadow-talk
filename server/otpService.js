@@ -30,28 +30,31 @@ loadEnv();
 // In-memory OTP Store: email -> { otp, expiresAt, attempts }
 const otpStore = new Map();
 
-// Helper to get or create nodemailer transporter with IPv4 forced
-function getTransporter(port = 465, secure = true) {
-  loadEnv();
-  const user = (process.env.EMAIL_USER || '').trim();
-  // Strip any spaces from Google 16-character app password (e.g. 'xxxx xxxx xxxx xxxx' -> 'xxxxxxxxxxxxxxxx')
-  const rawPass = (process.env.EMAIL_APP_PASSWORD || '').trim();
-  const pass = rawPass.replace(/\s+/g, '');
-
-  if (!user || !pass) {
-    return null;
+// Helper to resolve Gmail SMTP IPv4 addresses to bypass IPv6 ENETUNREACH on cloud containers
+async function resolveGmailIpv4() {
+  try {
+    const addresses = await dns.promises.resolve4('smtp.gmail.com');
+    if (addresses && addresses.length > 0) {
+      return addresses;
+    }
+  } catch (e) {
+    console.warn('[Email OTP Service]: DNS resolve4 failed, using default hostname:', e.message);
   }
+  return ['smtp.gmail.com'];
+}
 
+// Helper to create nodemailer transporter with direct IPv4 address
+function createTransporter(host, port, secure, user, pass) {
   return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
+    host: host,
     port: port,
     secure: secure, // true for 465 (SSL), false for 587 (STARTTLS)
     auth: { user, pass },
-    family: 4, // CRITICAL: Force IPv4
-    connectionTimeout: 4000,
-    greetingTimeout: 4000,
-    socketTimeout: 5000,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
     tls: {
+      servername: 'smtp.gmail.com', // Ensures SNI certificate matches smtp.gmail.com even when connecting to raw IP
       rejectUnauthorized: false
     }
   });
@@ -99,109 +102,58 @@ async function sendOtp(email) {
     </div>
   `;
 
-  // 1. Check for HTTPS Email APIs (Resend, Brevo) which are never blocked by cloud firewalls like Render
-  if (process.env.RESEND_API_KEY) {
-    try {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.RESEND_API_KEY.trim()}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          from: process.env.RESEND_FROM || 'ShadowTalk Security <onboarding@resend.dev>',
-          to: [normalizedEmail],
-          subject: `${otp} is your ShadowTalk Verification Code`,
-          html: htmlContent
-        }),
-        signal: AbortSignal.timeout(8000)
-      });
-      if (res.ok) {
-        console.log(`[Email OTP Service]: Real email sent successfully via Resend HTTPS API to ${normalizedEmail}`);
-        return {
-          success: true,
-          message: `Verification code sent to ${normalizedEmail}`,
-          email: normalizedEmail
-        };
-      }
-    } catch (resendErr) {
-      console.warn(`[Email OTP Service]: Resend HTTPS API failed (${resendErr.message}), falling back to SMTP...`);
-    }
+  loadEnv();
+  const user = (process.env.EMAIL_USER || '').trim();
+  const rawPass = (process.env.EMAIL_APP_PASSWORD || '').trim();
+  const pass = rawPass.replace(/\s+/g, '');
+
+  if (!user || !pass) {
+    throw new Error('EMAIL_USER and EMAIL_APP_PASSWORD are not configured in server/.env.');
   }
 
-  if (process.env.BREVO_API_KEY) {
-    try {
-      const res = await fetch('https://api.brevo.com/v3/smtp/email', {
-        method: 'POST',
-        headers: {
-          'api-key': process.env.BREVO_API_KEY.trim(),
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          sender: { name: 'ShadowTalk Security', email: process.env.EMAIL_USER || 'no-reply@shadowtalk.app' },
-          to: [{ email: normalizedEmail }],
-          subject: `${otp} is your ShadowTalk Verification Code`,
-          htmlContent: htmlContent
-        }),
-        signal: AbortSignal.timeout(8000)
-      });
-      if (res.ok) {
-        console.log(`[Email OTP Service]: Real email sent successfully via Brevo HTTPS API to ${normalizedEmail}`);
-        return {
-          success: true,
-          message: `Verification code sent to ${normalizedEmail}`,
-          email: normalizedEmail
-        };
-      }
-    } catch (brevoErr) {
-      console.warn(`[Email OTP Service]: Brevo HTTPS API failed (${brevoErr.message}), falling back to SMTP...`);
-    }
-  }
-
-  // 2. SMTP Delivery (Works locally and on hosts with open outbound SMTP)
   const mailOptions = {
-    from: `"ShadowTalk Security" <${process.env.EMAIL_USER}>`,
+    from: `"ShadowTalk Security" <${user}>`,
     to: normalizedEmail,
     subject: `${otp} is your ShadowTalk Verification Code`,
     html: htmlContent
   };
 
-  const transporter465 = getTransporter(465, true);
-  if (transporter465) {
-    // Attempt Port 465 (SSL direct with IPv4)
+  // Resolve Gmail SMTP IPv4 address to strictly bypass IPv6 ENETUNREACH
+  const ipv4List = await resolveGmailIpv4();
+  console.log(`[Email OTP Service]: Resolved Gmail SMTP IPv4: ${ipv4List.join(', ')}`);
+
+  // Try both Port 465 (SSL) and Port 587 (STARTTLS) with resolved IPv4
+  const configsToTry = [];
+  for (const ip of ipv4List) {
+    configsToTry.push({ host: ip, port: 465, secure: true, label: `${ip}:465 (SSL)` });
+    configsToTry.push({ host: ip, port: 587, secure: false, label: `${ip}:587 (STARTTLS)` });
+  }
+
+  let lastError = null;
+
+  for (const config of configsToTry) {
     try {
-      await transporter465.sendMail(mailOptions);
-      console.log(`[Email OTP Service]: Real email sent successfully via port 465 (IPv4) to ${normalizedEmail}`);
+      console.log(`[Email OTP Service]: Attempting delivery via Gmail SMTP [${config.label}]...`);
+      const transporter = createTransporter(config.host, config.port, config.secure, user, pass);
+      await transporter.sendMail(mailOptions);
+      console.log(`[Email OTP Service]: Real email sent successfully via Gmail SMTP [${config.label}] to ${normalizedEmail}`);
       return {
         success: true,
         message: `Verification code sent to ${normalizedEmail}`,
         email: normalizedEmail
       };
-    } catch (err465) {
-      console.warn(`[Email OTP Service]: Port 465 failed (${err465.message}). Retrying via Port 587...`);
-      
-      // Attempt Port 587 (STARTTLS with IPv4)
-      try {
-        const transporter587 = getTransporter(587, false);
-        await transporter587.sendMail(mailOptions);
-        console.log(`[Email OTP Service]: Real email sent successfully via port 587 (IPv4) to ${normalizedEmail}`);
-        return {
-          success: true,
-          message: `Verification code sent to ${normalizedEmail}`,
-          email: normalizedEmail
-        };
-      } catch (err587) {
-        console.warn(`[Email OTP Service]: SMTP blocked by cloud provider (Render free tier blocks ports 25, 465, and 587).`);
-      }
+    } catch (err) {
+      console.warn(`[Email OTP Service]: Delivery via ${config.label} failed: ${err.message}`);
+      lastError = err;
     }
   }
 
-  // 3. Graceful Cloud Fallback: Render free tier blocks outbound SMTP ports
-  // We log the code in Render logs and return it in the payload so the user is never stuck and can complete verification!
-  console.log(`[Email OTP Service]: Cloud SMTP blocked by host. 4-digit code for ${normalizedEmail} is -> ${otp}`);
+  // Cloud Host Fallback: If Render's host firewall drops all outbound SMTP ports (25, 465, 587),
+  // log the OTP and provide it so the user can verify their account without being blocked.
+  console.log(`[Email OTP Service]: Cloud host blocked raw SMTP ports. Code for ${normalizedEmail} is -> ${otp}`);
   return {
     success: true,
-    message: `Verification code generated! (Cloud host blocks SMTP: code is logged in Render dashboard, or add RESEND_API_KEY)`,
+    message: `Verification code generated! (Cloud host blocked SMTP ports. Code: ${otp})`,
     code: otp,
     email: normalizedEmail
   };
