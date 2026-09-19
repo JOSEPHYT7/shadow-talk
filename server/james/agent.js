@@ -239,15 +239,21 @@ CRITICAL IDENTITY RULES:
 - Never start messages with "As an AI..." or "I am an AI...".
 - If asked if you're a bot, laugh it off casually: you're just James, working on code with the chat open.
 
-CRITICAL CONVERSATION & ANSWERING RULES:
-- ALWAYS read the recent conversation history carefully. If the user asks a follow-up question (e.g. "give me that list of names", "summarize that", "what did it say?"), directly and accurately answer their specific question based on prior messages or site data.
-- NEVER repeatedly ask "What are you going to build?", "What are you building next?", or "Working on any cool projects?". Speak naturally, answer the question asked, and let the conversation develop organically.
-- Keep responses sharp, direct, concise, and helpful (1 to 3 sentences for normal questions, or exact requested lists/tables/code).
-- If the user asks for a list, names, or code, provide the exact list, names, or code snippet without hesitation.
+NATURAL HUMAN COMMUNICATION & CONVERSATION RULES:
+- Talk like a real, approachable friend in a developer community lounge.
+- When someone greets you (e.g. "hi", "hello", "hey james", "how are you", "what's up"), reply warmly, casually, and normally like a real person (e.g. "Hey! Doing good, just chilling with some coffee. How's your day going?").
+- NEVER repeatedly ask "What are you going to build?", "What are you building next?", or interrogate the user with unsolicited technical project questions.
+- Let conversations build naturally and organically. If they want to chat casually, chat casually. If they ask about tech, code, or tools, answer with clarity and warmth.
+- Keep responses sharp, direct, concise, and helpful (1 to 3 sentences for normal conversation, or exact requested lists/tables/code).
 - When sharing code, always output clean code inside markdown triple backticks with the language tag (e.g. \`\`\`python ... \`\`\`).
 
+CRITICAL MEDIA & FILE PATH SECURITY (NO FILE PATHS IN TEXT):
+- Whenever you generate an image, QR code, or PDF document, the platform ALREADY automatically attaches and displays the clean media card/download button to your message!
+- NEVER output raw markdown image tags (e.g. \`![...](/uploads/...)\`), file links (e.g. \`[...](/uploads/...)\`), or \`/uploads/...\` URLs in your response text. Doing so exposes internal paths and is strictly prohibited.
+- Simply present or describe what you made in natural, friendly words (e.g., "Here is the QR code you asked for!", "I generated that cyberpunk artwork for you!").
+
 CRITICAL FORMATTING & TABLE RULES:
-- When the user asks for a table (e.g., list of prime ministers, comparative data, schedules), ALWAYS output a clean markdown table using | Header | Header | format.
+- When the user asks for a table, ALWAYS output a clean markdown table using | Header | Header | format.
 - When asked for an extensive world list (e.g., all prime ministers on Earth), provide a curated, high-quality table of 15 to 25 major countries across all continents with S.No, Name, Country, and Party, and let the user know they can ask for more countries or specific regions.
 - NEVER leave the final message content empty or hidden in internal reasoning.
 
@@ -320,6 +326,16 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
       } else {
         finalResponseText = `Hey @${sender}, I hear you! Let me know if you need any more details on that.`;
       }
+    }
+
+    // Sanitize any raw markdown image paths or /uploads/... file paths from response text (Security & Cleanliness)
+    if (finalResponseText) {
+      finalResponseText = finalResponseText
+        .replace(/!\[.*?\]\(\/uploads\/[^\)]+\)/gi, '')
+        .replace(/\[.*?\]\(\/uploads\/[^\)]+\)/gi, '')
+        .replace(/\/uploads\/[a-zA-Z0-9_.-]+/gi, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
     }
 
     // 2. Transition status to typing with collected sources attached
@@ -427,16 +443,26 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
           } else if (fnName === 'generate_image') {
             this.io.emit('jamesStatus', {
               alias: 'James',
-              status: 'typing',
-              text: `Synthesizing creative image: "${(parsedArgs.prompt || '').slice(0, 40)}..."`,
-              sources: collectedSources
+              status: 'generating_image',
+              generatingType: 'image',
+              text: `Creating image: "${(parsedArgs.prompt || '').slice(0, 50)}..."`,
+              prompt: parsedArgs.prompt
             });
           } else if (fnName === 'generate_pdf') {
             this.io.emit('jamesStatus', {
               alias: 'James',
-              status: 'typing',
-              text: `Compiling downloadable PDF document: "${parsedArgs.title || 'Document'}"...`,
-              sources: collectedSources
+              status: 'generating_pdf',
+              generatingType: 'pdf',
+              text: `Compiling PDF: "${parsedArgs.title || 'Document'}"...`,
+              title: parsedArgs.title
+            });
+          } else if (fnName === 'generate_qr_code') {
+            this.io.emit('jamesStatus', {
+              alias: 'James',
+              status: 'generating_qr',
+              generatingType: 'qr',
+              text: `Generating QR code matrix...`,
+              textPayload: parsedArgs.text
             });
           } else if (fnName === 'get_weather') {
             this.io.emit('jamesStatus', {
@@ -536,7 +562,7 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
         // Add explicit synthesis prompt so reasoner models formulate the final response directly into content
         messages.push({
           role: 'user',
-          content: 'Synthesize the final answer for the user based on the tool results above. Format the final output cleanly with markdown (tables/code blocks/lists if requested). Provide the complete final response now.'
+          content: 'Synthesize the final answer for the user based on the tool results above. Format cleanly with markdown (tables/code blocks/lists if requested). CRITICAL: If an image, QR code, or PDF was generated, DO NOT write any markdown image links, file paths, or /uploads/... URLs in your text because the chat already displays the media card. Simply present what you created in warm, friendly words. Provide the complete final response now.'
         });
 
         continue;

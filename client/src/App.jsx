@@ -37,7 +37,8 @@ import {
   Trash2,
   Ban,
   Code2,
-  Copy
+  Copy,
+  QrCode
 } from 'lucide-react';
 import { PRESET_AVATARS } from './avatars';
 import './App.css';
@@ -979,6 +980,13 @@ function App() {
 
     socketRef.current.on('userCount', (count) => setOnlineCount(count || 1));
 
+    // 24h Periodic Real-Time Chat Sync from Server
+    socketRef.current.on('allMessages', (allMsgs) => {
+      if (Array.isArray(allMsgs)) {
+        setMessages(allMsgs);
+      }
+    });
+
     socketRef.current.on('jamesStatus', (payload) => {
       if (payload && payload.status && payload.status !== 'idle') {
         setJamesStatus(payload);
@@ -988,7 +996,15 @@ function App() {
     });
 
     socketRef.current.on('message', (msg) => {
-      setMessages((prev) => [...prev, msg]);
+      // Reconcile optimistic messages by id to avoid duplicate rendering
+      setMessages((prev) => {
+        const exists = prev.some(m => m.id === msg.id);
+        if (exists) {
+          return prev.map(m => m.id === msg.id ? { ...m, ...msg } : m);
+        }
+        return [...prev, msg];
+      });
+
       if (msg.alias === 'James' || msg.userId === 'bot_james') {
         setJamesStatus(null);
       }
@@ -1764,7 +1780,9 @@ function App() {
           });
         }
 
-        socketRef.current.emit('message', encryptMsg({
+        const clientMsgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
+        const rawPayload = {
+          id: clientMsgId,
           audioUrl: audioUrl,
           fileUrl: audioUrl,
           fileType: 'audio/webm',
@@ -1778,6 +1796,8 @@ function App() {
           status: identity.status || 'Online',
           isVerified: identity.isVerified,
           allowDownload: false,
+          timestamp: Date.now(),
+          reactions: {},
           replyTo: replyingTo ? {
             id: replyingTo.id,
             userId: replyingTo.userId,
@@ -1786,7 +1806,11 @@ function App() {
             text: replyingTo.text,
             fileName: replyingTo.fileName
           } : null
-        }));
+        };
+        const encrypted = encryptMsg(rawPayload);
+        // Instant Optimistic Update (0ms delay)
+        setMessages(prev => [...prev, encrypted]);
+        socketRef.current.emit('message', encrypted);
 
         setReplyingTo(null);
         setUploading(false);
@@ -1871,7 +1895,9 @@ function App() {
       const isVid = finalFileType.startsWith('video/');
       const isAud = finalFileType.startsWith('audio/');
 
-      socketRef.current.emit('message', encryptMsg({
+      const clientMsgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
+      const rawPayload = {
+        id: clientMsgId,
         text: input.trim() || null,
         fileUrl: uploadedUrl,
         imageUrl: isImg ? uploadedUrl : null,
@@ -1888,6 +1914,8 @@ function App() {
         status: identity.status || 'Online',
         isVerified: identity.isVerified,
         allowDownload: true,
+        timestamp: Date.now(),
+        reactions: {},
         replyTo: replyingTo ? {
           id: replyingTo.id,
           userId: replyingTo.userId,
@@ -1896,7 +1924,12 @@ function App() {
           text: replyingTo.text,
           fileName: replyingTo.fileName
         } : null
-      }));
+      };
+
+      const encrypted = encryptMsg(rawPayload);
+      // Instant Optimistic Update (0ms delay)
+      setMessages(prev => [...prev, encrypted]);
+      socketRef.current.emit('message', encrypted);
 
       removeSelectedFile();
       setReplyingTo(null);
@@ -1906,7 +1939,9 @@ function App() {
     }
 
     if (input.trim()) {
-      socketRef.current.emit('message', encryptMsg({
+      const clientMsgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
+      const rawPayload = {
+        id: clientMsgId,
         text: input.trim(),
         userId: identity.userId,
         alias: identity.alias,
@@ -1915,6 +1950,8 @@ function App() {
         bio: identity.bio || '',
         status: identity.status || 'Online',
         isVerified: identity.isVerified,
+        timestamp: Date.now(),
+        reactions: {},
         replyTo: replyingTo ? {
           id: replyingTo.id,
           userId: replyingTo.userId,
@@ -1923,7 +1960,13 @@ function App() {
           text: replyingTo.text,
           fileName: replyingTo.fileName
         } : null
-      }));
+      };
+
+      const encrypted = encryptMsg(rawPayload);
+      // Instant Optimistic Update (0ms delay)
+      setMessages(prev => [...prev, encrypted]);
+      socketRef.current.emit('message', encrypted);
+
       setReplyingTo(null);
       setInput('');
       setShowMentionDropdown(false);
@@ -2102,13 +2145,22 @@ function App() {
   const renderFormattedMessage = (text) => {
     if (!text) return null;
 
+    // Sanitize any raw markdown image syntax or /uploads/... file paths from message text (Security & Cleanliness)
+    const sanitizedText = text
+      .replace(/!\[.*?\]\(\/uploads\/[^\)]+\)/gi, '')
+      .replace(/\[.*?\]\(\/uploads\/[^\)]+\)/gi, '')
+      .replace(/\/uploads\/[a-zA-Z0-9_.-]+/gi, '')
+      .trim();
+
+    if (!sanitizedText) return null;
+
     // 1. Split text into code blocks (```lang ... ```) and regular text segments
     const codeBlockRegex = /```(?:([a-zA-Z0-9_#-]+)?\r?\n)?([\s\S]*?)```/g;
     const segments = [];
     let lastIndex = 0;
     let match;
 
-    while ((match = codeBlockRegex.exec(text)) !== null) {
+    while ((match = codeBlockRegex.exec(sanitizedText)) !== null) {
       if (match.index > lastIndex) {
         segments.push({
           type: 'text',
@@ -2268,6 +2320,10 @@ function App() {
   };
 
   const filteredMessages = messages.filter(msg => {
+    // 24h Auto-Clear: Hide messages older than 24 hours automatically
+    if (msg.timestamp && (Date.now() - msg.timestamp > 24 * 60 * 60 * 1000)) {
+      return false;
+    }
     const dmsg = decryptMsg(msg);
     if (dmsg.isHiddenEncrypted) return false;
     if (!searchQuery.trim()) return true;
@@ -2968,6 +3024,63 @@ function App() {
                     </div>
                   )}
 
+                  {/* ChatGPT-Style Generating Animation: Image Generation */}
+                  {(jamesStatus.status === 'generating_image' || jamesStatus.generatingType === 'image') && (
+                    <div className="james-live-indicator-card generating-image-card">
+                      <div className="chatgpt-generating-canvas">
+                        <div className="canvas-shimmer-sweep" />
+                        <div className="canvas-center-content">
+                          <div className="canvas-sparkle-halo">
+                            <Sparkles size={24} className="sparkle-anim-spin" />
+                          </div>
+                          <span className="canvas-status-title">Creating image...</span>
+                          {jamesStatus.prompt && (
+                            <span className="canvas-prompt-badge">
+                              "{jamesStatus.prompt.length > 55 ? jamesStatus.prompt.slice(0, 55) + '...' : jamesStatus.prompt}"
+                            </span>
+                          )}
+                          <div className="canvas-progress-track">
+                            <div className="canvas-progress-bar" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ChatGPT-Style Generating Animation: PDF Compilation */}
+                  {(jamesStatus.status === 'generating_pdf' || jamesStatus.generatingType === 'pdf') && (
+                    <div className="james-live-indicator-card generating-pdf-card">
+                      <div className="chatgpt-generating-document">
+                        <div className="doc-scanner-bar" />
+                        <div className="doc-icon-wrap">
+                          <FileText size={22} className="doc-pulse-icon" />
+                        </div>
+                        <div className="doc-info-col">
+                          <span className="doc-status-title">Compiling PDF document...</span>
+                          <span className="doc-title-badge">{jamesStatus.title || 'Document'}</span>
+                        </div>
+                        <Loader2 size={16} className="send-spinner" />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ChatGPT-Style Generating Animation: QR Code Matrix */}
+                  {(jamesStatus.status === 'generating_qr' || jamesStatus.generatingType === 'qr') && (
+                    <div className="james-live-indicator-card generating-qr-card">
+                      <div className="chatgpt-generating-qr">
+                        <div className="qr-matrix-box">
+                          <div className="qr-laser-scanner" />
+                          <QrCode size={26} className="qr-pulse-icon" />
+                        </div>
+                        <div className="qr-info-col">
+                          <span className="qr-status-title">Generating QR Code matrix...</span>
+                          <span className="qr-sub-badge">{jamesStatus.textPayload || 'Encoding data...'}</span>
+                        </div>
+                        <Loader2 size={16} className="send-spinner" />
+                      </div>
+                    </div>
+                  )}
+
                   {jamesStatus.status === 'typing' && (
                     <div className="james-live-indicator-card typing">
                       <div className="indicator-top-row">
@@ -3026,6 +3139,21 @@ function App() {
                 {jamesStatus.status === 'searching' && (
                   <div className="status-icon-badge searching">
                     <Globe size={14} className="status-spin-globe" />
+                  </div>
+                )}
+                {(jamesStatus.status === 'generating_image' || jamesStatus.generatingType === 'image') && (
+                  <div className="status-icon-badge generating">
+                    <Sparkles size={14} className="status-pulse-sparkle" />
+                  </div>
+                )}
+                {(jamesStatus.status === 'generating_pdf' || jamesStatus.generatingType === 'pdf') && (
+                  <div className="status-icon-badge generating">
+                    <FileText size={14} className="status-pulse-sparkle" />
+                  </div>
+                )}
+                {(jamesStatus.status === 'generating_qr' || jamesStatus.generatingType === 'qr') && (
+                  <div className="status-icon-badge generating">
+                    <QrCode size={14} className="status-pulse-sparkle" />
                   </div>
                 )}
                 {jamesStatus.status === 'typing' && (

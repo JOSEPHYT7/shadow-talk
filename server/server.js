@@ -455,11 +455,20 @@ io.on('connection', (socket) => {
   });
 });
 
-// Periodic cleanup every hour
-setInterval(() => {
+// Periodic cleanup of messages & uploads older than 24 hours
+const runPeriodicCleanup = () => {
+  const prevCount = messages.length;
   messages = cleanupMessages(messages);
   cleanupUploads();
-}, 60 * 60 * 1000);
+  if (messages.length !== prevCount) {
+    console.log(`[24h Auto-Cleanup]: Purged ${prevCount - messages.length} messages older than 24h.`);
+    io.emit('allMessages', messages);
+  }
+};
+
+// Run on startup & every 15 minutes
+runPeriodicCleanup();
+setInterval(runPeriodicCleanup, 15 * 60 * 1000);
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {

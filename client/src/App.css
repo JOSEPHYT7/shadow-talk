@@ -5196,3 +5196,276 @@
   height: 100%;
   object-fit: cover;
 }
+
+/* ==========================================================
+   ChatGPT-Style AI Tool Generation Cards (Image, PDF, QR)
+   ========================================================== */
+
+/* 1. Shimmering AI Canvas for Image Generation */
+.chatgpt-generating-canvas {
+  position: relative;
+  width: 100%;
+  min-height: 170px;
+  background: radial-gradient(circle at 50% 30%, rgba(15, 23, 42, 0.95), #060911);
+  border: 1px solid rgba(0, 243, 255, 0.28);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(0, 243, 255, 0.05);
+}
+
+.canvas-shimmer-sweep {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 200%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(0, 243, 255, 0.04) 25%,
+    rgba(192, 132, 252, 0.12) 50%,
+    rgba(0, 243, 255, 0.04) 75%,
+    transparent 100%
+  );
+  animation: canvasShimmerSweep 2.8s infinite linear;
+  pointer-events: none;
+}
+
+@keyframes canvasShimmerSweep {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(50%); }
+}
+
+.canvas-center-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 1.25rem 1rem;
+  text-align: center;
+  max-width: 90%;
+}
+
+.canvas-sparkle-halo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 243, 255, 0.25) 0%, rgba(192, 132, 252, 0.1) 70%, transparent 100%);
+  border: 1px solid rgba(0, 243, 255, 0.4);
+  box-shadow: 0 0 16px rgba(0, 243, 255, 0.35);
+  color: #00f3ff;
+}
+
+.sparkle-anim-spin {
+  animation: pulseSparkle 2s ease-in-out infinite;
+}
+
+@keyframes pulseSparkle {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.9; }
+  50% { transform: scale(1.15) rotate(15deg); opacity: 1; filter: drop-shadow(0 0 8px #00f3ff); }
+}
+
+.canvas-status-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  background: linear-gradient(90deg, #00f3ff, #c084fc, #38bdf8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: 0.4px;
+}
+
+.canvas-prompt-badge {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.72rem;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  max-width: 280px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.canvas-progress-track {
+  width: 140px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 0.25rem;
+}
+
+.canvas-progress-bar {
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(90deg, #00f3ff, #c084fc);
+  border-radius: 2px;
+  animation: progressIndeterminate 1.6s infinite ease-in-out;
+}
+
+@keyframes progressIndeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+
+/* 2. Sleek Document Compiler Card for PDF Generation */
+.chatgpt-generating-document {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.9rem 1.1rem;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.85));
+  border: 1px solid rgba(14, 165, 233, 0.35);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+}
+
+.doc-scanner-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2px;
+  height: 100%;
+  background: linear-gradient(180deg, transparent, #00f3ff, #38bdf8, transparent);
+  box-shadow: 0 0 10px #00f3ff;
+  animation: docLaserScan 2s infinite ease-in-out;
+}
+
+@keyframes docLaserScan {
+  0% { transform: translateX(0); opacity: 0.2; }
+  50% { transform: translateX(380px); opacity: 1; }
+  100% { transform: translateX(0); opacity: 0.2; }
+}
+
+.doc-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: rgba(14, 165, 233, 0.15);
+  border: 1px solid rgba(14, 165, 233, 0.4);
+  color: #38bdf8;
+  flex-shrink: 0;
+}
+
+.doc-pulse-icon {
+  animation: docIconPulse 1.8s infinite ease-in-out;
+}
+
+@keyframes docIconPulse {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.1); opacity: 1; color: #00f3ff; }
+}
+
+.doc-info-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1;
+}
+
+.doc-status-title {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.doc-title-badge {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.72rem;
+  color: #38bdf8;
+}
+
+/* 3. Pulsing Neon QR Matrix for QR Generation */
+.chatgpt-generating-qr {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.9rem 1.1rem;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(20, 28, 48, 0.85));
+  border: 1px solid rgba(0, 243, 255, 0.35);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+}
+
+.qr-matrix-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: #090d16;
+  border: 1.5px solid rgba(0, 243, 255, 0.5);
+  color: #00f3ff;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: 0 0 12px rgba(0, 243, 255, 0.2);
+}
+
+.qr-laser-scanner {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 2px;
+  background: #00f3ff;
+  box-shadow: 0 0 8px #00f3ff;
+  animation: qrLaserSweep 1.5s infinite ease-in-out;
+  z-index: 3;
+}
+
+@keyframes qrLaserSweep {
+  0% { transform: translateY(0px); opacity: 0.3; }
+  50% { transform: translateY(42px); opacity: 1; }
+  100% { transform: translateY(0px); opacity: 0.3; }
+}
+
+.qr-pulse-icon {
+  animation: qrPulse 2s infinite ease-in-out;
+}
+
+@keyframes qrPulse {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+
+.qr-info-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1;
+}
+
+.qr-status-title {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.qr-sub-badge {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.72rem;
+  color: #00f3ff;
+  max-width: 240px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
