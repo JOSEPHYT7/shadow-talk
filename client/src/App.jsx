@@ -3595,6 +3595,12 @@ function App() {
                   </div>
                 </div>
 
+                {otpSuccessMsg && (
+                  <div className="otp-info-banner" style={{ background: 'rgba(0, 243, 255, 0.08)', border: '1px solid rgba(0, 243, 255, 0.25)', color: '#00f3ff', padding: '0.45rem 0.75rem', borderRadius: 8, fontSize: '0.78rem', margin: '0.4rem 0 0.8rem 0', textAlign: 'center', lineHeight: 1.4 }}>
+                    {otpSuccessMsg}
+                  </div>
+                )}
+
                 {/* 4 Individual Digit Input Boxes */}
                 <div className="otp-boxes-row" onPaste={handleOtpPaste}>
                   {otpDigits.map((digit, idx) => (
