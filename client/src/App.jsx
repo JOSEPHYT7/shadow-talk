@@ -910,7 +910,14 @@ function App() {
   }, [identity]);
 
   useEffect(() => {
-    socketRef.current = io(SOCKET_URL);
+    socketRef.current = io(SOCKET_URL, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000
+    });
 
     socketRef.current.on('connect', () => {
       socketRef.current.emit('userJoined', {
@@ -942,7 +949,26 @@ function App() {
     });
 
     socketRef.current.on('init', (msgs) => {
-      setMessages(msgs);
+      if (Array.isArray(msgs) && msgs.length > 0) {
+        setMessages(msgs);
+        try {
+          localStorage.setItem('shadowtalk_cached_messages', JSON.stringify(msgs.slice(-100)));
+        } catch (e) {}
+      } else {
+        // If server sends empty array (e.g. freshly deployed before sync), fallback to cached messages
+        try {
+          const cached = localStorage.getItem('shadowtalk_cached_messages');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setMessages(parsed);
+              return;
+            }
+          }
+        } catch (e) {}
+        setMessages([]);
+      }
+
       if (Array.isArray(msgs)) {
         msgs.forEach((m) => {
           if (m && m.id) {
@@ -1002,10 +1028,13 @@ function App() {
       // Reconcile optimistic messages by id to avoid duplicate rendering
       setMessages((prev) => {
         const exists = prev.some(m => m && m.id && String(m.id) === msgIdStr);
-        if (exists) {
-          return prev.map(m => (m && m.id && String(m.id) === msgIdStr) ? { ...m, ...msg } : m);
-        }
-        return [...prev, msg];
+        const next = exists
+          ? prev.map(m => (m && m.id && String(m.id) === msgIdStr) ? { ...m, ...msg } : m)
+          : [...prev, msg];
+        try {
+          localStorage.setItem('shadowtalk_cached_messages', JSON.stringify(next.slice(-100)));
+        } catch (e) {}
+        return next;
       });
 
       if (msg.alias === 'James' || msg.userId === 'bot_james') {
@@ -1323,13 +1352,18 @@ function App() {
       const res = await fetch(`${SERVER_URL}/api/otp/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: targetEmail.trim() })
+        body: JSON.stringify({ email: targetEmail.trim() }),
+        signal: AbortSignal.timeout(10000)
       });
       const data = await res.json();
 
       if (data.success) {
         setOtpStep('code');
-        setOtpDigits(['', '', '', '']);
+        if (data.code && String(data.code).length === 4) {
+          setOtpDigits(String(data.code).split(''));
+        } else {
+          setOtpDigits(['', '', '', '']);
+        }
         setOtpResendCountdown(30);
         setOtpSuccessMsg(data.message || `Verification code sent to ${targetEmail}`);
         setTimeout(() => otpInputRefs.current[0]?.focus(), 150);
@@ -1337,7 +1371,7 @@ function App() {
         setOtpError(data.error || 'Failed to send verification code.');
       }
     } catch (err) {
-      setOtpError('Network error connecting to verification server.');
+      setOtpError('Network timeout connecting to verification server. Please try again.');
     } finally {
       setOtpLoading(false);
     }

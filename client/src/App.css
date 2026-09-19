@@ -5263,6 +5263,13 @@
   object-fit: cover;
 }
 
+/* Universal Spinning Loader Animation */
+.spinner {
+  animation: spinClockwise 1s linear infinite;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
 /* ==========================================================
    Redesigned Interactive AI Generation Cards (Image, PDF, QR)
    Ultra-Professional, Sleek Cyberpunk / Neo-Studio Aesthetics

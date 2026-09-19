@@ -60,15 +60,15 @@ function deleteUploadedFile(fileUrl) {
 const app = express();
 const server = http.createServer(app);
 
-// Configure Socket.io with 100MB buffer for rich attachments & base64 fallbacks
+// Configure Socket.io with 100MB buffer and generous timeouts to prevent mobile/cloud disconnections
 const io = new Server(server, {
   cors: {
     origin: '*',
     methods: ['GET', 'POST']
   },
   maxHttpBufferSize: 1e8, // 100 MB
-  pingInterval: 10000,
-  pingTimeout: 5000
+  pingInterval: 25000,
+  pingTimeout: 30000
 });
 
 app.use(cors());
@@ -91,8 +91,33 @@ const { cleanupUploads, cleanupMessages } = require('./cleanup');
 const { JamesBot } = require('./jamesBot');
 const { startKeepAlive } = require('./keepAlive');
 
-// In-memory message store
-let messages = [];
+// Persistent Message Store (backed by server/data/messages.json)
+const messagesFilePath = path.join(__dirname, 'data', 'messages.json');
+
+function loadMessages() {
+  try {
+    if (fs.existsSync(messagesFilePath)) {
+      const raw = fs.readFileSync(messagesFilePath, 'utf8');
+      const data = JSON.parse(raw);
+      if (Array.isArray(data)) return data;
+    }
+  } catch (e) {
+    console.error('[Messages Storage]: Failed to load messages.json:', e.message);
+  }
+  return [];
+}
+
+function saveMessages(msgs) {
+  try {
+    const dir = path.dirname(messagesFilePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(messagesFilePath, JSON.stringify(msgs, null, 2), 'utf8');
+  } catch (e) {
+    console.error('[Messages Storage]: Failed to save messages.json:', e.message);
+  }
+}
+
+let messages = loadMessages();
 
 // Upload route
 app.use('/upload', uploadRouter);
@@ -217,8 +242,10 @@ const broadcastUserCount = () => {
 // Initialize autonomous James Community Agent
 const jamesBot = new JamesBot(io, (msg) => {
   messages.push(msg);
+  saveMessages(messages);
 }, {
   getUserCount: () => getRealUserCount(),
+  getRoomMessages: (limit = 20) => messages.slice(-limit),
   getOnlineUsersList: () => {
     const list = [];
     for (const u of activeUsers.values()) {
@@ -380,6 +407,7 @@ io.on('connection', (socket) => {
     } else {
       messages.push(message);
     }
+    saveMessages(messages);
 
     io.emit('message', message);
 
@@ -418,6 +446,7 @@ io.on('connection', (socket) => {
         msg.reactions[emoji].push(alias);
       }
       io.emit('reaction', { messageId, reactions: msg.reactions });
+      saveMessages(messages);
     }
   });
 
@@ -432,6 +461,7 @@ io.on('connection', (socket) => {
     if (msg) {
       msg.allowDownload = allowDownload;
       io.emit('fileDownloadToggled', { messageId, allowDownload });
+      saveMessages(messages);
     }
   });
 
@@ -463,6 +493,7 @@ io.on('connection', (socket) => {
       }
 
       io.emit('fileAttachmentDeleted', { messageId, updatedMessage: msg });
+      saveMessages(messages);
       console.log(`[File Attachment Marked Deleted] id: ${messageId} (type: ${msg.deletedType})`);
     }
   });
@@ -473,6 +504,7 @@ const runPeriodicCleanup = () => {
   const prevCount = messages.length;
   messages = cleanupMessages(messages);
   cleanupUploads();
+  saveMessages(messages);
   if (messages.length !== prevCount) {
     console.log(`[24h Auto-Cleanup]: Purged ${prevCount - messages.length} messages older than 24h.`);
     io.emit('allMessages', messages);
