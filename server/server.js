@@ -356,18 +356,26 @@ io.on('connection', (socket) => {
 
   // Handle new message (text, files, links, replies)
   socket.on('message', (msg) => {
+    if (!msg) return;
     const senderUser = activeUsers.get(socket.id);
     const resolvedUserId = msg.userId || (senderUser ? senderUser.userId : null);
 
     let message = {
       ...msg,
       userId: resolvedUserId,
-      id: msg.id || Date.now() + Math.random(),
-      timestamp: Date.now(),
+      id: msg.id || ('msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9)),
+      timestamp: msg.timestamp || Date.now(),
       reactions: msg.reactions || {}
     };
 
-    messages.push(message);
+    const msgIdStr = String(message.id);
+    const existingIdx = messages.findIndex(m => m.id && String(m.id) === msgIdStr);
+    if (existingIdx >= 0) {
+      messages[existingIdx] = { ...messages[existingIdx], ...message };
+    } else {
+      messages.push(message);
+    }
+
     io.emit('message', message);
 
     if (!msg.encrypted && msg.alias) {

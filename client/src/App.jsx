@@ -996,11 +996,14 @@ function App() {
     });
 
     socketRef.current.on('message', (msg) => {
+      if (!msg || !msg.id) return;
+      const msgIdStr = String(msg.id);
+
       // Reconcile optimistic messages by id to avoid duplicate rendering
       setMessages((prev) => {
-        const exists = prev.some(m => m.id === msg.id);
+        const exists = prev.some(m => m && m.id && String(m.id) === msgIdStr);
         if (exists) {
-          return prev.map(m => m.id === msg.id ? { ...m, ...msg } : m);
+          return prev.map(m => (m && m.id && String(m.id) === msgIdStr) ? { ...m, ...msg } : m);
         }
         return [...prev, msg];
       });
@@ -1075,7 +1078,10 @@ function App() {
 
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      socketRef.current?.disconnect();
+      if (socketRef.current) {
+        socketRef.current.off();
+        socketRef.current.disconnect();
+      }
     };
   }, []);
 
@@ -1808,8 +1814,12 @@ function App() {
           } : null
         };
         const encrypted = encryptMsg(rawPayload);
-        // Instant Optimistic Update (0ms delay)
-        setMessages(prev => [...prev, encrypted]);
+        // Instant Optimistic Update (0ms delay) with deduplication
+        setMessages(prev => {
+          const msgIdStr = String(encrypted.id);
+          if (prev.some(m => m && m.id && String(m.id) === msgIdStr)) return prev;
+          return [...prev, encrypted];
+        });
         socketRef.current.emit('message', encrypted);
 
         setReplyingTo(null);
@@ -1927,8 +1937,12 @@ function App() {
       };
 
       const encrypted = encryptMsg(rawPayload);
-      // Instant Optimistic Update (0ms delay)
-      setMessages(prev => [...prev, encrypted]);
+      // Instant Optimistic Update (0ms delay) with deduplication
+      setMessages(prev => {
+        const msgIdStr = String(encrypted.id);
+        if (prev.some(m => m && m.id && String(m.id) === msgIdStr)) return prev;
+        return [...prev, encrypted];
+      });
       socketRef.current.emit('message', encrypted);
 
       removeSelectedFile();
@@ -1963,8 +1977,12 @@ function App() {
       };
 
       const encrypted = encryptMsg(rawPayload);
-      // Instant Optimistic Update (0ms delay)
-      setMessages(prev => [...prev, encrypted]);
+      // Instant Optimistic Update (0ms delay) with deduplication
+      setMessages(prev => {
+        const msgIdStr = String(encrypted.id);
+        if (prev.some(m => m && m.id && String(m.id) === msgIdStr)) return prev;
+        return [...prev, encrypted];
+      });
       socketRef.current.emit('message', encrypted);
 
       setReplyingTo(null);
@@ -2319,21 +2337,38 @@ function App() {
     });
   };
 
-  const filteredMessages = messages.filter(msg => {
-    // 24h Auto-Clear: Hide messages older than 24 hours automatically
-    if (msg.timestamp && (Date.now() - msg.timestamp > 24 * 60 * 60 * 1000)) {
-      return false;
-    }
-    const dmsg = decryptMsg(msg);
-    if (dmsg.isHiddenEncrypted) return false;
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      (dmsg.alias && dmsg.alias.toLowerCase().includes(q)) ||
-      (dmsg.text && dmsg.text.toLowerCase().includes(q)) ||
-      (dmsg.fileName && dmsg.fileName.toLowerCase().includes(q))
-    );
-  });
+  const filteredMessages = useMemo(() => {
+    const seenMsgIds = new Set();
+    const now = Date.now();
+    const q = searchQuery.trim().toLowerCase();
+
+    return messages.filter(msg => {
+      if (!msg) return false;
+
+      // Deduplicate by message ID - guarantees no duplicate bubbles or duplicate React keys
+      if (msg.id) {
+        const key = String(msg.id);
+        if (seenMsgIds.has(key)) return false;
+        seenMsgIds.add(key);
+      }
+
+      // 24h Auto-Clear: Hide messages older than 24 hours automatically
+      if (msg.timestamp && (now - msg.timestamp > 24 * 60 * 60 * 1000)) {
+        return false;
+      }
+
+      const dmsg = decryptMsg(msg);
+      if (dmsg.isHiddenEncrypted) return false;
+
+      if (!q) return true;
+
+      return (
+        (dmsg.alias && dmsg.alias.toLowerCase().includes(q)) ||
+        (dmsg.text && dmsg.text.toLowerCase().includes(q)) ||
+        (dmsg.fileName && dmsg.fileName.toLowerCase().includes(q))
+      );
+    });
+  }, [messages, searchQuery, passphrase, identity]);
 
   return (
     <div className="shadow-root">

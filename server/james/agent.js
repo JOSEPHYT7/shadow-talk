@@ -139,7 +139,7 @@ class JamesAgent {
     this.io.emit('jamesStatus', { alias: 'James', status: 'idle' });
 
     const message = {
-      id: Date.now() + Math.random(),
+      id: 'msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9),
       timestamp: Date.now(),
       alias: this.profile.alias,
       userId: this.profile.userId,
