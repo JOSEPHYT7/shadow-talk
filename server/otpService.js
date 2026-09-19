@@ -50,9 +50,9 @@ function createTransporter(host, port, secure, user, pass) {
     port: port,
     secure: secure, // true for 465 (SSL), false for 587 (STARTTLS)
     auth: { user, pass },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
+    connectionTimeout: 3500,
+    greetingTimeout: 3500,
+    socketTimeout: 4000,
     tls: {
       servername: 'smtp.gmail.com', // Ensures SNI certificate matches smtp.gmail.com even when connecting to raw IP
       rejectUnauthorized: false

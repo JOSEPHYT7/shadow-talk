@@ -1353,7 +1353,7 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: targetEmail.trim() }),
-        signal: AbortSignal.timeout(10000)
+        signal: AbortSignal.timeout(25000)
       });
       const data = await res.json();
 
