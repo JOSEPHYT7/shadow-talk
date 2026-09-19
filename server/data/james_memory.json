@@ -1,6 +1,25 @@
 {
-  "updatedAt": 0,
+  "updatedAt": 1789828071881,
   "summary": "",
   "topics": [],
-  "users": []
+  "users": [
+    {
+      "key": "uid:usr_78qzmjll4",
+      "userId": "usr_78qzmjll4",
+      "alias": "joseph",
+      "count": 29,
+      "notes": [],
+      "topics": [],
+      "lastSeen": 1789828066879
+    },
+    {
+      "key": "uid:usr_2i4zg49q8",
+      "userId": "usr_2i4zg49q8",
+      "alias": "kai_rivera24",
+      "count": 3,
+      "notes": [],
+      "topics": [],
+      "lastSeen": 1789827170772
+    }
+  ]
 }

@@ -695,10 +695,11 @@ function App() {
   const [otpResendCountdown, setOtpResendCountdown] = useState(30);
   const otpInputRefs = useRef([]);
 
-  // Mobile Instagram Swipe-to-Reply Gesture States
+  // Mobile Instagram Swipe-to-Reply Gesture States & Long-Press Reaction Bar
   const [swipingMsgId, setSwipingMsgId] = useState(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
-  const touchStartRef = useRef({ x: 0, y: 0, id: null, active: false });
+  const touchStartRef = useRef({ x: 0, y: 0, id: null, active: false, moved: false, ignoreSwipe: false });
+  const longPressTimerRef = useRef(null);
 
   // Audio Voice Recording States
   const [isRecording, setIsRecording] = useState(false);
@@ -733,6 +734,22 @@ function App() {
   const [hoveredMsgId, setHoveredMsgId] = useState(null);
   const [activeReactionMsgId, setActiveReactionMsgId] = useState(null);
 
+  // Dismiss mobile reaction bar when tapping outside
+  useEffect(() => {
+    if (!activeReactionMsgId) return;
+    const handleOutsideDismiss = (e) => {
+      if (!e.target.closest('.hover-reaction-bar') && !e.target.closest('.hover-reaction-btn')) {
+        setActiveReactionMsgId(null);
+      }
+    };
+    window.addEventListener('touchstart', handleOutsideDismiss, { passive: true });
+    window.addEventListener('click', handleOutsideDismiss);
+    return () => {
+      window.removeEventListener('touchstart', handleOutsideDismiss);
+      window.removeEventListener('click', handleOutsideDismiss);
+    };
+  }, [activeReactionMsgId]);
+
   const [typingUsers, setTypingUsers] = useState([]);
   const [atBottom, setAtBottom] = useState(true);
 
@@ -750,6 +767,38 @@ function App() {
     localStorage.setItem('bbx_identity', JSON.stringify(identity));
   }, [identity]);
 
+  function getSentEncryptedCache() {
+    try {
+      const raw = localStorage.getItem('bbx_sent_encrypted_cache');
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function saveSentEncryptedMessage(ciphertext, msgId, payload) {
+    try {
+      const cache = getSentEncryptedCache();
+      if (ciphertext) cache[ciphertext] = payload;
+      if (msgId) cache[msgId] = payload;
+      const keys = Object.keys(cache);
+      if (keys.length > 400) {
+        const trimmed = {};
+        keys.slice(-300).forEach(k => { trimmed[k] = cache[k]; });
+        localStorage.setItem('bbx_sent_encrypted_cache', JSON.stringify(trimmed));
+      } else {
+        localStorage.setItem('bbx_sent_encrypted_cache', JSON.stringify(cache));
+      }
+    } catch { }
+  }
+
+  function getSentEncryptedMessage(ciphertext, msgId) {
+    const cache = getSentEncryptedCache();
+    if (ciphertext && cache[ciphertext]) return cache[ciphertext];
+    if (msgId && cache[msgId]) return cache[msgId];
+    return null;
+  }
+
   function encryptMsg(obj) {
     if (!passphrase) {
       return {
@@ -757,9 +806,22 @@ function App() {
         userId: obj.userId || identity.userId
       };
     }
-    const payload = JSON.stringify(obj);
+    const clientMsgId = obj.id || ('msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9));
+    const payloadObj = { ...obj, id: clientMsgId };
+    const payload = JSON.stringify(payloadObj);
+    const ciphertext = CryptoJS.AES.encrypt(payload, passphrase).toString();
+
+    const sentPayload = {
+      ...payloadObj,
+      encrypted: ciphertext,
+      userId: obj.userId || identity.userId,
+      alias: obj.alias || identity.alias
+    };
+    saveSentEncryptedMessage(ciphertext, clientMsgId, sentPayload);
+
     return {
-      encrypted: CryptoJS.AES.encrypt(payload, passphrase).toString(),
+      ...sentPayload,
+      encrypted: ciphertext,
       fileUrl: obj.fileUrl || null,
       userId: obj.userId || identity.userId,
       alias: obj.alias || identity.alias
@@ -768,42 +830,65 @@ function App() {
 
   function decryptMsg(msg) {
     if (!msg.encrypted) return { ...msg, userId: msg.userId, sources: msg.sources || [] };
-    if (!passphrase) {
-      return {
-        text: '🔒 Encrypted Payload (Enter Passphrase in Vault)',
-        userId: msg.userId,
-        alias: msg.alias || 'Encrypted',
-        color: '#ffaa00',
-        timestamp: msg.timestamp,
-        sources: msg.sources || []
-      };
+
+    const isOwn = Boolean(
+      (msg.userId && identity.userId && msg.userId === identity.userId) ||
+      (msg.alias && identity.alias && msg.alias.toLowerCase() === identity.alias.toLowerCase())
+    );
+
+    // 1. If passphrase is provided in vault, attempt AES decryption
+    if (passphrase) {
+      try {
+        const bytes = CryptoJS.AES.decrypt(msg.encrypted, passphrase);
+        const decryptedStr = bytes.toString(CryptoJS.enc.Utf8);
+        if (decryptedStr) {
+          const decrypted = JSON.parse(decryptedStr);
+          if (isOwn) {
+            saveSentEncryptedMessage(msg.encrypted, msg.id, decrypted);
+          }
+          return {
+            ...decrypted,
+            userId: decrypted.userId || msg.userId,
+            id: msg.id,
+            timestamp: msg.timestamp,
+            reactions: msg.reactions,
+            fileUrl: decrypted.fileUrl || msg.fileUrl,
+            isFileDeleted: msg.isFileDeleted !== undefined ? msg.isFileDeleted : decrypted.isFileDeleted,
+            deletedType: msg.deletedType || decrypted.deletedType,
+            allowDownload: msg.allowDownload !== undefined ? msg.allowDownload : decrypted.allowDownload,
+            sources: msg.sources || decrypted.sources || []
+          };
+        }
+      } catch {
+        // Passphrase does not match this message
+      }
     }
-    try {
-      const bytes = CryptoJS.AES.decrypt(msg.encrypted, passphrase);
-      const decryptedStr = bytes.toString(CryptoJS.enc.Utf8);
-      if (!decryptedStr) throw new Error('Bad key');
-      const decrypted = JSON.parse(decryptedStr);
-      return {
-        ...decrypted,
-        userId: decrypted.userId || msg.userId,
-        id: msg.id,
-        timestamp: msg.timestamp,
-        reactions: msg.reactions,
-        fileUrl: decrypted.fileUrl || msg.fileUrl,
-        isFileDeleted: msg.isFileDeleted !== undefined ? msg.isFileDeleted : decrypted.isFileDeleted,
-        deletedType: msg.deletedType || decrypted.deletedType,
-        allowDownload: msg.allowDownload !== undefined ? msg.allowDownload : decrypted.allowDownload,
-        sources: msg.sources || decrypted.sources || []
-      };
-    } catch {
-      return {
-        text: '⚠️ [Decryption Failed - Invalid Passphrase Key]',
-        userId: msg.userId,
-        alias: msg.alias || 'Unknown',
-        color: '#ff0055',
-        timestamp: msg.timestamp
-      };
+
+    // 2. If it is the sender's own message, check if we have the plaintext cached in sentEncryptedCache.
+    // This guarantees that if the sender removes their phrasing key, their own sent encrypted messages remain visible to them!
+    if (isOwn) {
+      const cached = getSentEncryptedMessage(msg.encrypted, msg.id);
+      if (cached) {
+        return {
+          ...cached,
+          userId: cached.userId || msg.userId,
+          id: msg.id,
+          timestamp: msg.timestamp,
+          reactions: msg.reactions,
+          fileUrl: cached.fileUrl || msg.fileUrl,
+          isFileDeleted: msg.isFileDeleted !== undefined ? msg.isFileDeleted : cached.isFileDeleted,
+          deletedType: msg.deletedType || cached.deletedType,
+          allowDownload: msg.allowDownload !== undefined ? msg.allowDownload : cached.allowDownload,
+          sources: msg.sources || cached.sources || []
+        };
+      }
     }
+
+    // 3. For other users who haven't entered the phrasing key (or if decryption failed), completely hide the message
+    return {
+      ...msg,
+      isHiddenEncrypted: true
+    };
   }
 
   const scrollToMessage = (targetId) => {
@@ -1347,21 +1432,70 @@ function App() {
     return () => clearInterval(timer);
   }, [showOtpModal, otpStep, otpResendCountdown]);
 
-  // Mobile Instagram Swipe-to-Reply Gesture Handlers
+  // Mobile Touch Gestures: Long-Press for Reactions & Swipe-to-Reply (Isolated from Code Blocks)
   const handleTouchStart = (e, msgId) => {
     if (window.innerWidth > 768) return;
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+
+    // Check if the touch originated inside a code block, table, link, button, or media element
+    const isCodeOrInteractive = Boolean(
+      e.target.closest(
+        '.vscode-editor-container, .vscode-editor-body, .vscode-code-pre, pre, code, ' +
+        '.chat-markdown-table-wrapper, table, a, button, video, audio, ' +
+        '.voice-waveform-wrapper, .link-preview-card, .chat-compact-search-badge, .chat-sources-dropdown-popover'
+      )
+    );
+
     const touch = e.touches[0];
-    touchStartRef.current = { x: touch.clientX, y: touch.clientY, id: msgId, active: false };
+    touchStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      id: msgId,
+      active: false,
+      moved: false,
+      ignoreSwipe: isCodeOrInteractive
+    };
+
+    // If touching interactive elements or code block, do not start long-press reaction
+    if (isCodeOrInteractive) return;
+
+    // Start 450ms timer for long-press reaction bar
+    longPressTimerRef.current = setTimeout(() => {
+      if (!touchStartRef.current.moved && touchStartRef.current.id === msgId) {
+        setActiveReactionMsgId(msgId);
+        if (navigator.vibrate) {
+          try { navigator.vibrate(40); } catch { }
+        }
+      }
+    }, 450);
   };
 
   const handleTouchMove = (e, msgId) => {
     if (window.innerWidth > 768) return;
     if (touchStartRef.current.id !== msgId) return;
+
     const touch = e.touches[0];
     const dx = touch.clientX - touchStartRef.current.x;
     const dy = touch.clientY - touchStartRef.current.y;
 
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
+    // If finger moves more than 6px, cancel long-press
+    if (Math.hypot(dx, dy) > 6) {
+      touchStartRef.current.moved = true;
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    }
+
+    // If touch started on code block or interactive element, do NOT perform swipe-to-reply!
+    // Native horizontal scroll on .vscode-editor-body / tables will function smoothly!
+    if (touchStartRef.current.ignoreSwipe) return;
+
+    // Intentional horizontal swipe detection (requires horizontal distance significantly greater than vertical)
+    if (Math.abs(dx) > Math.abs(dy) * 1.5 && Math.abs(dx) > 15) {
       touchStartRef.current.active = true;
       setSwipingMsgId(msgId);
       const clamped = Math.max(-75, Math.min(75, dx));
@@ -1371,15 +1505,21 @@ function App() {
 
   const handleTouchEnd = (msg, dmsg, msgId) => {
     if (window.innerWidth > 768) return;
-    if (swipingMsgId === msgId && Math.abs(swipeOffset) > 42) {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+
+    if (!touchStartRef.current.ignoreSwipe && swipingMsgId === msgId && Math.abs(swipeOffset) > 42) {
       startReply(msg, dmsg, msgId);
       if (navigator.vibrate) {
         try { navigator.vibrate(35); } catch { }
       }
     }
+
     setSwipingMsgId(null);
     setSwipeOffset(0);
-    touchStartRef.current = { x: 0, y: 0, id: null, active: false };
+    touchStartRef.current = { x: 0, y: 0, id: null, active: false, moved: false, ignoreSwipe: false };
   };
 
   // Toggle File Download Permission (Sender/Owner only)
@@ -2128,8 +2268,9 @@ function App() {
   };
 
   const filteredMessages = messages.filter(msg => {
-    if (!searchQuery.trim()) return true;
     const dmsg = decryptMsg(msg);
+    if (dmsg.isHiddenEncrypted) return false;
+    if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
     return (
       (dmsg.alias && dmsg.alias.toLowerCase().includes(q)) ||
@@ -2210,7 +2351,7 @@ function App() {
             )}
           </div>
           <span className="search-count">
-            {filteredMessages.length} / {messages.length} MATCHES
+            {filteredMessages.length} / {messages.filter(m => !decryptMsg(m).isHiddenEncrypted).length} MATCHES
           </span>
         </div>
       )}
@@ -2265,8 +2406,16 @@ function App() {
                   key={msgId}
                   id={`msg-${msgId}`}
                   className={`message-card ${isOwn ? 'own-message' : ''}`}
-                  onMouseEnter={() => setHoveredMsgId(msgId)}
-                  onMouseLeave={() => setHoveredMsgId(null)}
+                  onMouseEnter={() => {
+                    if (window.innerWidth > 768 && window.matchMedia && window.matchMedia('(hover: hover)').matches) {
+                      setHoveredMsgId(msgId);
+                    }
+                  }}
+                  onMouseLeave={() => {
+                    if (window.innerWidth > 768) {
+                      setHoveredMsgId(null);
+                    }
+                  }}
                 >
                   {/* Floating Emoji Reaction Popover */}
                   {isPopoverVisible && (
