@@ -5198,83 +5198,231 @@
 }
 
 /* ==========================================================
-   ChatGPT-Style AI Tool Generation Cards (Image, PDF, QR)
+   Redesigned Interactive AI Generation Cards (Image, PDF, QR)
+   Ultra-Professional, Sleek Cyberpunk / Neo-Studio Aesthetics
    ========================================================== */
 
-/* 1. Shimmering AI Canvas for Image Generation */
-.chatgpt-generating-canvas {
+/* Shared Base Card Container */
+.ai-generation-card {
   position: relative;
   width: 100%;
-  min-height: 170px;
-  background: radial-gradient(circle at 50% 30%, rgba(15, 23, 42, 0.95), #060911);
-  border: 1px solid rgba(0, 243, 255, 0.28);
-  border-radius: 12px;
+  max-width: 440px;
+  background: linear-gradient(145deg, rgba(11, 17, 32, 0.95), rgba(7, 11, 20, 0.98));
+  border: 1px solid rgba(0, 243, 255, 0.22);
+  border-radius: 14px;
   overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(0, 243, 255, 0.05);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
-.canvas-shimmer-sweep {
+.ai-generation-card:hover {
+  border-color: rgba(0, 243, 255, 0.38);
+  box-shadow: 0 10px 38px rgba(0, 0, 0, 0.65), 0 0 20px rgba(0, 243, 255, 0.08);
+}
+
+/* Header Live Generating Pill in Message Header */
+.live-generating-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.68rem !important;
+  font-weight: 700;
+  color: #00f3ff !important;
+  background: rgba(0, 243, 255, 0.1);
+  border: 1px solid rgba(0, 243, 255, 0.3);
+  padding: 1px 7px;
+  border-radius: 10px;
+  letter-spacing: 0.4px;
+}
+
+.live-pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #00f3ff;
+  box-shadow: 0 0 8px #00f3ff;
+  animation: liveDotPulse 1.4s infinite ease-in-out;
+}
+
+@keyframes liveDotPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.5; }
+}
+
+/* Micro-Badges */
+.ai-gen-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.ai-gen-badge.image-badge {
+  background: rgba(0, 243, 255, 0.12);
+  border: 1px solid rgba(0, 243, 255, 0.3);
+  color: #00f3ff;
+}
+
+.ai-gen-badge.pdf-badge {
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
+}
+
+.ai-gen-badge.qr-badge {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #10b981;
+}
+
+.ai-gen-live-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #00f3ff;
+  box-shadow: 0 0 6px #00f3ff;
+  animation: liveDotPulse 1.4s infinite ease-in-out;
+}
+
+.ai-gen-live-dot.pdf-dot {
+  background: #38bdf8;
+  box-shadow: 0 0 6px #38bdf8;
+}
+
+.ai-gen-live-dot.qr-dot {
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+
+/* ==========================================================
+   1. AI Studio Canvas (Image Generation)
+   ========================================================== */
+.image-generation-card .ai-canvas-viewport {
+  position: relative;
+  width: 100%;
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 1.3rem 1.1rem;
+}
+
+.ai-canvas-grid-bg {
   position: absolute;
-  top: 0;
-  left: -100%;
-  width: 200%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(0, 243, 255, 0.04) 25%,
-    rgba(192, 132, 252, 0.12) 50%,
-    rgba(0, 243, 255, 0.04) 75%,
-    transparent 100%
-  );
-  animation: canvasShimmerSweep 2.8s infinite linear;
+  inset: 0;
+  background-image: 
+    linear-gradient(to right, rgba(0, 243, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 243, 255, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+  mask-image: radial-gradient(circle at center, black 40%, transparent 85%);
+  -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 85%);
   pointer-events: none;
 }
 
-@keyframes canvasShimmerSweep {
-  0% { transform: translateX(0%); }
-  100% { transform: translateX(50%); }
+.ai-canvas-shimmer-beam {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    transparent 0%,
+    rgba(0, 243, 255, 0.03) 30%,
+    rgba(192, 132, 252, 0.08) 50%,
+    rgba(0, 243, 255, 0.03) 70%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  animation: canvasBeamSweep 3s infinite ease-in-out;
+  pointer-events: none;
 }
 
-.canvas-center-content {
+@keyframes canvasBeamSweep {
+  0% { transform: translateX(-100%) translateY(-20%); }
+  50% { transform: translateX(100%) translateY(20%); }
+  100% { transform: translateX(-100%) translateY(-20%); }
+}
+
+.ai-canvas-center-aperture {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.65rem;
+}
+
+.orbital-ring-outer {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px dashed rgba(0, 243, 255, 0.5);
+  animation: spinClockwise 14s linear infinite;
+  box-shadow: 0 0 14px rgba(0, 243, 255, 0.15);
+}
+
+.orbital-ring-inner {
+  position: absolute;
+  inset: 7px;
+  border-radius: 50%;
+  border: 1.5px dotted rgba(192, 132, 252, 0.6);
+  animation: spinCounter 9s linear infinite;
+}
+
+@keyframes spinClockwise {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes spinCounter {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+.aperture-core-glow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 243, 255, 0.25) 0%, rgba(192, 132, 252, 0.1) 70%, transparent 100%);
+  border: 1px solid rgba(0, 243, 255, 0.45);
+  box-shadow: 0 0 20px rgba(0, 243, 255, 0.4);
+  color: #00f3ff;
+}
+
+.aperture-sparkle-spin {
+  animation: sparkleFloat 2.2s infinite ease-in-out;
+}
+
+@keyframes sparkleFloat {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.9; }
+  50% { transform: scale(1.18) rotate(20deg); opacity: 1; filter: drop-shadow(0 0 8px #00f3ff); }
+}
+
+.ai-canvas-info-overlay {
   position: relative;
   z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.55rem;
-  padding: 1.25rem 1rem;
+  gap: 0.4rem;
   text-align: center;
-  max-width: 90%;
+  max-width: 92%;
 }
 
-.canvas-sparkle-halo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(0, 243, 255, 0.25) 0%, rgba(192, 132, 252, 0.1) 70%, transparent 100%);
-  border: 1px solid rgba(0, 243, 255, 0.4);
-  box-shadow: 0 0 16px rgba(0, 243, 255, 0.35);
-  color: #00f3ff;
-}
-
-.sparkle-anim-spin {
-  animation: pulseSparkle 2s ease-in-out infinite;
-}
-
-@keyframes pulseSparkle {
-  0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.9; }
-  50% { transform: scale(1.15) rotate(15deg); opacity: 1; filter: drop-shadow(0 0 8px #00f3ff); }
-}
-
-.canvas-status-title {
-  font-size: 0.92rem;
+.ai-gen-status-title {
+  font-size: 0.88rem;
   font-weight: 700;
   background: linear-gradient(90deg, #00f3ff, #c084fc, #38bdf8);
   -webkit-background-clip: text;
@@ -5282,190 +5430,357 @@
   letter-spacing: 0.4px;
 }
 
-.canvas-prompt-badge {
+.ai-gen-prompt-pill {
   font-family: var(--font-mono, monospace);
   font-size: 0.72rem;
   color: #94a3b8;
-  background: rgba(255, 255, 255, 0.05);
-  padding: 0.25rem 0.65rem;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  max-width: 280px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  max-width: 320px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
-.canvas-progress-track {
-  width: 140px;
+.ai-gen-progress-track {
+  width: 160px;
   height: 3px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
   overflow: hidden;
-  margin-top: 0.25rem;
+  margin-top: 0.15rem;
 }
 
-.canvas-progress-bar {
-  width: 40%;
+.ai-gen-progress-glow {
+  width: 45%;
   height: 100%;
   background: linear-gradient(90deg, #00f3ff, #c084fc);
-  border-radius: 2px;
-  animation: progressIndeterminate 1.6s infinite ease-in-out;
+  border-radius: 3px;
+  animation: laserSweepProgress 1.6s infinite ease-in-out;
+  box-shadow: 0 0 8px #00f3ff;
 }
 
-@keyframes progressIndeterminate {
+@keyframes laserSweepProgress {
   0% { transform: translateX(-100%); }
-  100% { transform: translateX(350%); }
+  100% { transform: translateX(320%); }
 }
 
-/* 2. Sleek Document Compiler Card for PDF Generation */
-.chatgpt-generating-document {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  padding: 0.9rem 1.1rem;
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.85));
-  border: 1px solid rgba(14, 165, 233, 0.35);
-  border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
-}
-
-.doc-scanner-bar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 2px;
-  height: 100%;
-  background: linear-gradient(180deg, transparent, #00f3ff, #38bdf8, transparent);
-  box-shadow: 0 0 10px #00f3ff;
-  animation: docLaserScan 2s infinite ease-in-out;
-}
-
-@keyframes docLaserScan {
-  0% { transform: translateX(0); opacity: 0.2; }
-  50% { transform: translateX(380px); opacity: 1; }
-  100% { transform: translateX(0); opacity: 0.2; }
-}
-
-.doc-icon-wrap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 8px;
-  background: rgba(14, 165, 233, 0.15);
-  border: 1px solid rgba(14, 165, 233, 0.4);
-  color: #38bdf8;
-  flex-shrink: 0;
-}
-
-.doc-pulse-icon {
-  animation: docIconPulse 1.8s infinite ease-in-out;
-}
-
-@keyframes docIconPulse {
-  0%, 100% { transform: scale(1); opacity: 0.85; }
-  50% { transform: scale(1.1); opacity: 1; color: #00f3ff; }
-}
-
-.doc-info-col {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  flex: 1;
-}
-
-.doc-status-title {
-  font-size: 0.84rem;
-  font-weight: 600;
-  color: #f1f5f9;
-}
-
-.doc-title-badge {
+.ai-gen-substep {
+  font-size: 0.68rem;
+  color: #64748b;
   font-family: var(--font-mono, monospace);
-  font-size: 0.72rem;
-  color: #38bdf8;
+  letter-spacing: 0.2px;
 }
 
-/* 3. Pulsing Neon QR Matrix for QR Generation */
-.chatgpt-generating-qr {
-  position: relative;
+/* ==========================================================
+   2. Cybernetic Document Foundry (PDF Compilation)
+   ========================================================== */
+.pdf-compilation-card {
+  padding: 1.05rem 1.2rem;
+  background: linear-gradient(135deg, rgba(12, 22, 42, 0.95), rgba(7, 14, 28, 0.98));
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.pdf-foundry-inner {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
-  padding: 0.9rem 1.1rem;
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(20, 28, 48, 0.85));
-  border: 1px solid rgba(0, 243, 255, 0.35);
-  border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+  gap: 1.1rem;
 }
 
-.qr-matrix-box {
+.pdf-doc-silhouette-wrap {
   position: relative;
+  width: 50px;
+  height: 60px;
+  flex-shrink: 0;
+}
+
+.pdf-sheet-layer {
+  position: absolute;
+  border-radius: 7px;
+  transition: all 0.3s ease;
+}
+
+.sheet-back {
+  inset: 0;
+  transform: translate(5px, -3px) rotate(4deg);
+  background: rgba(14, 165, 233, 0.12);
+  border: 1px solid rgba(14, 165, 233, 0.2);
+}
+
+.sheet-mid {
+  inset: 0;
+  transform: translate(2.5px, -1.5px) rotate(2deg);
+  background: rgba(14, 165, 233, 0.2);
+  border: 1px solid rgba(14, 165, 233, 0.3);
+}
+
+.sheet-front {
+  inset: 0;
+  background: linear-gradient(145deg, #0e1e38, #091322);
+  border: 1.5px solid rgba(56, 189, 248, 0.55);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 0 12px rgba(56, 189, 248, 0.25);
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 8px;
-  background: #090d16;
-  border: 1.5px solid rgba(0, 243, 255, 0.5);
-  color: #00f3ff;
   overflow: hidden;
-  flex-shrink: 0;
-  box-shadow: 0 0 12px rgba(0, 243, 255, 0.2);
 }
 
-.qr-laser-scanner {
+.pdf-sheet-laser-line {
   position: absolute;
-  left: 0;
   top: 0;
+  left: 0;
   width: 100%;
   height: 2px;
-  background: #00f3ff;
-  box-shadow: 0 0 8px #00f3ff;
-  animation: qrLaserSweep 1.5s infinite ease-in-out;
-  z-index: 3;
+  background: #38bdf8;
+  box-shadow: 0 0 8px #38bdf8;
+  animation: pdfLaserVertical 1.8s infinite ease-in-out;
+  z-index: 2;
 }
 
-@keyframes qrLaserSweep {
-  0% { transform: translateY(0px); opacity: 0.3; }
-  50% { transform: translateY(42px); opacity: 1; }
-  100% { transform: translateY(0px); opacity: 0.3; }
+@keyframes pdfLaserVertical {
+  0% { transform: translateY(0); opacity: 0.3; }
+  50% { transform: translateY(58px); opacity: 1; }
+  100% { transform: translateY(0); opacity: 0.3; }
 }
 
-.qr-pulse-icon {
-  animation: qrPulse 2s infinite ease-in-out;
+.pdf-sheet-icon {
+  color: #38bdf8;
+  filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.5));
+  animation: pdfIconPulse 2s infinite ease-in-out;
 }
 
-@keyframes qrPulse {
-  0%, 100% { transform: scale(1); opacity: 0.8; }
-  50% { transform: scale(1.08); opacity: 1; }
+@keyframes pdfIconPulse {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.08); opacity: 1; filter: drop-shadow(0 0 10px #00f3ff); }
 }
 
-.qr-info-col {
+.pdf-foundry-content {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.3rem;
   flex: 1;
+  min-width: 0;
 }
 
-.qr-status-title {
-  font-size: 0.84rem;
-  font-weight: 600;
-  color: #f1f5f9;
+.pdf-foundry-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
-.qr-sub-badge {
+.pdf-spinner {
+  color: #38bdf8;
+  animation: spinClockwise 1.2s linear infinite;
+}
+
+.pdf-foundry-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: 0.3px;
+}
+
+.pdf-foundry-name-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  color: #38bdf8;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
   font-family: var(--font-mono, monospace);
   font-size: 0.72rem;
-  color: #00f3ff;
-  max-width: 240px;
+  font-weight: 600;
+  max-width: 260px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.pdf-progress-track {
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 0.15rem;
+}
+
+.pdf-progress-glow {
+  width: 45%;
+  height: 100%;
+  background: linear-gradient(90deg, #38bdf8, #00f3ff);
+  border-radius: 3px;
+  animation: laserSweepProgress 1.6s infinite ease-in-out;
+  box-shadow: 0 0 8px #38bdf8;
+}
+
+.pdf-foundry-subtext {
+  font-size: 0.68rem;
+  color: #64748b;
+  font-family: var(--font-mono, monospace);
+}
+
+/* ==========================================================
+   3. Quantum Matrix Encoder (QR Code Generation)
+   ========================================================== */
+.qr-generation-card {
+  padding: 1.05rem 1.2rem;
+  background: linear-gradient(135deg, rgba(10, 24, 22, 0.95), rgba(7, 14, 18, 0.98));
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.qr-encoder-inner {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+}
+
+.qr-reticle-viewfinder {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  border-radius: 9px;
+  background: #060e10;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), inset 0 0 14px rgba(16, 185, 129, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.reticle-corner {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-color: #10b981;
+  border-style: solid;
+  pointer-events: none;
+}
+
+.reticle-corner.top-left {
+  top: 3px;
+  left: 3px;
+  border-width: 2px 0 0 2px;
+}
+
+.reticle-corner.top-right {
+  top: 3px;
+  right: 3px;
+  border-width: 2px 2px 0 0;
+}
+
+.reticle-corner.bottom-left {
+  bottom: 3px;
+  left: 3px;
+  border-width: 0 0 2px 2px;
+}
+
+.reticle-corner.bottom-right {
+  bottom: 3px;
+  right: 3px;
+  border-width: 0 2px 2px 0;
+}
+
+.qr-laser-scanner-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  animation: qrLaserScan 1.6s infinite ease-in-out;
+  z-index: 2;
+}
+
+@keyframes qrLaserScan {
+  0% { transform: translateY(0); opacity: 0.3; }
+  50% { transform: translateY(50px); opacity: 1; }
+  100% { transform: translateY(0); opacity: 0.3; }
+}
+
+.qr-matrix-glyph {
+  color: #10b981;
+  filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.5));
+  animation: qrIconPulse 2s infinite ease-in-out;
+}
+
+@keyframes qrIconPulse {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.08); opacity: 1; filter: drop-shadow(0 0 10px #10b981); }
+}
+
+.qr-encoder-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.qr-encoder-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.qr-spinner {
+  color: #10b981;
+  animation: spinClockwise 1.2s linear infinite;
+}
+
+.qr-encoder-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: 0.3px;
+}
+
+.qr-payload-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  color: #10b981;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 600;
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.qr-progress-track {
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 0.15rem;
+}
+
+.qr-progress-glow {
+  width: 45%;
+  height: 100%;
+  background: linear-gradient(90deg, #10b981, #00f3ff);
+  border-radius: 3px;
+  animation: laserSweepProgress 1.6s infinite ease-in-out;
+  box-shadow: 0 0 8px #10b981;
+}
+
+.qr-encoder-subtext {
+  font-size: 0.68rem;
+  color: #64748b;
+  font-family: var(--font-mono, monospace);
 }

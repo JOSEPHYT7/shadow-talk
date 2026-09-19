@@ -971,7 +971,7 @@ function App() {
                 if (key) updated[key] = { ...(updated[key] || {}), ...p };
                 if (uId) updated[uId] = { ...(updated[uId] || {}), ...p };
               }
-            } catch {}
+            } catch { }
           });
           return updated;
         });
@@ -1032,7 +1032,7 @@ function App() {
             return next;
           });
         }
-      } catch {}
+      } catch { }
     });
 
     socketRef.current.on('reaction', ({ messageId, reactions }) => {
@@ -2979,8 +2979,15 @@ function App() {
             })
           )}
 
-          {/* In-Chat Live Dynamic Status Bubble from James */}
+          {/* In-Chat Live Dynamic Status Bubble from James - Only for Interactive Media Generation (Image, PDF, QR) */}
           {jamesStatus && (
+            jamesStatus.status === 'generating_image' ||
+            jamesStatus.generatingType === 'image' ||
+            jamesStatus.status === 'generating_pdf' ||
+            jamesStatus.generatingType === 'pdf' ||
+            jamesStatus.status === 'generating_qr' ||
+            jamesStatus.generatingType === 'qr'
+          ) && (
             <div className="message-item left james-in-chat-status-bubble" id="james-live-status-card">
               <div className="message-content-wrapper">
                 <div className="message-header-row left">
@@ -2994,156 +3001,126 @@ function App() {
                     <span className="verified-blue-tick-badge" title="Verified Profile">
                       <VerifiedBlueTick size={14} />
                     </span>
-                    <span className="time-stamp">Live</span>
+                    <span className="time-stamp live-generating-pill">
+                      <span className="live-pulse-dot" /> Generating
+                    </span>
                   </div>
                 </div>
 
                 <div className="message-body james-status-body">
-                  {jamesStatus.status === 'searching' && (
-                    <div className="james-live-indicator-card searching">
-                      <div className="indicator-top-row">
-                        <div className="indicator-icon-pulse globe">
-                          <Globe size={15} className="status-spin-globe" />
-                        </div>
-                        <div className="indicator-text-col">
-                          <span className="indicator-headline">
-                            {jamesStatus.text || 'Searching the live web...'}
-                          </span>
-                          {jamesStatus.query && (
-                            <span className="indicator-query-tag">Query: &quot;{jamesStatus.query}&quot;</span>
-                          )}
-                        </div>
-                      </div>
-
-                      {jamesStatus.sources && jamesStatus.sources.length > 0 && (
-                        <div className="live-sources-preview-box compact">
-                          <div className="chat-sources-favicons-cluster">
-                            {jamesStatus.sources.slice(0, 5).map((src, sIdx) => (
-                              <span key={sIdx} className="source-circle-avatar" title={src.domain}>
-                                <img
-                                  src={`https://www.google.com/s2/favicons?domain=${src.domain}&sz=64`}
-                                  alt=""
-                                  className="source-circle-img"
-                                  onError={(e) => {
-                                    e.target.style.display = 'none';
-                                    if (e.target.nextElementSibling) e.target.nextElementSibling.style.display = 'flex';
-                                  }}
-                                />
-                                <span className="source-fallback-letter" style={{ display: 'none' }}>
-                                  {(src.domain || '?')[0].toUpperCase()}
-                                </span>
-                              </span>
-                            ))}
-                          </div>
-                          <span className="sources-preview-title">
-                            Visited {jamesStatus.sources.length} {jamesStatus.sources.length === 1 ? 'site' : 'sites'}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {jamesStatus.status === 'thinking' && (
-                    <div className="james-live-indicator-card thinking">
-                      <div className="indicator-top-row">
-                        <div className="indicator-icon-pulse sparkle">
-                          <Sparkles size={15} className="status-pulse-sparkle" />
-                        </div>
-                        <div className="indicator-text-col">
-                          <span className="indicator-headline">
-                            {jamesStatus.text || 'James is thinking...'}
-                          </span>
-                          <span className="indicator-subtext">Synthesizing information & formulating response...</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ChatGPT-Style Generating Animation: Image Generation */}
+                  {/* Modern AI Studio Canvas: Image Generation */}
                   {(jamesStatus.status === 'generating_image' || jamesStatus.generatingType === 'image') && (
-                    <div className="james-live-indicator-card generating-image-card">
-                      <div className="chatgpt-generating-canvas">
-                        <div className="canvas-shimmer-sweep" />
-                        <div className="canvas-center-content">
-                          <div className="canvas-sparkle-halo">
-                            <Sparkles size={24} className="sparkle-anim-spin" />
+                    <div className="ai-generation-card image-generation-card">
+                      <div className="ai-canvas-viewport">
+                        <div className="ai-canvas-grid-bg" />
+                        <div className="ai-canvas-shimmer-beam" />
+
+                        <div className="ai-canvas-center-aperture">
+                          <div className="orbital-ring-outer" />
+                          <div className="orbital-ring-inner" />
+                          <div className="aperture-core-glow">
+                            <Sparkles size={22} className="aperture-sparkle-spin" />
                           </div>
-                          <span className="canvas-status-title">Creating image...</span>
+                        </div>
+
+                        <div className="ai-canvas-info-overlay">
+                          <div className="ai-gen-badge image-badge">
+                            <span className="ai-gen-live-dot" />
+                            <span>AI IMAGE STUDIO</span>
+                          </div>
+                          <span className="ai-gen-status-title">Synthesizing Visual Artwork...</span>
                           {jamesStatus.prompt && (
-                            <span className="canvas-prompt-badge">
-                              "{jamesStatus.prompt.length > 55 ? jamesStatus.prompt.slice(0, 55) + '...' : jamesStatus.prompt}"
-                            </span>
+                            <div className="ai-gen-prompt-pill" title={jamesStatus.prompt}>
+                              &ldquo;{jamesStatus.prompt.length > 60 ? jamesStatus.prompt.slice(0, 60) + '...' : jamesStatus.prompt}&rdquo;
+                            </div>
                           )}
-                          <div className="canvas-progress-track">
-                            <div className="canvas-progress-bar" />
+                          <div className="ai-gen-progress-track">
+                            <div className="ai-gen-progress-glow" />
+                          </div>
+                          <span className="ai-gen-substep">Diffusing latent pixels &bull; High-resolution render</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Cybernetic Document Foundry: PDF Compilation */}
+                  {(jamesStatus.status === 'generating_pdf' || jamesStatus.generatingType === 'pdf') && (
+                    <div className="ai-generation-card pdf-compilation-card">
+                      <div className="pdf-foundry-inner">
+                        <div className="pdf-doc-silhouette-wrap">
+                          <div className="pdf-sheet-layer sheet-back" />
+                          <div className="pdf-sheet-layer sheet-mid" />
+                          <div className="pdf-sheet-layer sheet-front">
+                            <div className="pdf-sheet-laser-line" />
+                            <FileText size={24} className="pdf-sheet-icon" />
                           </div>
                         </div>
+
+                        <div className="pdf-foundry-content">
+                          <div className="pdf-foundry-header">
+                            <div className="ai-gen-badge pdf-badge">
+                              <span className="ai-gen-live-dot pdf-dot" />
+                              <span>PDF COMPILER</span>
+                            </div>
+                            <Loader2 size={15} className="pdf-spinner" />
+                          </div>
+
+                          <span className="pdf-foundry-title">Compiling PDF Document...</span>
+
+                          <div className="pdf-foundry-name-badge">
+                            <FileText size={12} />
+                            <span>{jamesStatus.title ? `${jamesStatus.title}.pdf` : 'Document.pdf'}</span>
+                          </div>
+
+                          <div className="pdf-progress-track">
+                            <div className="pdf-progress-glow" />
+                          </div>
+
+                          <span className="pdf-foundry-subtext">
+                            Formatting typography, vector layouts &amp; structure
+                          </span>
+                        </div>
                       </div>
                     </div>
                   )}
 
-                  {/* ChatGPT-Style Generating Animation: PDF Compilation */}
-                  {(jamesStatus.status === 'generating_pdf' || jamesStatus.generatingType === 'pdf') && (
-                    <div className="james-live-indicator-card generating-pdf-card">
-                      <div className="chatgpt-generating-document">
-                        <div className="doc-scanner-bar" />
-                        <div className="doc-icon-wrap">
-                          <FileText size={22} className="doc-pulse-icon" />
-                        </div>
-                        <div className="doc-info-col">
-                          <span className="doc-status-title">Compiling PDF document...</span>
-                          <span className="doc-title-badge">{jamesStatus.title || 'Document'}</span>
-                        </div>
-                        <Loader2 size={16} className="send-spinner" />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ChatGPT-Style Generating Animation: QR Code Matrix */}
+                  {/* Quantum Matrix Encoder: QR Code Generation */}
                   {(jamesStatus.status === 'generating_qr' || jamesStatus.generatingType === 'qr') && (
-                    <div className="james-live-indicator-card generating-qr-card">
-                      <div className="chatgpt-generating-qr">
-                        <div className="qr-matrix-box">
-                          <div className="qr-laser-scanner" />
-                          <QrCode size={26} className="qr-pulse-icon" />
+                    <div className="ai-generation-card qr-generation-card">
+                      <div className="qr-encoder-inner">
+                        <div className="qr-reticle-viewfinder">
+                          <span className="reticle-corner top-left" />
+                          <span className="reticle-corner top-right" />
+                          <span className="reticle-corner bottom-left" />
+                          <span className="reticle-corner bottom-right" />
+                          <div className="qr-laser-scanner-line" />
+                          <QrCode size={26} className="qr-matrix-glyph" />
                         </div>
-                        <div className="qr-info-col">
-                          <span className="qr-status-title">Generating QR Code matrix...</span>
-                          <span className="qr-sub-badge">{jamesStatus.textPayload || 'Encoding data...'}</span>
-                        </div>
-                        <Loader2 size={16} className="send-spinner" />
-                      </div>
-                    </div>
-                  )}
 
-                  {jamesStatus.status === 'typing' && (
-                    <div className="james-live-indicator-card typing">
-                      <div className="indicator-top-row">
-                        <div className="typing-dots in-bubble">
-                          <span />
-                          <span />
-                          <span />
+                        <div className="qr-encoder-content">
+                          <div className="qr-encoder-header">
+                            <div className="ai-gen-badge qr-badge">
+                              <span className="ai-gen-live-dot qr-dot" />
+                              <span>MATRIX ENCODER</span>
+                            </div>
+                            <Loader2 size={15} className="qr-spinner" />
+                          </div>
+
+                          <span className="qr-encoder-title">Generating QR Code Matrix...</span>
+
+                          <div className="qr-payload-pill" title={jamesStatus.textPayload || 'Payload'}>
+                            <span>{jamesStatus.textPayload || 'Encoding data payload...'}</span>
+                          </div>
+
+                          <div className="qr-progress-track">
+                            <div className="qr-progress-glow" />
+                          </div>
+
+                          <span className="qr-encoder-subtext">
+                            Encoding Level-H error-corrected 2D matrix
+                          </span>
                         </div>
-                        <span className="typing-in-bubble-text">
-                          {jamesStatus.text || 'James is drafting a response...'}
-                        </span>
                       </div>
-                      {jamesStatus.sources && jamesStatus.sources.length > 0 && (
-                        <div className="live-sources-mini-row">
-                          <span className="mini-sources-label">Sources:</span>
-                          {jamesStatus.sources.slice(0, 4).map((src, sIdx) => (
-                            <span key={sIdx} className="mini-source-favicon-circle" title={src.domain}>
-                              <img
-                                src={src.favicon || `https://www.google.com/s2/favicons?domain=${src.domain}&sz=64`}
-                                alt=""
-                                onError={(e) => {
-                                  e.target.style.display = 'none';
-                                }}
-                              />
-                            </span>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
@@ -3157,7 +3134,7 @@ function App() {
         {/* Floating Scroll Button */}
         {!atBottom && (
           <button className="scroll-fab" onClick={scrollToBottom}>
-            <ChevronDown size={15} /> Latest Transmissions
+            <ChevronDown size={15} />
           </button>
         )}
 
