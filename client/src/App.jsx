@@ -2823,10 +2823,26 @@ function App() {
                         {!dmsg.isFileDeleted && !msg.isFileDeleted && isImage && (
                           <div className="media-attachment-wrapper">
                             <div
-                              className="message-image-container"
+                              className="message-image-container gpt-reveal-wrapper"
                               onClick={() => setLightboxImage(resolveMediaUrl(dmsg.imageUrl || dmsg.fileUrl))}
                             >
-                              <img src={resolveMediaUrl(dmsg.imageUrl || dmsg.fileUrl)} alt="attachment" className="message-img" />
+                              <img
+                                src={resolveMediaUrl(dmsg.imageUrl || dmsg.fileUrl)}
+                                alt="attachment"
+                                className="message-img gpt-image-reveal"
+                                loading="lazy"
+                                ref={(el) => {
+                                  if (el && el.complete && el.naturalWidth > 0) {
+                                    el.parentElement?.classList.add('image-loaded');
+                                  }
+                                }}
+                                onLoad={(e) => {
+                                  e.currentTarget.parentElement?.classList.add('image-loaded');
+                                }}
+                                onError={(e) => {
+                                  e.currentTarget.parentElement?.classList.add('image-loaded');
+                                }}
+                              />
                             </div>
                           </div>
                         )}
@@ -3011,33 +3027,40 @@ function App() {
                   {/* Modern AI Studio Canvas: Image Generation */}
                   {(jamesStatus.status === 'generating_image' || jamesStatus.generatingType === 'image') && (
                     <div className="ai-generation-card image-generation-card">
-                      <div className="ai-canvas-viewport">
-                        <div className="ai-canvas-grid-bg" />
-                        <div className="ai-canvas-shimmer-beam" />
-
-                        <div className="ai-canvas-center-aperture">
-                          <div className="orbital-ring-outer" />
-                          <div className="orbital-ring-inner" />
-                          <div className="aperture-core-glow">
-                            <Sparkles size={22} className="aperture-sparkle-spin" />
-                          </div>
+                      <div className="image-foundry-inner">
+                        <div className="image-canvas-silhouette-wrap">
+                          <div className="image-canvas-laser-line" />
+                          <Sparkles size={24} className="image-canvas-icon" />
                         </div>
 
-                        <div className="ai-canvas-info-overlay">
-                          <div className="ai-gen-badge image-badge">
-                            <span className="ai-gen-live-dot" />
-                            <span>AI IMAGE STUDIO</span>
+                        <div className="image-foundry-content">
+                          <div className="image-foundry-header">
+                            <div className="ai-gen-badge image-badge">
+                              <span className="ai-gen-live-dot" />
+                              <span>AI IMAGE STUDIO</span>
+                            </div>
+                            <Loader2 size={15} className="image-spinner" />
                           </div>
-                          <span className="ai-gen-status-title">Synthesizing Visual Artwork...</span>
-                          {jamesStatus.prompt && (
-                            <div className="ai-gen-prompt-pill" title={jamesStatus.prompt}>
-                              &ldquo;{jamesStatus.prompt.length > 60 ? jamesStatus.prompt.slice(0, 60) + '...' : jamesStatus.prompt}&rdquo;
+
+                          <span className="image-foundry-title">Synthesizing Visual Artwork...</span>
+
+                          {jamesStatus.prompt ? (
+                            <div className="image-prompt-pill" title={jamesStatus.prompt}>
+                              <span>&ldquo;{jamesStatus.prompt.length > 50 ? jamesStatus.prompt.slice(0, 50) + '...' : jamesStatus.prompt}&rdquo;</span>
+                            </div>
+                          ) : (
+                            <div className="image-prompt-pill">
+                              <span>Visual Concept Render</span>
                             </div>
                           )}
-                          <div className="ai-gen-progress-track">
-                            <div className="ai-gen-progress-glow" />
+
+                          <div className="image-progress-track">
+                            <div className="image-progress-glow" />
                           </div>
-                          <span className="ai-gen-substep">Diffusing latent pixels &bull; High-resolution render</span>
+
+                          <span className="image-foundry-subtext">
+                            Diffusing latent pixels &bull; High-resolution render
+                          </span>
                         </div>
                       </div>
                     </div>

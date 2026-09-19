@@ -364,7 +364,7 @@
 .message-card.own-message {
   align-self: flex-end;
   align-items: flex-end;
-  text-align: right;
+  text-align: left;
   margin-left: auto;
 }
 
@@ -441,7 +441,7 @@
 .own-message .message-body {
   padding-left: 0;
   padding-right: 1.8rem;
-  text-align: right;
+  text-align: left;
 }
 
 .message-body.encrypted-placeholder {
@@ -461,6 +461,8 @@
   cursor: pointer;
   transition: transform 0.15s ease;
   display: inline-block;
+  position: relative;
+  background: rgba(10, 16, 28, 0.7);
 }
 
 .message-image-container:hover {
@@ -471,6 +473,70 @@
   width: 100%;
   height: auto;
   display: block;
+}
+
+/* ChatGPT-Style Progressive Slow Image Reveal */
+.gpt-reveal-wrapper .message-img {
+  opacity: 0;
+  filter: blur(22px);
+  transform: scale(0.96);
+  will-change: filter, opacity, transform;
+}
+
+.gpt-reveal-wrapper.image-loaded .message-img {
+  animation: gptImageSlowReveal 2.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.gpt-reveal-wrapper.image-loaded::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(0, 243, 255, 0.12) 40%,
+    rgba(255, 255, 255, 0.32) 50%,
+    rgba(0, 243, 255, 0.12) 60%,
+    transparent 100%
+  );
+  transform: translateY(-100%);
+  animation: gptRevealScanline 2.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes gptImageSlowReveal {
+  0% {
+    filter: blur(22px) brightness(1.15);
+    opacity: 0.15;
+    transform: scale(0.96);
+  }
+  35% {
+    filter: blur(14px) brightness(1.08);
+    opacity: 0.65;
+  }
+  70% {
+    filter: blur(5px) brightness(1.02);
+    opacity: 0.92;
+  }
+  100% {
+    filter: blur(0px) brightness(1);
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes gptRevealScanline {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0.9;
+  }
+  75% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
 }
 
 .media-attachment-container {
@@ -5303,150 +5369,110 @@
 }
 
 /* ==========================================================
-   1. AI Studio Canvas (Image Generation)
+   1. AI Studio Canvas (Image Generation) - Compact Studio Foundry
    ========================================================== */
-.image-generation-card .ai-canvas-viewport {
-  position: relative;
-  width: 100%;
-  min-height: 190px;
+.image-generation-card {
+  padding: 1.05rem 1.2rem;
+  background: linear-gradient(135deg, rgba(11, 20, 36, 0.95), rgba(7, 12, 24, 0.98));
+  border: 1px solid rgba(0, 243, 255, 0.3);
+}
+
+.image-foundry-inner {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 1.1rem;
+}
+
+.image-canvas-silhouette-wrap {
+  position: relative;
+  width: 52px;
+  height: 58px;
+  border-radius: 8px;
+  background: #060d16;
+  border: 1.5px solid rgba(0, 243, 255, 0.45);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 14px rgba(0, 243, 255, 0.2);
+  display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   overflow: hidden;
-  padding: 1.3rem 1.1rem;
 }
 
-.ai-canvas-grid-bg {
+.image-canvas-laser-line {
   position: absolute;
-  inset: 0;
-  background-image: 
-    linear-gradient(to right, rgba(0, 243, 255, 0.04) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(0, 243, 255, 0.04) 1px, transparent 1px);
-  background-size: 24px 24px;
-  mask-image: radial-gradient(circle at center, black 40%, transparent 85%);
-  -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 85%);
-  pointer-events: none;
-}
-
-.ai-canvas-shimmer-beam {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    135deg,
-    transparent 0%,
-    rgba(0, 243, 255, 0.03) 30%,
-    rgba(192, 132, 252, 0.08) 50%,
-    rgba(0, 243, 255, 0.03) 70%,
-    transparent 100%
-  );
-  transform: translateX(-100%);
-  animation: canvasBeamSweep 3s infinite ease-in-out;
-  pointer-events: none;
-}
-
-@keyframes canvasBeamSweep {
-  0% { transform: translateX(-100%) translateY(-20%); }
-  50% { transform: translateX(100%) translateY(20%); }
-  100% { transform: translateX(-100%) translateY(-20%); }
-}
-
-.ai-canvas-center-aperture {
-  position: relative;
-  width: 64px;
-  height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 0.65rem;
-}
-
-.orbital-ring-outer {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 1.5px dashed rgba(0, 243, 255, 0.5);
-  animation: spinClockwise 14s linear infinite;
-  box-shadow: 0 0 14px rgba(0, 243, 255, 0.15);
-}
-
-.orbital-ring-inner {
-  position: absolute;
-  inset: 7px;
-  border-radius: 50%;
-  border: 1.5px dotted rgba(192, 132, 252, 0.6);
-  animation: spinCounter 9s linear infinite;
-}
-
-@keyframes spinClockwise {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-@keyframes spinCounter {
-  from { transform: rotate(360deg); }
-  to { transform: rotate(0deg); }
-}
-
-.aperture-core-glow {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(0, 243, 255, 0.25) 0%, rgba(192, 132, 252, 0.1) 70%, transparent 100%);
-  border: 1px solid rgba(0, 243, 255, 0.45);
-  box-shadow: 0 0 20px rgba(0, 243, 255, 0.4);
-  color: #00f3ff;
-}
-
-.aperture-sparkle-spin {
-  animation: sparkleFloat 2.2s infinite ease-in-out;
-}
-
-@keyframes sparkleFloat {
-  0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.9; }
-  50% { transform: scale(1.18) rotate(20deg); opacity: 1; filter: drop-shadow(0 0 8px #00f3ff); }
-}
-
-.ai-canvas-info-overlay {
-  position: relative;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: #00f3ff;
+  box-shadow: 0 0 8px #00f3ff;
+  animation: imageLaserVertical 1.8s infinite ease-in-out;
   z-index: 2;
+}
+
+@keyframes imageLaserVertical {
+  0% { transform: translateY(0); opacity: 0.3; }
+  50% { transform: translateY(56px); opacity: 1; }
+  100% { transform: translateY(0); opacity: 0.3; }
+}
+
+.image-canvas-icon {
+  color: #00f3ff;
+  filter: drop-shadow(0 0 6px rgba(0, 243, 255, 0.6));
+  animation: imageIconPulse 2s infinite ease-in-out;
+}
+
+@keyframes imageIconPulse {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.1); opacity: 1; filter: drop-shadow(0 0 10px #00f3ff); }
+}
+
+.image-foundry-content {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.4rem;
-  text-align: center;
-  max-width: 92%;
+  gap: 0.3rem;
+  flex: 1;
+  min-width: 0;
 }
 
-.ai-gen-status-title {
+.image-foundry-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.image-spinner {
+  color: #00f3ff;
+  animation: spinClockwise 1.2s linear infinite;
+}
+
+.image-foundry-title {
   font-size: 0.88rem;
   font-weight: 700;
-  background: linear-gradient(90deg, #00f3ff, #c084fc, #38bdf8);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  letter-spacing: 0.4px;
+  color: #f8fafc;
+  letter-spacing: 0.3px;
 }
 
-.ai-gen-prompt-pill {
+.image-prompt-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 243, 255, 0.08);
+  border: 1px solid rgba(0, 243, 255, 0.22);
+  color: #00f3ff;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
   font-family: var(--font-mono, monospace);
   font-size: 0.72rem;
-  color: #94a3b8;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 0.25rem 0.75rem;
-  border-radius: 20px;
-  max-width: 320px;
+  font-weight: 600;
+  max-width: 260px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
-.ai-gen-progress-track {
-  width: 160px;
+.image-progress-track {
+  width: 100%;
   height: 3px;
   background: rgba(255, 255, 255, 0.06);
   border-radius: 3px;
@@ -5454,25 +5480,19 @@
   margin-top: 0.15rem;
 }
 
-.ai-gen-progress-glow {
+.image-progress-glow {
   width: 45%;
   height: 100%;
-  background: linear-gradient(90deg, #00f3ff, #c084fc);
+  background: linear-gradient(90deg, #00f3ff, #38bdf8);
   border-radius: 3px;
   animation: laserSweepProgress 1.6s infinite ease-in-out;
   box-shadow: 0 0 8px #00f3ff;
 }
 
-@keyframes laserSweepProgress {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(320%); }
-}
-
-.ai-gen-substep {
+.image-foundry-subtext {
   font-size: 0.68rem;
   color: #64748b;
   font-family: var(--font-mono, monospace);
-  letter-spacing: 0.2px;
 }
 
 /* ==========================================================
