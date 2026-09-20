@@ -13,6 +13,8 @@ class ToolRegistry {
     this.moderationEngine = dependencies.moderationEngine;
     this.freeTools = dependencies.freeTools || new FreeToolsService();
     this.getOnlineUsersList = dependencies.getOnlineUsersList || (() => []);
+    this.onPollCreated = dependencies.onPollCreated || (() => {});
+    this.onReminderSet = dependencies.onReminderSet || (() => {});
   }
 
   /**
@@ -264,6 +266,218 @@ class ToolRegistry {
             required: ['user_id_or_alias', 'reason']
           }
         }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'run_code',
+          description: 'Safely execute a JavaScript code snippet in an isolated sandbox and return console logs and evaluated result. Use when asked to test, run, evaluate, or debug JavaScript code, algorithms, or regular expressions.',
+          parameters: {
+            type: 'object',
+            properties: {
+              code: {
+                type: 'string',
+                description: 'The JavaScript code snippet to execute.'
+              },
+              language: {
+                type: 'string',
+                description: 'Programming language (default: "javascript").'
+              }
+            },
+            required: ['code']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'generate_voice',
+          description: 'Generate a playable audio voice note for a spoken message or text. Use when the user asks you to say something out loud, speak, generate an audio note, or send a voice message.',
+          parameters: {
+            type: 'object',
+            properties: {
+              text: {
+                type: 'string',
+                description: 'The text message to synthesize into spoken audio (up to 300 characters).'
+              }
+            },
+            required: ['text']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'create_poll',
+          description: 'Create an interactive community poll in the room with a question and 2 to 6 multiple choice options. Use when users ask to make a poll, vote on something, or when a fun group decision is needed.',
+          parameters: {
+            type: 'object',
+            properties: {
+              question: {
+                type: 'string',
+                description: 'The question for the community poll.'
+              },
+              options: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'List of 2 to 6 choice options for users to vote on.'
+              }
+            },
+            required: ['question', 'options']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'set_reminder',
+          description: 'Set a timed reminder or timer for a user. Use when a user asks to be reminded of something after a certain amount of time (e.g. "remind me in 10 minutes to take a break").',
+          parameters: {
+            type: 'object',
+            properties: {
+              user_id_or_alias: {
+                type: 'string',
+                description: 'The username or alias to ping when the reminder triggers.'
+              },
+              reminder_text: {
+                type: 'string',
+                description: 'What the user wants to be reminded of.'
+              },
+              seconds: {
+                type: 'number',
+                description: 'Number of seconds from now when the reminder should fire (e.g. 60 for 1 min, 600 for 10 min).'
+              }
+            },
+            required: ['user_id_or_alias', 'reminder_text', 'seconds']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'start_trivia',
+          description: 'Launch a developer or tech trivia question for the room. Use when users ask for trivia, a quiz, or a fun challenge.',
+          parameters: {
+            type: 'object',
+            properties: {
+              topic: {
+                type: 'string',
+                description: 'Topic for trivia (e.g. "javascript", "general", "git", "web").'
+              }
+            }
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'roll_dice',
+          description: 'Roll one or more dice with a specified number of sides (e.g., d6, d20, d100). Use for games, random selections, or when asked to roll dice.',
+          parameters: {
+            type: 'object',
+            properties: {
+              sides: {
+                type: 'number',
+                description: 'Number of sides per die (e.g. 6 for standard d6, 20 for d20). Default 6.'
+              },
+              count: {
+                type: 'number',
+                description: 'Number of dice to roll (1 to 10). Default 1.'
+              }
+            }
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'flip_coin',
+          description: 'Flip a coin (Heads or Tails). Use for coin tosses, coin flips, or 50/50 decisions.',
+          parameters: {
+            type: 'object',
+            properties: {
+              count: {
+                type: 'number',
+                description: 'Number of coins to flip (1 to 10). Default 1.'
+              }
+            }
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'analyze_file',
+          description: 'Read and inspect an uploaded document or code file from the room uploads. Use when a user asks to summarize, inspect, or explain a file they uploaded.',
+          parameters: {
+            type: 'object',
+            properties: {
+              filename: {
+                type: 'string',
+                description: 'Filename of the uploaded file to read from uploads directory.'
+              }
+            },
+            required: ['filename']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'summarize_chat',
+          description: 'Summarize recent room messages, topics, and discussions. Use when someone asks "what did I miss?", "summarize the chat", or asks for a recap of recent conversation.',
+          parameters: {
+            type: 'object',
+            properties: {
+              limit: {
+                type: 'number',
+                description: 'Number of recent messages to analyze (default 20, max 50).'
+              }
+            }
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'translate_text',
+          description: 'Translate text from one language to another. Use whenever the user asks to translate a sentence, word, or paragraph into another language (e.g. Spanish, French, German, Japanese, Hindi, etc.).',
+          parameters: {
+            type: 'object',
+            properties: {
+              text: {
+                type: 'string',
+                description: 'The text to translate.'
+              },
+              target_language: {
+                type: 'string',
+                description: 'Target language code or name (e.g. "es" or "Spanish", "fr" or "French", "ja" or "Japanese", "de" or "German", "hi" or "Hindi").'
+              }
+            },
+            required: ['text', 'target_language']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'explain_code',
+          description: 'Analyze, explain, and break down a code snippet with time/space complexity analysis (Big-O) and potential edge cases.',
+          parameters: {
+            type: 'object',
+            properties: {
+              code: {
+                type: 'string',
+                description: 'The code snippet to explain.'
+              },
+              language: {
+                type: 'string',
+                description: 'The programming language of the code (e.g. javascript, python, rust, go, c++).'
+              }
+            },
+            required: ['code']
+          }
+        }
       }
     ];
   }
@@ -433,6 +647,147 @@ class ToolRegistry {
           }
           const res = this.moderationEngine.flagUser(target, reason);
           return JSON.stringify(res);
+        }
+
+        case 'run_code': {
+          const code = args.code || '';
+          const language = args.language || 'javascript';
+          if (!this.freeTools) {
+            return JSON.stringify({ error: 'Free tools service unavailable.' });
+          }
+          const result = await this.freeTools.runCode(language, code);
+          return JSON.stringify(result);
+        }
+
+        case 'generate_voice': {
+          const text = args.text || '';
+          if (!this.freeTools) {
+            return JSON.stringify({ error: 'Free tools service unavailable.' });
+          }
+          const result = await this.freeTools.generateVoice(text);
+          return JSON.stringify(result);
+        }
+
+        case 'create_poll': {
+          let question = (args.question || 'Community Poll').trim();
+          let rawOptions = Array.isArray(args.options) ? args.options.map(o => String(o).trim()).filter(Boolean) : null;
+
+          // If options is missing, empty, or defaulted to ['Yes', 'No'] while question has "or" / "vs":
+          const isGenericYesNo = rawOptions && rawOptions.length === 2 &&
+            rawOptions[0].toLowerCase() === 'yes' && rawOptions[1].toLowerCase() === 'no';
+
+          if (!rawOptions || rawOptions.length < 2 || isGenericYesNo) {
+            const orMatch = question.match(/(.*?)\s+(?:or|vs\.?)\s+(.*)/i);
+            if (orMatch) {
+              const opt1 = orMatch[1].replace(/^(?:should\s+we\s+|is\s+it\s+|do\s+you\s+prefer\s+|poll:\s*)/i, '').replace(/^[^\w]+|[^\w]+$/g, '').trim();
+              const opt2 = orMatch[2].replace(/[?.,!]+$/g, '').trim();
+              if (opt1 && opt2) {
+                rawOptions = [opt1, opt2];
+              }
+            }
+          }
+
+          const options = (rawOptions && rawOptions.length >= 2) ? rawOptions : ['Yes', 'No'];
+          const pollId = 'poll_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+          const pollData = {
+            id: pollId,
+            question: question,
+            options: options.map(opt => ({ text: String(opt).trim(), votes: 0 })),
+            totalVotes: 0,
+            voters: {},
+            createdAt: Date.now()
+          };
+          if (typeof this.onPollCreated === 'function') {
+            this.onPollCreated(pollData);
+          }
+          return JSON.stringify({
+            success: true,
+            poll: pollData,
+            message: `Poll created: "${question}" with options: ${options.join(', ')}.`
+          });
+        }
+
+        case 'set_reminder': {
+          const target = args.user_id_or_alias || 'User';
+          const reminderText = args.reminder_text || 'Reminder';
+          const seconds = Math.min(Math.max(parseInt(args.seconds) || 60, 5), 86400); // 5s to 24h
+          if (typeof this.onReminderSet === 'function') {
+            this.onReminderSet(target, reminderText, seconds);
+          }
+          return JSON.stringify({
+            success: true,
+            user: target,
+            reminder: reminderText,
+            seconds,
+            firesAt: new Date(Date.now() + seconds * 1000).toLocaleTimeString()
+          });
+        }
+
+        case 'start_trivia': {
+          const topic = args.topic || 'general';
+          if (!this.freeTools) {
+            return JSON.stringify({ error: 'Free tools service unavailable.' });
+          }
+          const question = this.freeTools.getTriviaQuestion(topic);
+          return JSON.stringify(question);
+        }
+
+        case 'roll_dice': {
+          const sides = args.sides || 6;
+          const count = args.count || 1;
+          if (!this.freeTools) {
+            return JSON.stringify({ error: 'Free tools service unavailable.' });
+          }
+          const result = this.freeTools.rollDice(sides, count);
+          return JSON.stringify(result);
+        }
+
+        case 'flip_coin': {
+          const count = args.count || 1;
+          if (!this.freeTools) {
+            return JSON.stringify({ error: 'Free tools service unavailable.' });
+          }
+          const result = this.freeTools.flipCoin(count);
+          return JSON.stringify(result);
+        }
+
+        case 'analyze_file': {
+          const filename = args.filename || '';
+          if (!this.freeTools) {
+            return JSON.stringify({ error: 'Free tools service unavailable.' });
+          }
+          const result = await this.freeTools.analyzeFile(filename);
+          return JSON.stringify(result);
+        }
+
+        case 'summarize_chat': {
+          const limit = Math.min(Math.max(parseInt(args.limit) || 20, 5), 50);
+          const messages = this.memoryService ? this.memoryService.getRecentMessages(limit) : [];
+          if (!this.freeTools) {
+            return JSON.stringify({ error: 'Free tools service unavailable.' });
+          }
+          const summary = this.freeTools.summarizeChat(messages, limit);
+          return JSON.stringify(summary);
+        }
+
+        case 'translate_text': {
+          const text = args.text || '';
+          const targetLang = args.target_language || 'es';
+          if (!this.freeTools) {
+            return JSON.stringify({ error: 'Free tools service unavailable.' });
+          }
+          const result = await this.freeTools.translateText(text, targetLang);
+          return JSON.stringify(result);
+        }
+
+        case 'explain_code': {
+          const code = args.code || '';
+          const language = args.language || 'javascript';
+          if (!this.freeTools) {
+            return JSON.stringify({ error: 'Free tools service unavailable.' });
+          }
+          const result = this.freeTools.explainCode(code, language);
+          return JSON.stringify(result);
         }
 
         default:

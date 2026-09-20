@@ -16,6 +16,8 @@ class MemoryService {
     
     // User memories: Map of userId/key -> { userId, alias, notes: [], topics: [], count: 0, lastSeen: number }
     this.userMemories = new Map();
+    this.welcomedUsers = new Set();
+    this.lastReturnGreetTime = new Map();
     
     this.storagePath = options.storagePath || path.join(__dirname, '..', 'data', 'james_memory.json');
     this.saveTimeout = null;
@@ -38,9 +40,16 @@ class MemoryService {
       userId: msg.userId || null,
       text: (msg.text || '').trim(),
       timestamp: msg.timestamp || Date.now(),
+      fileUrl: msg.fileUrl || msg.imageUrl || null,
+      imageUrl: msg.imageUrl || (msg.fileType?.startsWith('image/') ? msg.fileUrl : null),
+      fileType: msg.fileType || null,
       replyTo: msg.replyTo ? {
+        id: msg.replyTo.id,
         alias: msg.replyTo.alias,
-        text: (msg.replyTo.text || '').substring(0, 100)
+        text: (msg.replyTo.text || '').substring(0, 100),
+        fileUrl: msg.replyTo.fileUrl || msg.replyTo.imageUrl || null,
+        imageUrl: msg.replyTo.imageUrl || msg.replyTo.fileUrl || null,
+        fileType: msg.replyTo.fileType || null
       } : null,
       isJames: msg.alias === 'James' || msg.userId === 'bot_james'
     };
@@ -49,6 +58,16 @@ class MemoryService {
     if (this.conversationHistory.length > this.maxHistory) {
       this.conversationHistory.shift();
     }
+  }
+
+  /**
+   * Find a past message in memory by ID.
+   * @param {string|number} id
+   */
+  getMessageById(id) {
+    if (!id) return null;
+    const strId = String(id);
+    return this.conversationHistory.find(m => String(m.id) === strId) || null;
   }
 
   /**
@@ -155,6 +174,10 @@ class MemoryService {
     this.scheduleSave();
   }
 
+  touchUser(userId, alias) {
+    this.recordUserInteraction(userId, alias);
+  }
+
   /**
    * Save a relevant fact, preference, or technical note about a user.
    * @param {string} userId - User identifier.
@@ -191,6 +214,50 @@ class MemoryService {
     return false;
   }
 
+  // --- Welcomed Users & Greeting Persistence ---
+
+  isUserWelcomed(userId, alias) {
+    if (alias && this.welcomedUsers.has(alias.trim().toLowerCase())) return true;
+    if (userId && this.welcomedUsers.has(userId.trim().toLowerCase())) return true;
+    if (this.getUserMemory(userId, alias)) return true;
+    return false;
+  }
+
+  markUserWelcomed(userId, alias) {
+    let changed = false;
+    if (alias) {
+      const a = alias.trim().toLowerCase();
+      if (!this.welcomedUsers.has(a)) {
+        this.welcomedUsers.add(a);
+        changed = true;
+      }
+    }
+    if (userId) {
+      const u = userId.trim().toLowerCase();
+      if (!this.welcomedUsers.has(u)) {
+        this.welcomedUsers.add(u);
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.scheduleSave();
+    }
+  }
+
+  canGreetReturningUser(alias) {
+    if (!alias) return false;
+    const a = alias.trim().toLowerCase();
+    const lastTime = this.lastReturnGreetTime.get(a) || 0;
+    return (Date.now() - lastTime) > (24 * 60 * 60 * 1000);
+  }
+
+  markReturningUserGreeted(alias) {
+    if (!alias) return;
+    const a = alias.trim().toLowerCase();
+    this.lastReturnGreetTime.set(a, Date.now());
+    this.scheduleSave();
+  }
+
   // --- Persistence ---
 
   loadPersistedMemory() {
@@ -204,7 +271,19 @@ class MemoryService {
               if (u.key) {
                 this.userMemories.set(u.key, u);
               }
+              if (u.alias) this.welcomedUsers.add(u.alias.trim().toLowerCase());
+              if (u.userId) this.welcomedUsers.add(u.userId.trim().toLowerCase());
             });
+          }
+          if (Array.isArray(parsed.welcomedUsers)) {
+            parsed.welcomedUsers.forEach(u => {
+              if (u && typeof u === 'string') this.welcomedUsers.add(u.trim().toLowerCase());
+            });
+          }
+          if (parsed.lastReturnGreetTime && typeof parsed.lastReturnGreetTime === 'object') {
+            for (const [k, v] of Object.entries(parsed.lastReturnGreetTime)) {
+              if (k && v) this.lastReturnGreetTime.set(k.toLowerCase(), Number(v));
+            }
           }
           if (parsed.summary) {
             this.conversationSummary = parsed.summary;
@@ -224,7 +303,7 @@ class MemoryService {
     this.saveTimeout = setTimeout(() => {
       this.saveTimeout = null;
       this.saveToDisk();
-    }, 5000); // 5-second debounce
+    }, 2000); // 2-second debounce
   }
 
   saveToDisk() {
@@ -243,6 +322,8 @@ class MemoryService {
         updatedAt: Date.now(),
         summary: this.conversationSummary,
         topics: Array.from(this.activeTopics),
+        welcomedUsers: Array.from(this.welcomedUsers),
+        lastReturnGreetTime: Object.fromEntries(this.lastReturnGreetTime),
         users: usersArray
       };
 

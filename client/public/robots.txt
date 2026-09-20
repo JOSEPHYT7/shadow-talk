@@ -1,0 +1,8 @@
+# ShadowTalk robots.txt
+User-agent: *
+Allow: /
+Allow: /manifesto
+Disallow: /api/
+Disallow: /uploads/
+
+Sitemap: https://shadow-talk-kryk.onrender.com/sitemap.xml

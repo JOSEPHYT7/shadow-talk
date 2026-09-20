@@ -70,24 +70,36 @@ class DecisionEngine {
       return { action: 'IGNORE', reason: 'room_dormant', isDirect: false };
     }
 
-    // Comprehensive query detection: commands, generation requests, questions, tech queries, greetings, or any meaningful text
+    // Comprehensive query detection: commands, generation requests, questions, tech queries, greetings
     const isQuestion = /\?|how|what|why|who|where|when|which|is|are|can|could|would|should|do|does|did|will/i.test(text);
     const isGreeting = /^(hi|hello|hey|yo|greetings|morning|evening|sup|good)\b/i.test(text);
     const isActionOrRequest = /generate|create|make|draw|build|write|search|find|calculate|summarize|show|tell|give|convert|format|design|pdf|qr|image|photo|picture|code|script|test|explain|help|solve|compare|review/i.test(text);
     const isTechHelp = /error|bug|issue|react|node|javascript|python|deploy|css|html|api|database|syntax|docker|git/i.test(text);
     const isMeaningfulQuery = text.trim().length > 2;
 
-    // Single-user companion mode: James stays present and naturally conversant
-    if (socialState.mode === 'COMPANION') {
-      return { action: 'RESPOND', reason: 'single_user_companion', isDirect: false };
+    // 1. Single-user companion mode: James stays present, interactive, and naturally conversant
+    if (socialState.mode === 'COMPANION' || socialState.userCount === 1) {
+      if (isActionOrRequest || isQuestion || isGreeting || isTechHelp || isMeaningfulQuery) {
+        return { action: 'RESPOND', reason: 'single_user_companion', isDirect: false };
+      }
+      return { action: 'RESPOND', reason: 'single_user_general', isDirect: false };
     }
 
-    // In any room state, answer any query, request, question, or greeting (short or long)
-    if (isActionOrRequest || isQuestion || isGreeting || isTechHelp || isMeaningfulQuery) {
-      return { action: 'RESPOND', reason: 'user_query_active', isDirect: isDirectMention };
+    // 2. Crowded room / 5+ users (OBSERVER mode): Strictly silent unless mentioned or replied to
+    // (Note: isDirect was already evaluated on line 61 and returned RESPOND)
+    if (socialState.mode === 'OBSERVER' || socialState.userCount >= 5) {
+      return { action: 'IGNORE', reason: 'observer_mode_silent_crowded_room', isDirect: false };
     }
 
-    return { action: 'RESPOND', reason: 'general_room_response', isDirect: false };
+    // 3. Moderate group (2 to 4 users / "somewhat in touch"):
+    // James responds when asked questions, given tool/generation requests, asked for tech help, or greeted.
+    // James does NOT hijack casual user-to-user conversation.
+    if (isActionOrRequest || isQuestion || isTechHelp || isGreeting) {
+      return { action: 'RESPOND', reason: 'group_query_or_help', isDirect: isDirectMention };
+    }
+
+    // Casual user-to-user chatter -> James observes quietly
+    return { action: 'IGNORE', reason: 'group_chatter_observe_only', isDirect: false };
   }
 
   /**

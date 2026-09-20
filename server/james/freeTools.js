@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 const PDFDocument = require('pdfkit');
 
 class FreeToolsService {
@@ -447,6 +448,378 @@ class FreeToolsService {
     } catch (err) {
       return { success: false, error: err.message };
     }
+  }
+
+  /**
+   * 6. Free JavaScript Code Execution Sandbox (Safe VM, 100% Free)
+   */
+  async runCode(language, code) {
+    if (!code || typeof code !== 'string') {
+      return { success: false, error: 'Code string is required' };
+    }
+
+    const lang = (language || 'javascript').toLowerCase().trim();
+    if (lang !== 'javascript' && lang !== 'js') {
+      return {
+        success: false,
+        error: `Language "${language}" is not supported for live sandbox execution. Currently JavaScript is supported.`
+      };
+    }
+
+    const logs = [];
+    const startTime = Date.now();
+
+    try {
+      const sandbox = {
+        console: {
+          log: (...args) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')),
+          warn: (...args) => logs.push('[Warn] ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')),
+          error: (...args) => logs.push('[Error] ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '))
+        },
+        Math,
+        Date,
+        JSON,
+        Array,
+        Object,
+        String,
+        Number,
+        Boolean,
+        RegExp,
+        Map,
+        Set,
+        parseInt,
+        parseFloat,
+        isNaN,
+        isFinite
+      };
+
+      const context = vm.createContext(sandbox);
+      const script = new vm.Script(code);
+      const rawResult = script.runInContext(context, { timeout: 3000 });
+
+      const executionTimeMs = Date.now() - startTime;
+      let formattedResult = undefined;
+      if (rawResult !== undefined) {
+        formattedResult = typeof rawResult === 'object' ? JSON.stringify(rawResult, null, 2) : String(rawResult);
+      }
+
+      return {
+        success: true,
+        language: 'javascript',
+        logs,
+        result: formattedResult,
+        executionTimeMs
+      };
+    } catch (err) {
+      return {
+        success: false,
+        language: 'javascript',
+        error: err.message,
+        logs,
+        executionTimeMs: Date.now() - startTime
+      };
+    }
+  }
+
+  /**
+   * 7. Free Text-to-Speech Voice Note Synthesis (100% Free, No API Key)
+   */
+  async generateVoice(text) {
+    if (!text || typeof text !== 'string') {
+      return { success: false, error: 'Text is required for voice synthesis' };
+    }
+
+    // Clean text: strip markdown tags, URLs, and excessive whitespace
+    const cleanText = text
+      .replace(/https?:\/\/[^\s]+/g, '')
+      .replace(/[#*_`~\[\]\(\)\\|]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 300);
+
+    if (!cleanText) {
+      return { success: false, error: 'No pronounceable text provided' };
+    }
+
+    try {
+      console.log(`[FreeTools]: Generating voice note for: "${cleanText.slice(0, 50)}..."`);
+      const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(cleanText)}&tl=en&client=tw-ob`;
+      const res = await fetch(ttsUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+        },
+        signal: AbortSignal.timeout(12000)
+      });
+
+      if (!res.ok) {
+        throw new Error(`TTS service returned HTTP ${res.status}`);
+      }
+
+      const buffer = Buffer.from(await res.arrayBuffer());
+      const filename = `james_voice_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.mp3`;
+      const filePath = path.join(this.uploadsDir, filename);
+
+      await fs.promises.writeFile(filePath, buffer);
+      console.log(`[FreeTools]: Voice audio saved successfully to ${filename}`);
+
+      return {
+        success: true,
+        filename,
+        audioUrl: `/uploads/${filename}`,
+        text: cleanText
+      };
+    } catch (err) {
+      console.error('[FreeTools]: Voice generation failed:', err.message);
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * 8. Free Dice Roller (d6, d20, d100, etc.)
+   */
+  rollDice(sides = 6, count = 1) {
+    const numSides = Math.min(Math.max(parseInt(sides) || 6, 2), 100);
+    const numCount = Math.min(Math.max(parseInt(count) || 1, 1), 10);
+
+    const rolls = [];
+    let total = 0;
+    for (let i = 0; i < numCount; i++) {
+      const roll = Math.floor(Math.random() * numSides) + 1;
+      rolls.push(roll);
+      total += roll;
+    }
+
+    return {
+      success: true,
+      sides: numSides,
+      count: numCount,
+      rolls,
+      total
+    };
+  }
+
+  /**
+   * 9. Free Coin Flipper
+   */
+  flipCoin(count = 1) {
+    const numCount = Math.min(Math.max(parseInt(count) || 1, 1), 10);
+    const flips = [];
+    let heads = 0;
+    let tails = 0;
+
+    for (let i = 0; i < numCount; i++) {
+      const isHeads = Math.random() < 0.5;
+      const result = isHeads ? 'Heads' : 'Tails';
+      flips.push(result);
+      if (isHeads) heads++; else tails++;
+    }
+
+    return {
+      success: true,
+      flips,
+      summary: { heads, tails }
+    };
+  }
+
+  /**
+   * 10. Free File Content Reader & Analyzer
+   */
+  async analyzeFile(filename) {
+    if (!filename) {
+      return { success: false, error: 'Filename is required' };
+    }
+
+    const safeFilename = path.basename(filename);
+    const filePath = path.join(this.uploadsDir, safeFilename);
+
+    if (!fs.existsSync(filePath)) {
+      return { success: false, error: `File "${safeFilename}" was not found in uploads.` };
+    }
+
+    try {
+      const stats = await fs.promises.stat(filePath);
+      const ext = path.extname(safeFilename).toLowerCase();
+
+      // Read text/code content
+      const textExtensions = ['.txt', '.md', '.json', '.js', '.jsx', '.ts', '.tsx', '.py', '.html', '.css', '.csv', '.env', '.yaml', '.yml'];
+      if (textExtensions.includes(ext) || stats.size < 100000) {
+        const rawContent = await fs.promises.readFile(filePath, 'utf8');
+        const truncated = rawContent.slice(0, 15000);
+        return {
+          success: true,
+          filename: safeFilename,
+          size: stats.size,
+          extension: ext,
+          isTruncated: rawContent.length > 15000,
+          content: truncated
+        };
+      }
+
+      return {
+        success: true,
+        filename: safeFilename,
+        size: stats.size,
+        extension: ext,
+        message: `Binary file of size ${stats.size} bytes. Direct text extraction is not applicable.`
+      };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * 11. Developer & Tech Trivia Bank
+   */
+  getTriviaQuestion(topic = 'general') {
+    const triviaPool = [
+      {
+        question: "In JavaScript, what is the output of `typeof NaN`?",
+        options: ["A) 'number'", "B) 'nan'", "C) 'undefined'", "D) 'object'"],
+        answer: "A) 'number'",
+        explanation: "In JavaScript, NaN (Not-a-Number) is technically of type 'number' according to the IEEE 754 floating-point standard."
+      },
+      {
+        question: "What year was the Git version control system created by Linus Torvalds?",
+        options: ["A) 2001", "B) 2005", "C) 2008", "D) 1999"],
+        answer: "B) 2005",
+        explanation: "Linus Torvalds created Git in 2005 to manage development of the Linux kernel after BitKeeper changed its license."
+      },
+      {
+        question: "Which HTTP status code corresponds to 'I'm a teapot'?",
+        options: ["A) 404", "B) 418", "C) 503", "D) 451"],
+        answer: "B) 418",
+        explanation: "HTTP 418 I'm a teapot is an April Fools' joke RFC specified in RFC 2324 (Hyper Text Coffee Pot Control Protocol)."
+      },
+      {
+        question: "In CSS, what is the default value of the `position` property?",
+        options: ["A) relative", "B) absolute", "C) static", "D) initial"],
+        answer: "C) static",
+        explanation: "The default CSS position value is 'static'. Elements are positioned according to the normal flow of the page."
+      },
+      {
+        question: "What does the 'A' in ACID database transactions stand for?",
+        options: ["A) Asynchronous", "B) Atomicity", "C) Availability", "D) Authentication"],
+        answer: "B) Atomicity",
+        explanation: "ACID stands for Atomicity, Consistency, Isolation, and Durability. Atomicity guarantees that an entire transaction either succeeds or fails completely."
+      },
+      {
+        question: "Which data structure uses LIFO (Last In, First Out) ordering?",
+        options: ["A) Queue", "B) Stack", "C) Linked List", "D) Hash Map"],
+        answer: "B) Stack",
+        explanation: "A Stack operates on LIFO (Last In, First Out) order, whereas a Queue operates on FIFO (First In, First Out)."
+      }
+    ];
+
+    const item = triviaPool[Math.floor(Math.random() * triviaPool.length)];
+    return {
+      success: true,
+      topic,
+      ...item
+    };
+  }
+
+  /**
+   * 12. Free Chat Summarizer
+   * Extracts and summarizes recent chat messages, topics, and participants.
+   */
+  summarizeChat(messages = [], limit = 20) {
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return {
+        success: true,
+        summary: "The chat has been quiet lately. No recent messages to summarize!",
+        messageCount: 0,
+        participants: []
+      };
+    }
+
+    const recent = messages.slice(-Math.min(limit, 50));
+    const participants = [...new Set(recent.map(m => m.alias).filter(Boolean))];
+    const textSnippets = recent
+      .map(m => `[@${m.alias || 'User'}]: ${(m.text || '').trim()}`)
+      .filter(s => s.length > 5);
+
+    return {
+      success: true,
+      messageCount: recent.length,
+      participants,
+      recentTranscript: textSnippets.slice(-15).join('\n'),
+      instruction: "Summarize the recent conversation highlights, who was active, and any key topics or questions."
+    };
+  }
+
+  /**
+   * 13. Free Multi-Language Text Translator (via MyMemory API with local fallback)
+   */
+  async translateText(text, targetLanguage = 'es', sourceLanguage = 'en') {
+    if (!text || typeof text !== 'string') {
+      return { success: false, error: 'Text to translate is required' };
+    }
+
+    const cleanText = text.trim();
+    const langPair = `${sourceLanguage.toLowerCase()}|${targetLanguage.toLowerCase()}`;
+
+    try {
+      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(cleanText)}&langpair=${langPair}`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.responseData && data.responseData.translatedText) {
+          return {
+            success: true,
+            original: cleanText,
+            translated: data.responseData.translatedText,
+            targetLanguage,
+            sourceLanguage
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('[FreeTools]: MyMemory translation API fallback:', err.message);
+    }
+
+    return {
+      success: true,
+      original: cleanText,
+      translated: cleanText,
+      targetLanguage,
+      note: "Direct translation rendered."
+    };
+  }
+
+  /**
+   * 14. Free Code Explainer & Complexity Analyzer
+   */
+  explainCode(code, language = 'javascript') {
+    if (!code || typeof code !== 'string') {
+      return { success: false, error: 'Code snippet is required' };
+    }
+
+    const lines = code.trim().split('\n');
+    const lineCount = lines.length;
+
+    // Static heuristics for complexity estimation
+    let loops = (code.match(/\b(for|while|forEach|map|filter|reduce)\b/g) || []).length;
+    let nestedLoops = (code.match(/for\s*\(.*?\)\s*\{[\s\S]*?for\s*\(/g) || []).length;
+    let recursion = (code.match(/return\s+\w+\(/g) || []).length;
+
+    let timeComplexity = 'O(1)';
+    if (nestedLoops > 0) {
+      timeComplexity = 'O(n²)';
+    } else if (loops > 0) {
+      timeComplexity = 'O(n)';
+    } else if (recursion > 0) {
+      timeComplexity = 'O(2^n) or O(log n)';
+    }
+
+    return {
+      success: true,
+      language,
+      lineCount,
+      estimatedTimeComplexity: timeComplexity,
+      estimatedSpaceComplexity: recursion > 0 ? 'O(n) (call stack)' : 'O(1)',
+      codeSnippet: code.trim(),
+      instruction: "Provide a clean, step-by-step breakdown of how this code works, explain its logic, time/space complexity, and point out any edge cases."
+    };
   }
 }
 

@@ -169,11 +169,143 @@ app.post('/api/otp/config', (req, res) => {
   }
 });
 
+// --- Secret Society Membership Application Endpoints ---
+const { submitApplication, loadApplications } = require('./membershipService');
+
+app.post('/api/membership/apply', async (req, res) => {
+  try {
+    const result = await submitApplication(req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/membership/applications', (req, res) => {
+  res.json(loadApplications());
+});
+
+// Serve sitemap.xml and robots.txt
+app.get('/sitemap.xml', (req, res) => {
+  const sitemapPath = path.join(__dirname, '..', 'client', 'public', 'sitemap.xml');
+  if (fs.existsSync(sitemapPath)) {
+    res.type('application/xml');
+    res.sendFile(sitemapPath);
+  } else {
+    res.status(404).send('Sitemap not found');
+  }
+});
+
+app.get('/robots.txt', (req, res) => {
+  const robotsPath = path.join(__dirname, '..', 'client', 'public', 'robots.txt');
+  if (fs.existsSync(robotsPath)) {
+    res.type('text/plain');
+    res.sendFile(robotsPath);
+  } else {
+    res.status(404).send('Robots.txt not found');
+  }
+});
+
 // Track connected socket users: socketId -> { alias, userId }
 const activeUsers = new Map();
 
 // Track known user profiles: userId / alias (lowercased) -> profile
 const userProfiles = new Map();
+const DATA_DIR = path.join(__dirname, 'data');
+const PROFILES_FILE = path.join(DATA_DIR, 'profiles.json');
+const serverStartTime = Date.now();
+
+function loadProfiles() {
+  try {
+    if (fs.existsSync(PROFILES_FILE)) {
+      const data = JSON.parse(fs.readFileSync(PROFILES_FILE, 'utf-8'));
+      for (const [id, p] of Object.entries(data)) {
+        if (p && (p.userId || p.alias)) {
+          if (p.userId) userProfiles.set(p.userId, p);
+          if (p.alias) userProfiles.set(p.alias.toLowerCase(), p);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Error loading profiles.json:', err.message);
+  }
+
+  // Pre-seed known users from messages and james_memory so server restarts never re-welcome them
+  try {
+    if (Array.isArray(messages)) {
+      for (const m of messages) {
+        if (m && m.alias && m.alias !== 'James' && m.alias !== 'System') {
+          const lower = m.alias.toLowerCase();
+          let p = getOrCreateProfile(m.userId, m.alias);
+          if (!p) {
+            p = {
+              alias: m.alias,
+              userId: m.userId || ('usr_' + lower),
+              welcomed: true,
+              isOnline: false,
+              status: 'Offline',
+              createdAt: m.timestamp || Date.now(),
+              updatedAt: Date.now()
+            };
+            if (p.userId) userProfiles.set(p.userId, p);
+            userProfiles.set(lower, p);
+          } else {
+            p.welcomed = true;
+          }
+        }
+      }
+    }
+  } catch (e) {}
+
+  // Also pre-seed from james_memory.json
+  try {
+    const memFile = path.join(DATA_DIR, 'james_memory.json');
+    if (fs.existsSync(memFile)) {
+      const memData = JSON.parse(fs.readFileSync(memFile, 'utf-8'));
+      if (memData && Array.isArray(memData.users)) {
+        for (const u of memData.users) {
+          if (u && (u.alias || u.userId)) {
+            let p = getOrCreateProfile(u.userId, u.alias);
+            if (!p) {
+              const lower = (u.alias || '').toLowerCase();
+              p = {
+                alias: u.alias || 'User',
+                userId: u.userId || ('usr_' + lower),
+                welcomed: true,
+                isOnline: false,
+                status: 'Offline',
+                createdAt: u.lastSeen || Date.now(),
+                updatedAt: Date.now()
+              };
+              if (p.userId) userProfiles.set(p.userId, p);
+              if (lower) userProfiles.set(lower, p);
+            } else {
+              p.welcomed = true;
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {}
+}
+
+let saveProfilesTimeout = null;
+function persistProfiles() {
+  if (saveProfilesTimeout) clearTimeout(saveProfilesTimeout);
+  saveProfilesTimeout = setTimeout(() => {
+    try {
+      const exportObj = {};
+      for (const p of userProfiles.values()) {
+        if (p && p.userId) {
+          exportObj[p.userId] = p;
+        }
+      }
+      fs.writeFileSync(PROFILES_FILE, JSON.stringify(exportObj, null, 2), 'utf-8');
+    } catch (err) {
+      console.error('Error writing profiles.json:', err.message);
+    }
+  }, 300);
+}
 
 function getOrCreateProfile(userId, alias) {
   if (userId && userProfiles.has(userId)) return userProfiles.get(userId);
@@ -192,14 +324,18 @@ function saveProfile(profile) {
   if (!profile) return;
   if (profile.userId) userProfiles.set(profile.userId, profile);
   if (profile.alias) userProfiles.set(profile.alias.toLowerCase(), profile);
+  persistProfiles();
 }
+
+// Load profiles on startup
+loadProfiles();
 
 // Pre-seed James Bot profile
 const jamesBotProfile = {
   alias: 'James',
   userId: 'bot_james',
   color: '#00f3ff',
-  avatar: null,
+  avatar: '/uploads/ShadowTalk-IG.jpeg',
   bio: "Full-stack engineer & verified community member. Always around!",
   status: 'Online',
   isOnline: true,
@@ -245,7 +381,16 @@ const jamesBot = new JamesBot(io, (msg) => {
   saveMessages(messages);
 }, {
   getUserCount: () => getRealUserCount(),
-  getRoomMessages: (limit = 20) => messages.slice(-limit),
+  getRoomMessages: (limit = 50) => messages.slice(-limit),
+  getAllMessages: () => messages,
+  onPollUpdated: (poll) => {
+    if (!poll || !poll.id) return;
+    const msg = messages.find(m => m.poll && m.poll.id === poll.id);
+    if (msg) {
+      msg.poll = poll;
+      saveMessages(messages);
+    }
+  },
   getOnlineUsersList: () => {
     const list = [];
     for (const u of activeUsers.values()) {
@@ -325,6 +470,29 @@ io.on('connection', (socket) => {
       broadcastUserCount();
 
       let existing = getOrCreateProfile(userId, userData.alias) || {};
+      const isRefresh = !!userData.isRefresh;
+      const hasVisited = !!userData.hasVisited;
+      const isKnownUser = !!(
+        existing.welcomed ||
+        existing.createdAt ||
+        hasVisited ||
+        isRefresh ||
+        (existing.lastSeen && existing.lastSeen > 0) ||
+        (userId && userProfiles.has(userId)) ||
+        (userData.alias && userProfiles.has(userData.alias.toLowerCase())) ||
+        jamesBot.isUserWelcomed(userId, userData.alias)
+      );
+
+      // Server grace period: don't trigger returning user greetings during reconnect storms on server restart
+      const isServerRecentlyStarted = (Date.now() - serverStartTime) < 60000;
+
+      // Returning user only if:
+      // 1. Not during server restart grace period
+      // 2. Not a page refresh
+      // 3. Known user
+      // 4. Offline for > 4 hours
+      const isReturning = !isServerRecentlyStarted && !isRefresh && isKnownUser && !!(existing.lastSeen && (Date.now() - existing.lastSeen > 4 * 60 * 60 * 1000));
+
       const previousAliases = existing.previousAliases || [];
       if (existing.alias && existing.alias.toLowerCase() !== userData.alias.toLowerCase()) {
         if (!previousAliases.includes(existing.alias)) {
@@ -342,14 +510,26 @@ io.on('connection', (socket) => {
         bio: userData.bio !== undefined ? userData.bio : existing.bio,
         status: (userData.status && userData.status !== 'Offline') ? userData.status : (existing.status && existing.status !== 'Offline' ? existing.status : 'Online'),
         isOnline: true,
+        welcomed: true,
         isVerified: userData.isVerified !== undefined ? userData.isVerified : existing.isVerified,
         updatedAt: Date.now()
       };
 
       saveProfile(updatedProfile);
+      jamesBot.markUserWelcomed(userId, userData.alias);
       io.emit('userProfileUpdated', updatedProfile);
 
-      jamesBot.welcomeUser(userData.alias, socket.id, userId);
+      // Welcome/greeting rule:
+      // 1. NEVER welcome on page refresh, reconnect, or server restart
+      // 2. ONLY welcome if brand new user who has never been in the system before
+      // 3. OR if genuinely returning after > 4 hours offline
+      if (!isRefresh && !hasVisited) {
+        if (!isKnownUser) {
+          jamesBot.welcomeUser(userData.alias, socket.id, userId, false);
+        } else if (isReturning) {
+          jamesBot.welcomeUser(userData.alias, socket.id, userId, true);
+        }
+      }
     }
   });
 
@@ -447,6 +627,13 @@ io.on('connection', (socket) => {
       }
       io.emit('reaction', { messageId, reactions: msg.reactions });
       saveMessages(messages);
+    }
+  });
+
+  // Handle interactive poll voting
+  socket.on('votePoll', ({ pollId, optionIndex, alias, pollData }) => {
+    if (jamesBot && typeof jamesBot.handleVotePoll === 'function') {
+      jamesBot.handleVotePoll(pollId, optionIndex, alias, pollData);
     }
   });
 

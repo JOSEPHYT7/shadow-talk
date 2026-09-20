@@ -38,10 +38,14 @@ import {
   Ban,
   Code2,
   Copy,
-  QrCode
+  QrCode,
+  BarChart2,
+  Volume2
 } from 'lucide-react';
 import { PRESET_AVATARS } from './avatars';
+import JAMES_AVATAR_IMG from './assets/ShadowTalk-IG.jpeg';
 import './App.css';
+import SecretSociety from './SecretSociety';
 
 const SERVER_URL = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? 'http://localhost:5000'
@@ -121,8 +125,8 @@ function decodeGoogleJwt(token) {
   }
 }
 
-// Realistic Human Portrait Avatar SVG for James
-const JAMES_HUMAN_AVATAR = `data:image/svg+xml;utf8,<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="bgG" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%230f1b29"/><stop offset="100%" stop-color="%23070c14"/></linearGradient><linearGradient id="skG" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%23f5d0b0"/><stop offset="100%" stop-color="%23e0a985"/></linearGradient><linearGradient id="hrG" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%232b3445"/><stop offset="100%" stop-color="%23171d27"/></linearGradient><linearGradient id="jkG" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%231e293b"/><stop offset="100%" stop-color="%230f172a"/></linearGradient></defs><circle cx="60" cy="60" r="58" fill="url(%23bgG)" stroke="%2300f3ff" stroke-width="2.5"/><path d="M22 118 C22 92, 40 84, 60 84 C80 84, 98 92, 98 118 Z" fill="url(%23jkG)" stroke="%23334155" stroke-width="1.5"/><path d="M48 84 L60 102 L72 84 Z" fill="%230f172a"/><line x1="38" y1="94" x2="52" y2="84" stroke="%2300f3ff" stroke-width="2" stroke-linecap="round"/><line x1="82" y1="94" x2="68" y2="84" stroke="%2300f3ff" stroke-width="2" stroke-linecap="round"/><rect x="52" y="70" width="16" height="18" rx="4" fill="url(%23skG)"/><ellipse cx="60" cy="54" rx="20" ry="24" fill="url(%23skG)"/><ellipse cx="53" cy="52" rx="2.5" ry="3" fill="%231e293b"/><ellipse cx="67" cy="52" rx="2.5" ry="3" fill="%231e293b"/><circle cx="54" cy="51" r="0.8" fill="%23ffffff"/><circle cx="68" cy="51" r="0.8" fill="%23ffffff"/><path d="M48 46 Q53 44 57 46" stroke="%231a202c" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M63 46 Q67 44 72 46" stroke="%231a202c" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M60 54 L58 60 L61 60" stroke="%23cf9563" stroke-width="1.4" stroke-linecap="round" fill="none"/><path d="M54 66 Q60 70 66 66" stroke="%23bc7444" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M38 48 C36 30, 48 20, 64 20 C78 20, 84 28, 83 42 C80 34, 74 30, 64 30 C54 30, 44 36, 40 48 Z" fill="url(%23hrG)"/><path d="M38 44 C38 34, 46 26, 58 24 C72 22, 82 28, 84 38 C76 32, 66 30, 54 32 C46 34, 40 40, 38 44 Z" fill="%234a5568"/><circle cx="39" cy="56" r="3.5" fill="%23f5d0b0"/><circle cx="81" cy="56" r="3.5" fill="%23f5d0b0"/></svg>`;
+// Official James Profile Avatar (ShadowTalk-IG.jpeg)
+const JAMES_HUMAN_AVATAR = JAMES_AVATAR_IMG;
 
 // Real Usernames
 const REAL_USERNAMES = [
@@ -652,6 +656,266 @@ function TypewriterMessage({ text, isJames, msgId, animatedIdsSet, onFinishAnima
   );
 }
 
+function JamesImageGenerationCard({ jamesStatus }) {
+  const [percent, setPercent] = useState(14);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPercent(prev => {
+        if (prev < 32) return prev + Math.floor(Math.random() * 4 + 2);
+        if (prev < 72) return prev + Math.floor(Math.random() * 3 + 1);
+        if (prev < 92) return prev + Math.floor(Math.random() * 2 + 1);
+        return 94;
+      });
+    }, 260);
+    return () => clearInterval(interval);
+  }, []);
+
+  const dots = useMemo(() => Array.from({ length: 256 }, (_, i) => i), []);
+
+  return (
+    <div className="dot-matrix-canvas">
+      <div className="dot-matrix-top-bar">
+        <span className="dot-matrix-header-title">Creating image</span>
+        {jamesStatus?.prompt && (
+          <span className="dot-matrix-prompt-hint" title={jamesStatus.prompt}>
+            &ldquo;{jamesStatus.prompt.length > 45 ? jamesStatus.prompt.slice(0, 45) + '...' : jamesStatus.prompt}&rdquo;
+          </span>
+        )}
+      </div>
+
+      <div className="dot-matrix-grid">
+        {dots.map(i => {
+          const row = Math.floor(i / 16);
+          const col = i % 16;
+          const delay = ((row + col) * 0.07).toFixed(2);
+          return (
+            <span
+              key={i}
+              className="dot-matrix-dot"
+              style={{ animationDelay: `${delay}s` }}
+            />
+          );
+        })}
+      </div>
+
+      <div className="dot-matrix-pill">
+        <span className="dot-matrix-percent">{percent}%</span>
+      </div>
+    </div>
+  );
+}
+
+function JamesPdfGenerationCard({ jamesStatus }) {
+  const [percent, setPercent] = useState(18);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPercent(prev => (prev < 93 ? prev + Math.floor(Math.random() * 3 + 2) : 94));
+    }, 240);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="pdf-modern-canvas">
+      <div className="pdf-modern-header">
+        <span className="pdf-modern-title">Compiling document</span>
+        <span className="pdf-modern-docname">
+          <FileText size={12} />
+          {jamesStatus?.title ? `${jamesStatus.title}.pdf` : 'Document.pdf'}
+        </span>
+      </div>
+
+      <div className="pdf-modern-visual">
+        <div className="pdf-modern-sheet-stack">
+          <div className="pdf-sheet-layer sheet-back" />
+          <div className="pdf-sheet-layer sheet-mid" />
+          <div className="pdf-sheet-layer sheet-front">
+            <div className="pdf-sheet-laser-line" />
+            <div className="pdf-wireframe-lines">
+              <span className="wireframe-line title" />
+              <span className="wireframe-line line-1" />
+              <span className="wireframe-line line-2" />
+              <span className="wireframe-line line-3" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="pdf-modern-pill">
+        <span className="pdf-modern-pill-text">Page 1/2 &bull; {percent}%</span>
+      </div>
+    </div>
+  );
+}
+
+function JamesQrGenerationCard({ jamesStatus }) {
+  const [percent, setPercent] = useState(22);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPercent(prev => (prev < 95 ? prev + Math.floor(Math.random() * 4 + 2) : 96));
+    }, 210);
+    return () => clearInterval(interval);
+  }, []);
+
+  const matrixBlocks = useMemo(() => Array.from({ length: 36 }, (_, i) => i), []);
+
+  return (
+    <div className="qr-modern-canvas">
+      <div className="qr-modern-header">
+        <span className="qr-modern-title">Encoding QR matrix</span>
+        {jamesStatus?.textPayload && (
+          <span className="qr-modern-payload" title={jamesStatus.textPayload}>
+            {jamesStatus.textPayload.length > 35 ? jamesStatus.textPayload.slice(0, 35) + '...' : jamesStatus.textPayload}
+          </span>
+        )}
+      </div>
+
+      <div className="qr-modern-visual">
+        <div className="qr-reticle-viewfinder modern-reticle">
+          <span className="reticle-corner top-left" />
+          <span className="reticle-corner top-right" />
+          <span className="reticle-corner bottom-left" />
+          <span className="reticle-corner bottom-right" />
+          <div className="qr-laser-scanner-line" />
+          <div className="qr-blocks-grid">
+            {matrixBlocks.map(i => (
+              <span
+                key={i}
+                className="qr-block-cell"
+                style={{ animationDelay: `${(i * 0.05).toFixed(2)}s` }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="qr-modern-pill">
+        <span className="qr-modern-pill-text">ECC-H &bull; {percent}%</span>
+      </div>
+    </div>
+  );
+}
+
+function JamesVoiceGenerationCard() {
+  const [percent, setPercent] = useState(15);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPercent(prev => (prev < 92 ? prev + Math.floor(Math.random() * 3 + 2) : 94));
+    }, 230);
+    return () => clearInterval(interval);
+  }, []);
+
+  const bars = useMemo(() => Array.from({ length: 24 }, (_, i) => i), []);
+
+  return (
+    <div className="voice-modern-canvas">
+      <div className="voice-modern-header">
+        <span className="voice-modern-title">Synthesizing voice</span>
+        <span className="voice-modern-mode">Neural Acoustic TTS</span>
+      </div>
+
+      <div className="voice-modern-visual">
+        <div className="voice-equalizer-bars">
+          {bars.map(i => (
+            <span
+              key={i}
+              className="voice-eq-bar"
+              style={{
+                animationDelay: `${((i % 8) * 0.12).toFixed(2)}s`,
+                height: `${20 + ((i * 17) % 65)}%`
+              }}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="voice-modern-pill">
+        <span className="voice-modern-pill-text">24kHz &bull; {percent}%</span>
+      </div>
+    </div>
+  );
+}
+
+function JamesCodeGenerationCard() {
+  const [percent, setPercent] = useState(25);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPercent(prev => (prev < 96 ? prev + Math.floor(Math.random() * 4 + 3) : 98));
+    }, 170);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="code-modern-canvas">
+      <div className="code-modern-header">
+        <div className="code-modern-header-left">
+          <span className="window-dot red" />
+          <span className="window-dot yellow" />
+          <span className="window-dot green" />
+          <span className="code-modern-title">Executing runtime</span>
+        </div>
+        <span className="code-modern-runtime">Node.js VM</span>
+      </div>
+
+      <div className="code-modern-terminal">
+        <div className="terminal-line prompt">
+          <span className="term-cyan">&gt;</span> <span className="term-white">node sandbox.js</span>
+        </div>
+        <div className="terminal-line trace">
+          <span className="term-muted">evaluating abstract syntax tree...</span>
+        </div>
+        <div className="terminal-line cursor-line">
+          <span className="term-cyan">&gt;</span> <span className="term-cursor">&block;</span>
+        </div>
+      </div>
+
+      <div className="code-modern-pill">
+        <span className="code-modern-pill-text">V8 VM &bull; {percent}%</span>
+      </div>
+    </div>
+  );
+}
+
+function JamesPollGenerationCard() {
+  const [percent, setPercent] = useState(20);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPercent(prev => (prev < 94 ? prev + Math.floor(Math.random() * 3 + 2) : 95));
+    }, 210);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="poll-modern-canvas">
+      <div className="poll-modern-header">
+        <span className="poll-modern-title">Structuring poll</span>
+        <span className="poll-modern-badge">Live Ballot Matrix</span>
+      </div>
+
+      <div className="poll-modern-visual">
+        <div className="poll-bar-skeleton bar-1">
+          <span className="poll-skeleton-fill fill-1" />
+        </div>
+        <div className="poll-bar-skeleton bar-2">
+          <span className="poll-skeleton-fill fill-2" />
+        </div>
+        <div className="poll-bar-skeleton bar-3">
+          <span className="poll-skeleton-fill fill-3" />
+        </div>
+      </div>
+
+      <div className="poll-modern-pill">
+        <span className="poll-modern-pill-text">Ballot &bull; {percent}%</span>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -685,16 +949,67 @@ function App() {
   const [selectedUserProfile, setSelectedUserProfile] = useState(null);
   const [userProfilesMap, setUserProfilesMap] = useState({});
 
-  // --- Real Email 4-Digit OTP Verification States ---
-  const [showOtpModal, setShowOtpModal] = useState(false);
-  const [otpStep, setOtpStep] = useState('email'); // 'email' | 'code' | 'success'
-  const [targetEmail, setTargetEmail] = useState('');
-  const [otpDigits, setOtpDigits] = useState(['', '', '', '']); // 4 digits
-  const [otpLoading, setOtpLoading] = useState(false);
-  const [otpError, setOtpError] = useState('');
-  const [otpSuccessMsg, setOtpSuccessMsg] = useState('');
-  const [otpResendCountdown, setOtpResendCountdown] = useState(30);
-  const otpInputRefs = useRef([]);
+  // --- View Routing State ('chat' | 'manifesto') ---
+  const [currentView, setCurrentView] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname.toLowerCase();
+      const hash = window.location.hash.toLowerCase();
+      if (path === '/manifesto' || path === '/society' || hash === '#manifesto' || hash === '#society') {
+        return 'manifesto';
+      }
+    }
+    return 'chat';
+  });
+
+  useEffect(() => {
+    const handleLocationChange = () => {
+      const path = window.location.pathname.toLowerCase();
+      const hash = window.location.hash.toLowerCase();
+      if (path === '/manifesto' || path === '/society' || hash === '#manifesto' || hash === '#society') {
+        setCurrentView('manifesto');
+      } else {
+        setCurrentView('chat');
+      }
+    };
+
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('hashchange', handleLocationChange);
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('hashchange', handleLocationChange);
+    };
+  }, []);
+
+  const navigateToManifesto = () => {
+    if (window.history?.pushState) {
+      window.history.pushState({}, '', '/manifesto');
+    }
+    setCurrentView('manifesto');
+    window.scrollTo(0, 0);
+  };
+
+  const navigateToChat = () => {
+    if (window.history?.pushState) {
+      window.history.pushState({}, '', '/');
+    }
+    setCurrentView('chat');
+  };
+
+  // --- Secret Society Membership Application States ---
+  const [showMembershipModal, setShowMembershipModal] = useState(false);
+  const [membershipStep, setMembershipStep] = useState('form'); // 'form' | 'success'
+  const [membershipForm, setMembershipForm] = useState({
+    fullName: '',
+    email: '',
+    role: '',
+    ageLocation: '',
+    purpose: '',
+    socialHandle: '',
+    pledgeAccepted: false
+  });
+  const [membershipLoading, setMembershipLoading] = useState(false);
+  const [membershipError, setMembershipError] = useState('');
+  const [membershipSuccessMsg, setMembershipSuccessMsg] = useState('');
 
   // Mobile Instagram Swipe-to-Reply Gesture States & Long-Press Reaction Bar
   const [swipingMsgId, setSwipingMsgId] = useState(null);
@@ -767,6 +1082,30 @@ function App() {
   useEffect(() => {
     localStorage.setItem('bbx_identity', JSON.stringify(identity));
   }, [identity]);
+
+  // Normalize poll options: if question has "or" / "vs" but options defaulted to Yes/No, extract real choices
+  function getNormalizedPoll(poll) {
+    if (!poll) return null;
+    let options = poll.options || [];
+    const isGenericYesNo = options.length === 2 &&
+      options[0]?.text?.toLowerCase() === 'yes' && options[1]?.text?.toLowerCase() === 'no';
+
+    if (isGenericYesNo && poll.question) {
+      const orMatch = poll.question.match(/(.*?)\s+(?:or|vs\.?)\s+(.*)/i);
+      if (orMatch) {
+        const opt1 = orMatch[1].replace(/^(?:should\s+we\s+|is\s+it\s+|do\s+you\s+prefer\s+|poll:\s*)/i, '').replace(/^[^\w]+|[^\w]+$/g, '').trim();
+        const opt2 = orMatch[2].replace(/[?.,!]+$/g, '').trim();
+        if (opt1 && opt2) {
+          options = [
+            { ...options[0], text: opt1 },
+            { ...options[1], text: opt2 }
+          ];
+          return { ...poll, options };
+        }
+      }
+    }
+    return poll;
+  }
 
   function getSentEncryptedCache() {
     try {
@@ -920,6 +1259,11 @@ function App() {
     });
 
     socketRef.current.on('connect', () => {
+      const isRefresh = !!sessionStorage.getItem('shadowtalk_session_active');
+      sessionStorage.setItem('shadowtalk_session_active', 'true');
+      const hasVisited = !!localStorage.getItem('shadowtalk_has_visited');
+      localStorage.setItem('shadowtalk_has_visited', 'true');
+
       socketRef.current.emit('userJoined', {
         alias: identityRef.current.alias,
         userId: identityRef.current.userId,
@@ -927,7 +1271,9 @@ function App() {
         avatar: identityRef.current.avatar,
         bio: identityRef.current.bio,
         status: identityRef.current.status,
-        isVerified: identityRef.current.isVerified
+        isVerified: identityRef.current.isVerified,
+        isRefresh: isRefresh,
+        hasVisited: hasVisited
       });
     });
 
@@ -1068,6 +1414,24 @@ function App() {
       setMessages((prev) => prev.map(m => m.id === messageId ? { ...m, reactions } : m));
     });
 
+    // Real-time sync for interactive community polls
+    socketRef.current.on('pollUpdated', (updatedPoll) => {
+      if (!updatedPoll || !updatedPoll.id) return;
+      setMessages((prev) => {
+        const next = prev.map((m) => {
+          const d = decryptMsg(m);
+          if ((d && d.poll && d.poll.id === updatedPoll.id) || (m && m.poll && m.poll.id === updatedPoll.id)) {
+            return { ...m, poll: updatedPoll };
+          }
+          return m;
+        });
+        try {
+          localStorage.setItem('shadowtalk_cached_messages', JSON.stringify(next.slice(-100)));
+        } catch (e) {}
+        return next;
+      });
+    });
+
     // Real-time sync for file download permissions
     socketRef.current.on('fileDownloadToggled', ({ messageId, allowDownload }) => {
       setMessages(prev => prev.map(m => m.id === messageId ? { ...m, allowDownload } : m));
@@ -1124,7 +1488,9 @@ function App() {
         avatar: identity.avatar,
         bio: identity.bio,
         status: identity.status,
-        isVerified: identity.isVerified
+        isVerified: identity.isVerified,
+        isRefresh: true,
+        hasVisited: true
       };
       socketRef.current.emit('userJoined', payload);
       socketRef.current.emit('userProfileUpdate', payload);
@@ -1323,170 +1689,82 @@ function App() {
     };
   }, [isRecording]);
 
-  // --- Real Email 4-Digit OTP Verification Logic ---
-  const startEmailVerification = () => {
+  // --- Secret Society Membership Induction & Verification Handlers ---
+  const openMembershipModal = () => {
     setShowIdentityModal(false);
-    setShowOtpModal(true);
-    setOtpStep('email');
-    setOtpError('');
-    setOtpSuccessMsg('');
-    setOtpDigits(['', '', '', '']);
-    if (identity.verifiedEmail) {
-      setTargetEmail(identity.verifiedEmail);
-    } else {
-      setTargetEmail('');
-    }
+    setShowMembershipModal(true);
+    setMembershipStep('form');
+    setMembershipError('');
+    setMembershipSuccessMsg('');
+    setMembershipForm(prev => ({
+      ...prev,
+      email: identity.verifiedEmail || prev.email || '',
+      fullName: prev.fullName || identity.alias || ''
+    }));
   };
 
-  const handleSendOtp = async () => {
-    if (!targetEmail || !targetEmail.includes('@')) {
-      setOtpError('Please enter a valid email address.');
+  const closeMembershipModal = () => {
+    setShowMembershipModal(false);
+    setMembershipStep('form');
+    setMembershipError('');
+    setMembershipLoading(false);
+  };
+
+  const handleSubmitMembershipApplication = async (e) => {
+    if (e) e.preventDefault();
+    if (!membershipForm.fullName?.trim()) {
+      setMembershipError('Please provide your Real / Legal Full Name.');
+      return;
+    }
+    if (!membershipForm.email?.trim() || !membershipForm.email.includes('@')) {
+      setMembershipError('Please provide a valid Primary Email Address.');
+      return;
+    }
+    if (!membershipForm.role?.trim()) {
+      setMembershipError('Please specify your Student / Occupational Role.');
+      return;
+    }
+    if (!membershipForm.ageLocation?.trim()) {
+      setMembershipError('Please specify your Age & Current Location.');
+      return;
+    }
+    if (!membershipForm.purpose?.trim() || membershipForm.purpose.trim().length < 15) {
+      setMembershipError('Please provide a meaningful statement of purpose (at least 15 characters).');
+      return;
+    }
+    if (!membershipForm.pledgeAccepted) {
+      setMembershipError('You must solemnly accept the Sovereign Covenant to proceed.');
       return;
     }
 
-    setOtpLoading(true);
-    setOtpError('');
-    setOtpSuccessMsg('');
+    setMembershipLoading(true);
+    setMembershipError('');
 
     try {
-      const res = await fetch(`${SERVER_URL}/api/otp/send`, {
+      const res = await fetch(`${SERVER_URL}/api/membership/apply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: targetEmail.trim() }),
+        body: JSON.stringify({
+          ...membershipForm,
+          alias: identity.alias,
+          userId: identity.userId
+        }),
         signal: AbortSignal.timeout(25000)
       });
       const data = await res.json();
 
       if (data.success) {
-        setOtpStep('code');
-        if (data.code && String(data.code).length === 4) {
-          setOtpDigits(String(data.code).split(''));
-        } else {
-          setOtpDigits(['', '', '', '']);
-        }
-        setOtpResendCountdown(30);
-        setOtpSuccessMsg(data.message || `Verification code sent to ${targetEmail}`);
-        setTimeout(() => otpInputRefs.current[0]?.focus(), 150);
+        setMembershipStep('success');
+        setMembershipSuccessMsg(data.message || 'Application submitted successfully to the Inner Circle Council.');
       } else {
-        setOtpError(data.error || 'Failed to send verification code.');
+        setMembershipError(data.error || 'Failed to dispatch application to council.');
       }
     } catch (err) {
-      setOtpError('Network timeout connecting to verification server. Please try again.');
+      setMembershipError('Network timeout connecting to council server. Please try again.');
     } finally {
-      setOtpLoading(false);
+      setMembershipLoading(false);
     }
   };
-
-  const handleOtpDigitChange = (index, value) => {
-    const char = value.replace(/[^0-9]/g, '').slice(-1);
-    const newDigits = [...otpDigits];
-    newDigits[index] = char;
-    setOtpDigits(newDigits);
-    setOtpError('');
-
-    if (char && index < 3) {
-      otpInputRefs.current[index + 1]?.focus();
-    }
-
-    // Auto verify when 4th digit entered
-    const fullCode = newDigits.join('');
-    if (fullCode.length === 4) {
-      handleVerifyOtp(fullCode);
-    }
-  };
-
-  const handleOtpKeyDown = (index, e) => {
-    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
-      otpInputRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handleOtpPaste = (e) => {
-    e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/[^0-9]/g, '').slice(0, 4);
-    if (!pasted) return;
-    const newDigits = ['', '', '', ''];
-    for (let i = 0; i < pasted.length; i++) {
-      newDigits[i] = pasted[i];
-    }
-    setOtpDigits(newDigits);
-    if (pasted.length === 4) {
-      handleVerifyOtp(pasted);
-    } else {
-      otpInputRefs.current[Math.min(3, pasted.length)]?.focus();
-    }
-  };
-
-  const handleVerifyOtp = async (codeToVerify) => {
-    const code = codeToVerify || otpDigits.join('');
-    if (code.length < 4) {
-      setOtpError('Please enter the full 4-digit code.');
-      return;
-    }
-
-    setOtpLoading(true);
-    setOtpError('');
-
-    try {
-      const res = await fetch(`${SERVER_URL}/api/otp/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: targetEmail.trim(),
-          otp: code,
-          alias: identity.alias
-        })
-      });
-      const data = await res.json();
-
-      if (data.success && data.verified) {
-        setOtpStep('success');
-        setIdentity(prev => ({
-          ...prev,
-          isVerified: true,
-          verifiedEmail: targetEmail.trim()
-        }));
-
-        if (socketRef.current) {
-          socketRef.current.emit('userJoined', {
-            alias: identity.alias,
-            isVerified: true,
-            avatar: identity.avatar
-          });
-        }
-
-        setTimeout(() => {
-          setShowOtpModal(false);
-          setOtpStep('email');
-        }, 2200);
-      } else {
-        setOtpError(data.error || 'Incorrect code. Please try again.');
-      }
-    } catch (err) {
-      setOtpError('Error connecting to verification server.');
-    } finally {
-      setOtpLoading(false);
-    }
-  };
-
-
-
-  const closeOtpModal = () => {
-    setShowOtpModal(false);
-    setOtpStep('email');
-    setOtpError('');
-    setOtpLoading(false);
-  };
-
-  useEffect(() => {
-    let timer;
-    if (showOtpModal && otpStep === 'code' && otpResendCountdown > 0) {
-      timer = setInterval(() => {
-        setOtpResendCountdown(prev => Math.max(0, prev - 1));
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [showOtpModal, otpStep, otpResendCountdown]);
 
   // Mobile Touch Gestures: Long-Press for Reactions & Swipe-to-Reply (Isolated from Code Blocks)
   const handleTouchStart = (e, msgId) => {
@@ -1966,7 +2244,10 @@ function App() {
           alias: replyingTo.alias,
           color: replyingTo.color,
           text: replyingTo.text,
-          fileName: replyingTo.fileName
+          fileName: replyingTo.fileName,
+          fileType: replyingTo.fileType || null,
+          fileUrl: replyingTo.fileUrl || replyingTo.imageUrl || null,
+          imageUrl: replyingTo.imageUrl || replyingTo.fileUrl || null
         } : null
       };
 
@@ -2006,7 +2287,10 @@ function App() {
           alias: replyingTo.alias,
           color: replyingTo.color,
           text: replyingTo.text,
-          fileName: replyingTo.fileName
+          fileName: replyingTo.fileName,
+          fileType: replyingTo.fileType || null,
+          fileUrl: replyingTo.fileUrl || replyingTo.imageUrl || null,
+          imageUrl: replyingTo.imageUrl || replyingTo.fileUrl || null
         } : null
       };
 
@@ -2042,6 +2326,63 @@ function App() {
     setActiveReactionMsgId(null);
   };
 
+  const handleVote = (pollId, optionIndex, currentPoll) => {
+    if (!pollId || optionIndex === undefined) return;
+    const voter = identity.alias || 'User';
+
+    // 1. Instant Optimistic UI Update (0ms delay)
+    setMessages((prev) => {
+      const next = prev.map((m) => {
+        const d = decryptMsg(m);
+        if ((d && d.poll && d.poll.id === pollId) || (m && m.poll && m.poll.id === pollId)) {
+          const basePoll = currentPoll || d.poll || m.poll;
+          const poll = { ...basePoll };
+          const options = (poll.options || []).map(o => ({ ...o }));
+          const voters = { ...(poll.voters || {}) };
+          const prevVote = voters[voter];
+
+          if (prevVote !== undefined) {
+            if (prevVote === optionIndex) {
+              // Toggle off
+              options[prevVote].votes = Math.max(0, (options[prevVote].votes || 0) - 1);
+              poll.totalVotes = Math.max(0, (poll.totalVotes || 0) - 1);
+              delete voters[voter];
+            } else {
+              // Switch vote
+              options[prevVote].votes = Math.max(0, (options[prevVote].votes || 0) - 1);
+              options[optionIndex].votes = (options[optionIndex].votes || 0) + 1;
+              voters[voter] = optionIndex;
+            }
+          } else {
+            // New vote
+            options[optionIndex].votes = (options[optionIndex].votes || 0) + 1;
+            poll.totalVotes = (poll.totalVotes || 0) + 1;
+            voters[voter] = optionIndex;
+          }
+
+          poll.options = options;
+          poll.voters = voters;
+          return { ...m, poll };
+        }
+        return m;
+      });
+      try {
+        localStorage.setItem('shadowtalk_cached_messages', JSON.stringify(next.slice(-100)));
+      } catch (e) {}
+      return next;
+    });
+
+    // 2. Synchronize with server
+    if (socketRef.current) {
+      socketRef.current.emit('votePoll', {
+        pollId,
+        optionIndex,
+        alias: voter,
+        pollData: currentPoll
+      });
+    }
+  };
+
   const generateNewIdentity = () => {
     const newAlias = generateRealUsername();
     const newColor = HACKER_COLORS[Math.floor(Math.random() * HACKER_COLORS.length)];
@@ -2057,7 +2398,9 @@ function App() {
       color: dmsg?.color,
       text: dmsg?.text,
       fileName: dmsg?.fileName,
-      fileType: dmsg?.fileType
+      fileType: dmsg?.fileType || null,
+      fileUrl: dmsg?.fileUrl || dmsg?.imageUrl || null,
+      imageUrl: dmsg?.imageUrl || dmsg?.fileUrl || null
     });
     setTimeout(() => textareaRef.current?.focus(), 50);
   };
@@ -2091,7 +2434,7 @@ function App() {
         alias: 'James',
         userId: 'bot_james',
         color: '#00f3ff',
-        avatar: null,
+        avatar: JAMES_AVATAR_IMG,
         isVerified: true,
         bio: "Full-stack engineer & verified community member. Always around!",
         status: 'Online',
@@ -2406,56 +2749,77 @@ function App() {
 
   return (
     <div className="shadow-root">
-      <div className="cyber-grid" />
-      <div className="glow-ambient" />
+      {currentView === 'manifesto' ? (
+        <SecretSociety
+          onReturn={navigateToChat}
+          onApply={() => {
+            navigateToChat();
+            openMembershipModal();
+          }}
+        />
+      ) : (
+        <>
+          <div className="cyber-grid" />
+          <div className="glow-ambient" />
 
-      {/* --- Top Header Navigation --- */}
-      <header className="shadow-header">
-        <div className="brand-section">
-          <div className="brand-icon-wrapper">
-            <Terminal size={17} />
-          </div>
-          <div className="brand-title">
-            SHADOWTALK <span className="version-tag">v2.0</span>
-          </div>
+          {/* --- Top Header Navigation --- */}
+          <header className="shadow-header">
+            <div className="brand-section">
+              <div className="brand-icon-wrapper" aria-hidden="true">
+                <Terminal size={17} />
+              </div>
+              <div className="brand-title">
+                <span
+                  className="shadowtalk-text-link"
+                  onClick={navigateToManifesto}
+                  title="SHADOWTALK // Access Enclave"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => { if (e.key === 'Enter') navigateToManifesto(); }}
+                >
+                  SHADOWTALK
+                </span>
+                <span className="version-tag">v2.0</span>
+              </div>
 
-          <div className="online-members-badge" title="Active Members Online">
-            <span className="online-dot" />
-            <span>{onlineCount}</span>
-          </div>
-        </div>
-
-        <div className="header-actions">
-          <button
-            className={`icon-btn ${showSearch ? 'active' : ''}`}
-            onClick={() => setShowSearch(!showSearch)}
-            title="Search Transmissions"
-          >
-            <Search size={16} />
-          </button>
-
-          <button
-            className={`icon-btn ${passphrase ? 'active' : ''}`}
-            onClick={() => setShowVaultModal(true)}
-            title="Encryption Key Vault"
-          >
-            <Key size={16} />
-          </button>
-
-          <button
-            className="profile-btn"
-            onClick={() => setShowIdentityModal(true)}
-            title="Profile Settings"
-          >
-            <div style={{ position: 'relative', display: 'inline-flex' }}>
-              {renderAvatar(identity.alias, identity.color, identity.avatar, 24)}
-              <span className={`status-indicator-dot ${(identity.status || 'online').toLowerCase().replace(/\s+/g, '-')}`} title={identity.status || 'Online'} />
+              <div className="online-members-badge" title="Active Members Online">
+                <span className="online-dot" />
+                <span>{onlineCount}</span>
+              </div>
             </div>
-            <span className="profile-btn-alias">{identity.alias}</span>
-            {identity.isVerified && <VerifiedBlueTick size={14} className="header-verified-tick" />}
-          </button>
-        </div>
-      </header>
+
+            <div className="header-actions">
+
+              <button
+                className={`icon-btn ${showSearch ? 'active' : ''}`}
+                onClick={() => setShowSearch(!showSearch)}
+                title="Search Transmissions"
+              >
+                <Search size={16} />
+              </button>
+
+              <button
+                className={`icon-btn ${passphrase ? 'active' : ''}`}
+                onClick={() => setShowVaultModal(true)}
+                title="Encryption Key Vault"
+              >
+                <Key size={16} />
+              </button>
+
+              <button
+                className="profile-btn"
+                onClick={() => setShowIdentityModal(true)}
+                title="Profile Settings"
+              >
+                <div style={{ position: 'relative', display: 'inline-flex' }}>
+                  {renderAvatar(identity.alias, identity.color, identity.avatar, 24)}
+                  <span className={`status-indicator-dot ${(identity.status || 'online').toLowerCase().replace(/\s+/g, '-')}`} title={identity.status || 'Online'} />
+                </div>
+                <span className="profile-btn-alias">{identity.alias}</span>
+                {identity.isVerified && <VerifiedBlueTick size={14} className="header-verified-tick" />}
+              </button>
+            </div>
+          </header>
 
       {/* --- Search Bar Container --- */}
       {showSearch && (
@@ -2512,7 +2876,8 @@ function App() {
               const isVoiceNote = Boolean(
                 dmsg.isVoiceNote ||
                 dmsg.fileName === 'Voice Transmission.webm' ||
-                (dmsg.audioUrl && (!dmsg.fileName || dmsg.fileName.startsWith('voice-note-')))
+                (dmsg.audioUrl && (!dmsg.fileName || dmsg.fileName.startsWith('voice-note-') || dmsg.fileName.startsWith('james_voice_') || dmsg.audioFilename?.startsWith('james_voice_'))) ||
+                (dmsg.fileType === 'audio/mpeg' && (String(dmsg.fileName || '').startsWith('james_voice_') || String(dmsg.audioFilename || '').startsWith('james_voice_')))
               );
               const isImage = dmsg.imageUrl || dmsg.fileType?.startsWith('image/');
               const isVideo = dmsg.videoUrl || dmsg.fileType?.startsWith('video/');
@@ -2582,7 +2947,7 @@ function App() {
                       </div>
                     )}
 
-                    {/* If own message: Reply button always, and Delete button ONLY for file or live voice recording */}
+                    {/* If own message: Reply button always */}
                     {isOwn && (
                       <div className="msg-side-actions left permanent">
                         <button
@@ -2592,16 +2957,6 @@ function App() {
                         >
                           <Reply size={13} />
                         </button>
-                        {(hasFile || isVoiceNote) && !dmsg.isFileDeleted && !msg.isFileDeleted && (
-                          <button
-                            type="button"
-                            className="msg-side-delete-btn always-visible"
-                            onClick={() => promptDeleteFile(msgId, dmsg.fileUrl || dmsg.audioUrl || dmsg.imageUrl || dmsg.videoUrl, isVoiceNote, dmsg.fileName)}
-                            title={isVoiceNote ? "Delete voice recording" : "Delete file"}
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        )}
                       </div>
                     )}
 
@@ -2816,6 +3171,89 @@ function App() {
                           </div>
                         )}
 
+                        {/* Interactive Community Poll Card */}
+                        {dmsg.poll && (() => {
+                          const poll = getNormalizedPoll(dmsg.poll);
+                          const total = poll.totalVotes || 0;
+                          return (
+                            <div className="community-poll-card">
+                              <div className="poll-card-header">
+                                <div className="poll-header-badge">
+                                  <BarChart2 size={14} />
+                                  <span>COMMUNITY POLL</span>
+                                </div>
+                                <span className="poll-total-votes">
+                                  {total} {total === 1 ? 'vote' : 'votes'}
+                                </span>
+                              </div>
+                              <h4 className="poll-question-text">{poll.question}</h4>
+                              <div className="poll-options-list">
+                                {(poll.options || []).map((opt, optIdx) => {
+                                  const pct = total > 0 ? Math.round(((opt.votes || 0) / total) * 100) : 0;
+                                  const hasVoted = poll.voters && poll.voters[identity.alias] === optIdx;
+
+                                  return (
+                                    <button
+                                      key={optIdx}
+                                      type="button"
+                                      className={`poll-option-btn ${hasVoted ? 'voted' : ''}`}
+                                      onClick={() => handleVote(poll.id, optIdx, poll)}
+                                    >
+                                      <div className="poll-option-progress-bar" style={{ width: `${pct}%` }} />
+                                      <div className="poll-option-content">
+                                        <div className="poll-option-left">
+                                          <span className={`poll-option-radio ${hasVoted ? 'selected' : ''}`} />
+                                          <span className="poll-option-label">{opt.text}</span>
+                                        </div>
+                                        <div className="poll-option-right">
+                                          <span className="poll-option-count">{opt.votes || 0}</span>
+                                          <span className="poll-option-percent">{pct}%</span>
+                                        </div>
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* Safe Code Sandbox Output Card */}
+                        {dmsg.codeExecution && (
+                          <div className="code-sandbox-card">
+                            <div className="code-sandbox-header">
+                              <div className="code-sandbox-title">
+                                <Code2 size={14} />
+                                <span>JS SANDBOX EXECUTION</span>
+                              </div>
+                              <span className="code-sandbox-time">
+                                {dmsg.codeExecution.executionTimeMs || 0}ms
+                              </span>
+                            </div>
+                            <div className="code-sandbox-body">
+                              {dmsg.codeExecution.logs && dmsg.codeExecution.logs.length > 0 && (
+                                <div className="sandbox-section">
+                                  <span className="sandbox-sec-title">CONSOLE LOGS:</span>
+                                  <pre className="sandbox-code-pre">{dmsg.codeExecution.logs.join('\n')}</pre>
+                                </div>
+                              )}
+                              {dmsg.codeExecution.result !== undefined && (
+                                <div className="sandbox-section">
+                                  <span className="sandbox-sec-title">EVALUATED RESULT:</span>
+                                  <pre className="sandbox-code-pre result">{dmsg.codeExecution.result}</pre>
+                                </div>
+                              )}
+                              {dmsg.codeExecution.error && (
+                                <div className="sandbox-section error">
+                                  <span className="sandbox-sec-title">ERROR:</span>
+                                  <pre className="sandbox-code-pre error">{dmsg.codeExecution.error}</pre>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+
                         {/* Interactive Link Preview Card */}
                         {detectedUrl && (
                           <div className="link-preview-card" onClick={() => window.open(detectedUrl, '_blank', 'noopener,noreferrer')}>
@@ -3029,21 +3467,27 @@ function App() {
             })
           )}
 
-          {/* In-Chat Live Dynamic Status Bubble from James - Only for Interactive Media Generation (Image, PDF, QR) */}
+          {/* In-Chat Live Dynamic Status Bubble from James - Only for Interactive Media Generation (Image, PDF, QR, Voice, Code, Poll) */}
           {jamesStatus && (
             jamesStatus.status === 'generating_image' ||
             jamesStatus.generatingType === 'image' ||
             jamesStatus.status === 'generating_pdf' ||
             jamesStatus.generatingType === 'pdf' ||
             jamesStatus.status === 'generating_qr' ||
-            jamesStatus.generatingType === 'qr'
+            jamesStatus.generatingType === 'qr' ||
+            jamesStatus.status === 'generating_voice' ||
+            jamesStatus.generatingType === 'voice' ||
+            jamesStatus.status === 'running_code' ||
+            jamesStatus.generatingType === 'code' ||
+            jamesStatus.status === 'creating_poll' ||
+            jamesStatus.generatingType === 'poll'
           ) && (
             <div className="message-item left james-in-chat-status-bubble" id="james-live-status-card">
               <div className="message-content-wrapper">
                 <div className="message-header-row left">
                   <div
                     className="message-user-info other clickable-profile"
-                    onClick={() => openUserProfile('James', '#00f3ff', null, true, 'Full-stack engineer & verified community member. Always around!', 'Online', 'bot_james')}
+                    onClick={() => openUserProfile('James', '#00f3ff', JAMES_AVATAR_IMG, true, 'Full-stack engineer & verified community member. Always around!', 'Online', 'bot_james')}
                     title="View James's profile"
                   >
                     {renderAvatar('James', '#00f3ff', null, 24)}
@@ -3058,127 +3502,34 @@ function App() {
                 </div>
 
                 <div className="message-body james-status-body">
-                  {/* Modern AI Studio Canvas: Image Generation */}
+                  {/* Modern AI Studio Canvas: Image Generation (Dot Matrix) */}
                   {(jamesStatus.status === 'generating_image' || jamesStatus.generatingType === 'image') && (
-                    <div className="ai-generation-card image-generation-card">
-                      <div className="image-foundry-inner">
-                        <div className="image-canvas-silhouette-wrap">
-                          <div className="image-canvas-laser-line" />
-                          <Sparkles size={24} className="image-canvas-icon" />
-                        </div>
-
-                        <div className="image-foundry-content">
-                          <div className="image-foundry-header">
-                            <div className="ai-gen-badge image-badge">
-                              <span className="ai-gen-live-dot" />
-                              <span>AI IMAGE STUDIO</span>
-                            </div>
-                            <Loader2 size={15} className="image-spinner" />
-                          </div>
-
-                          <span className="image-foundry-title">Synthesizing Visual Artwork...</span>
-
-                          {jamesStatus.prompt ? (
-                            <div className="image-prompt-pill" title={jamesStatus.prompt}>
-                              <span>&ldquo;{jamesStatus.prompt.length > 50 ? jamesStatus.prompt.slice(0, 50) + '...' : jamesStatus.prompt}&rdquo;</span>
-                            </div>
-                          ) : (
-                            <div className="image-prompt-pill">
-                              <span>Visual Concept Render</span>
-                            </div>
-                          )}
-
-                          <div className="image-progress-track">
-                            <div className="image-progress-glow" />
-                          </div>
-
-                          <span className="image-foundry-subtext">
-                            Diffusing latent pixels &bull; High-resolution render
-                          </span>
-                        </div>
-                      </div>
-                    </div>
+                    <JamesImageGenerationCard jamesStatus={jamesStatus} />
                   )}
 
                   {/* Cybernetic Document Foundry: PDF Compilation */}
                   {(jamesStatus.status === 'generating_pdf' || jamesStatus.generatingType === 'pdf') && (
-                    <div className="ai-generation-card pdf-compilation-card">
-                      <div className="pdf-foundry-inner">
-                        <div className="pdf-doc-silhouette-wrap">
-                          <div className="pdf-sheet-layer sheet-back" />
-                          <div className="pdf-sheet-layer sheet-mid" />
-                          <div className="pdf-sheet-layer sheet-front">
-                            <div className="pdf-sheet-laser-line" />
-                            <FileText size={24} className="pdf-sheet-icon" />
-                          </div>
-                        </div>
-
-                        <div className="pdf-foundry-content">
-                          <div className="pdf-foundry-header">
-                            <div className="ai-gen-badge pdf-badge">
-                              <span className="ai-gen-live-dot pdf-dot" />
-                              <span>PDF COMPILER</span>
-                            </div>
-                            <Loader2 size={15} className="pdf-spinner" />
-                          </div>
-
-                          <span className="pdf-foundry-title">Compiling PDF Document...</span>
-
-                          <div className="pdf-foundry-name-badge">
-                            <FileText size={12} />
-                            <span>{jamesStatus.title ? `${jamesStatus.title}.pdf` : 'Document.pdf'}</span>
-                          </div>
-
-                          <div className="pdf-progress-track">
-                            <div className="pdf-progress-glow" />
-                          </div>
-
-                          <span className="pdf-foundry-subtext">
-                            Formatting typography, vector layouts &amp; structure
-                          </span>
-                        </div>
-                      </div>
-                    </div>
+                    <JamesPdfGenerationCard jamesStatus={jamesStatus} />
                   )}
 
                   {/* Quantum Matrix Encoder: QR Code Generation */}
                   {(jamesStatus.status === 'generating_qr' || jamesStatus.generatingType === 'qr') && (
-                    <div className="ai-generation-card qr-generation-card">
-                      <div className="qr-encoder-inner">
-                        <div className="qr-reticle-viewfinder">
-                          <span className="reticle-corner top-left" />
-                          <span className="reticle-corner top-right" />
-                          <span className="reticle-corner bottom-left" />
-                          <span className="reticle-corner bottom-right" />
-                          <div className="qr-laser-scanner-line" />
-                          <QrCode size={26} className="qr-matrix-glyph" />
-                        </div>
+                    <JamesQrGenerationCard jamesStatus={jamesStatus} />
+                  )}
 
-                        <div className="qr-encoder-content">
-                          <div className="qr-encoder-header">
-                            <div className="ai-gen-badge qr-badge">
-                              <span className="ai-gen-live-dot qr-dot" />
-                              <span>MATRIX ENCODER</span>
-                            </div>
-                            <Loader2 size={15} className="qr-spinner" />
-                          </div>
+                  {/* Voice Audio Foundry */}
+                  {(jamesStatus.status === 'generating_voice' || jamesStatus.generatingType === 'voice') && (
+                    <JamesVoiceGenerationCard />
+                  )}
 
-                          <span className="qr-encoder-title">Generating QR Code Matrix...</span>
+                  {/* Code Sandbox Foundry */}
+                  {(jamesStatus.status === 'running_code' || jamesStatus.generatingType === 'code') && (
+                    <JamesCodeGenerationCard />
+                  )}
 
-                          <div className="qr-payload-pill" title={jamesStatus.textPayload || 'Payload'}>
-                            <span>{jamesStatus.textPayload || 'Encoding data payload...'}</span>
-                          </div>
-
-                          <div className="qr-progress-track">
-                            <div className="qr-progress-glow" />
-                          </div>
-
-                          <span className="qr-encoder-subtext">
-                            Encoding Level-H error-corrected 2D matrix
-                          </span>
-                        </div>
-                      </div>
-                    </div>
+                  {/* Community Poll Foundry */}
+                  {(jamesStatus.status === 'creating_poll' || jamesStatus.generatingType === 'poll') && (
+                    <JamesPollGenerationCard />
                   )}
                 </div>
               </div>
@@ -3403,6 +3754,8 @@ function App() {
           )}
         </div>
       </main>
+        </>
+      )}
 
       {/* --- Other User Profile Popup Modal --- */}
       {selectedUserProfile && (() => {
@@ -3492,191 +3845,192 @@ function App() {
         );
       })()}
 
-      {/* --- Real Email 4-Digit OTP Verification Modal --- */}
-      {showOtpModal && (
-        <div className="modal-overlay otp-modal-overlay" onClick={closeOtpModal}>
-          <div className="modal-content otp-verification-card" onClick={e => e.stopPropagation()}>
+      {/* --- Secret Society Membership Application Modal (Handlable Dossier Terminal) --- */}
+      {showMembershipModal && (
+        <div className="modal-overlay membership-modal-overlay" onClick={closeMembershipModal}>
+          <div className="modal-content membership-modal-card handlable-dossier-card" onClick={e => e.stopPropagation()}>
             {/* Header */}
-            <div className="otp-modal-header">
-              <div className="otp-header-left">
-                <div className="otp-header-icon-wrap">
-                  <Mail size={18} />
+            <div className="membership-modal-header">
+              <div className="membership-header-left">
+                <div className="membership-header-icon-wrap">
+                  <ShieldCheck size={20} />
                 </div>
                 <div>
-                  <h3 className="otp-modal-title">Verified Blue Tick</h3>
-                  <span className="otp-modal-subtitle">4-Digit Email Verification</span>
+                  <h3 className="membership-modal-title">Enclave Induction Dossier</h3>
+                  <span className="membership-modal-subtitle">Candidate Vetting Protocol // Code Black</span>
                 </div>
               </div>
-              <button className="icon-btn otp-modal-close" onClick={closeOtpModal} title="Close">
+              <button className="icon-btn membership-modal-close" onClick={closeMembershipModal} title="Close">
                 <X size={18} />
               </button>
             </div>
 
-            {/* STEP 1: Enter Email */}
-            {otpStep === 'email' && (
-              <div className="otp-modal-body">
-                <div className="otp-step-graphic">
-                  <div className="otp-pulse-ring">
-                    <Mail size={32} color="#00f3ff" />
+            {/* FORM VIEW */}
+            {membershipStep === 'form' && (
+              <form className="membership-modal-body dossier-form-body" onSubmit={handleSubmitMembershipApplication}>
+                {/* Notice Banner */}
+                <div className="dossier-covenant-callout">
+                  <div className="callout-seal">
+                    <span>Ω</span>
                   </div>
-                </div>
-
-                <h4 className="otp-step-heading">Verify Your Email Address</h4>
-                <p className="otp-step-desc">
-                  Enter your email address to receive a <strong>4-digit verification code</strong>. Once confirmed, you will instantly earn the official Verified Blue Tick badge.
-                </p>
-
-                <div className="otp-form-group">
-                  <label className="otp-field-label">YOUR EMAIL ADDRESS</label>
-                  <div className="otp-input-wrapper">
-                    <Mail size={16} className="otp-input-icon" />
-                    <input
-                      type="email"
-                      className="otp-text-input"
-                      placeholder="e.g. name@gmail.com"
-                      value={targetEmail}
-                      onChange={e => {
-                        setTargetEmail(e.target.value);
-                        setOtpError('');
-                      }}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') handleSendOtp();
-                      }}
-                      autoFocus
-                    />
-                  </div>
-                </div>
-
-                {otpError && (
-                  <div className="otp-error-banner">
-                    {otpError}
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  className="otp-primary-action-btn"
-                  onClick={handleSendOtp}
-                  disabled={otpLoading}
-                >
-                  {otpLoading ? (
-                    <>
-                      <Loader2 size={16} className="spinner" />
-                      <span>Sending 4-Digit Code...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Send 4-Digit Code</span>
-                      <ArrowRight size={16} />
-                    </>
-                  )}
-                </button>
-
-              </div>
-            )}
-
-            {/* STEP 2: Enter 4-Digit Code */}
-            {otpStep === 'code' && (
-              <div className="otp-modal-body">
-                <div className="otp-step-heading-row">
-                  <button
-                    type="button"
-                    className="otp-back-btn"
-                    onClick={() => setOtpStep('email')}
-                    title="Change email"
-                  >
-                    <ArrowLeft size={16} />
-                  </button>
-                  <div>
-                    <h4 className="otp-step-heading">Enter 4-Digit Code</h4>
-                    <p className="otp-step-desc">
-                      Sent to <strong>{targetEmail}</strong>
+                  <div className="callout-text">
+                    <strong>RESTRICTED VETTING NOTICE:</strong>
+                    <p>
+                      ShadowTalk is an encrypted digital sanctuary. We enforce zero tolerance for noise, childish conduct, or state-sanctioned propaganda. Initiated members access restricted vaults and private peer-to-peer mesh relays. Fictitious dossiers are permanently discarded.
                     </p>
                   </div>
                 </div>
 
-                {otpSuccessMsg && (
-                  <div className="otp-info-banner" style={{ background: 'rgba(0, 243, 255, 0.08)', border: '1px solid rgba(0, 243, 255, 0.25)', color: '#00f3ff', padding: '0.45rem 0.75rem', borderRadius: 8, fontSize: '0.78rem', margin: '0.4rem 0 0.8rem 0', textAlign: 'center', lineHeight: 1.4 }}>
-                    {otpSuccessMsg}
-                  </div>
-                )}
-
-                {/* 4 Individual Digit Input Boxes */}
-                <div className="otp-boxes-row" onPaste={handleOtpPaste}>
-                  {otpDigits.map((digit, idx) => (
+                {/* Handlable 2-Column Responsive Matrix */}
+                <div className="dossier-fields-grid">
+                  <div className="membership-field-group">
+                    <label className="membership-label">LEGAL / REAL FULL NAME *</label>
                     <input
-                      key={idx}
-                      ref={el => (otpInputRefs.current[idx] = el)}
                       type="text"
-                      inputMode="numeric"
-                      maxLength={1}
-                      value={digit}
-                      onChange={e => handleOtpDigitChange(idx, e.target.value)}
-                      onKeyDown={e => handleOtpKeyDown(idx, e)}
-                      className={`otp-digit-box ${digit ? 'filled' : ''} ${otpError ? 'has-error' : ''}`}
-                      autoFocus={idx === 0}
+                      className="membership-input"
+                      placeholder="e.g. Julian Alexander Vance"
+                      value={membershipForm.fullName}
+                      onChange={e => setMembershipForm({ ...membershipForm, fullName: e.target.value })}
+                      required
                     />
-                  ))}
+                  </div>
+
+                  <div className="membership-field-group">
+                    <label className="membership-label">PRIMARY EMAIL ADDRESS *</label>
+                    <input
+                      type="email"
+                      className="membership-input"
+                      placeholder="e.g. julian.vance@mesh.org"
+                      value={membershipForm.email}
+                      onChange={e => setMembershipForm({ ...membershipForm, email: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div className="membership-field-group">
+                    <label className="membership-label">STUDENT / OCCUPATIONAL ROLE *</label>
+                    <input
+                      type="text"
+                      className="membership-input"
+                      placeholder="e.g. CS Student / Cryptography Researcher / Autodidact"
+                      value={membershipForm.role}
+                      onChange={e => setMembershipForm({ ...membershipForm, role: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div className="membership-field-group">
+                    <label className="membership-label">AGE &amp; CURRENT LOCATION *</label>
+                    <input
+                      type="text"
+                      className="membership-input"
+                      placeholder="e.g. 22, Berlin / 24, California"
+                      value={membershipForm.ageLocation}
+                      onChange={e => setMembershipForm({ ...membershipForm, ageLocation: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div className="membership-field-group full-width">
+                    <label className="membership-label">PUBLIC PROOF / SOCIAL HANDLE (OPTIONAL)</label>
+                    <input
+                      type="text"
+                      className="membership-input"
+                      placeholder="e.g. @github_handle, X / Twitter, or LinkedIn profile"
+                      value={membershipForm.socialHandle}
+                      onChange={e => setMembershipForm({ ...membershipForm, socialHandle: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="membership-field-group full-width">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <label className="membership-label">PURPOSE &amp; WHAT UNREDACTED KNOWLEDGE YOU SEEK *</label>
+                      <span className="char-counter" style={{ color: membershipForm.purpose.length >= 15 ? '#00f3ff' : '#94a3b8' }}>
+                        {membershipForm.purpose.length}/15 min chars
+                      </span>
+                    </div>
+                    <textarea
+                      className="membership-textarea"
+                      rows={3}
+                      placeholder="Explain why you seek induction into the Enclave, what unspoken knowledge you are pursuing, and what unique perspective or value you bring to fellow members..."
+                      value={membershipForm.purpose}
+                      onChange={e => setMembershipForm({ ...membershipForm, purpose: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div className="membership-field-group full-width">
+                    <label className="membership-checkbox-label handlable-oath">
+                      <input
+                        type="checkbox"
+                        checked={membershipForm.pledgeAccepted}
+                        onChange={e => setMembershipForm({ ...membershipForm, pledgeAccepted: e.target.checked })}
+                      />
+                      <span>
+                        <strong>The Sovereign Covenant Oath:</strong> I solemnly pledge to uphold the Covenant of Maturity, protect the secrecy of the Enclave, and conduct all transmissions with honor.
+                      </span>
+                    </label>
+                  </div>
                 </div>
 
-                {otpError && (
-                  <div className="otp-error-banner">
-                    {otpError}
+                {membershipError && (
+                  <div className="otp-error-banner" style={{ margin: '0.8rem 0 0.4rem 0' }}>
+                    {membershipError}
                   </div>
                 )}
 
-                <button
-                  type="button"
-                  className="otp-primary-action-btn"
-                  onClick={() => handleVerifyOtp()}
-                  disabled={otpLoading || otpDigits.join('').length < 4}
-                >
-                  {otpLoading ? (
-                    <>
-                      <Loader2 size={16} className="spinner" />
-                      <span>Verifying Code...</span>
-                    </>
-                  ) : (
-                    <>
-                      <ShieldCheck size={16} />
-                      <span>Verify & Claim Blue Tick</span>
-                    </>
-                  )}
-                </button>
-
-                {/* Resend Row with Countdown */}
-                <div className="otp-resend-row">
-                  <span>Didn't get the code?</span>{' '}
-                  {otpResendCountdown > 0 ? (
-                    <span className="otp-countdown-text">Resend in {otpResendCountdown}s</span>
-                  ) : (
-                    <button
-                      type="button"
-                      className="otp-resend-link-btn"
-                      onClick={handleSendOtp}
-                      disabled={otpLoading}
-                    >
-                      Resend Code
-                    </button>
-                  )}
+                <div className="membership-actions-row">
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={closeMembershipModal}
+                  >
+                    Withdraw
+                  </button>
+                  <button
+                    type="submit"
+                    className="membership-primary-action-btn"
+                    disabled={membershipLoading}
+                  >
+                    {membershipLoading ? (
+                      <>
+                        <Loader2 size={16} className="spinner" />
+                        <span>Transmitting Dossier to Council...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck size={16} />
+                        <span>Transmit Dossier for Council Vetting</span>
+                      </>
+                    )}
+                  </button>
                 </div>
-              </div>
+              </form>
             )}
 
-            {/* STEP 3: Verification Success */}
-            {otpStep === 'success' && (
-              <div className="otp-modal-body otp-success-view">
-                <div className="otp-success-icon-wrap">
-                  <VerifiedBlueTick size={64} />
+            {/* CONFIRMATION VIEW */}
+            {membershipStep === 'success' && (
+              <div className="membership-modal-body membership-success-view">
+                <div className="membership-success-icon-wrap">
+                  <ShieldCheck size={56} color="#00f3ff" />
                 </div>
-                <h4 className="otp-success-title">Email Verified!</h4>
-                <p className="otp-success-desc">
-                  Official Verified Blue Tick awarded to <strong>@{identity.alias}</strong>.
+                <h4 className="membership-success-title">Dossier Dispatched to the High Council</h4>
+                <p className="membership-success-desc">
+                  Your candidate credentials and sovereign oath have been transmitted via secure encrypted protocol to <strong>mnsolutions61@gmail.com</strong>.
                 </p>
-                <div className="otp-success-preview-badge">
-                  <span className="otp-badge-name">@{identity.alias}</span>
-                  <VerifiedBlueTick size={18} />
+                <div className="membership-success-info-box">
+                  <p>
+                    The vetting council inspects candidate dossiers within 24–48 hours. Upon verification, your account (<strong>@{identity.alias}</strong>) will be inducted into the Enclave and awarded the official Verified Blue Tick badge across the mesh network.
+                  </p>
                 </div>
+                <button
+                  type="button"
+                  className="membership-primary-action-btn"
+                  style={{ marginTop: '1.2rem', width: '100%' }}
+                  onClick={closeMembershipModal}
+                >
+                  Return to Terminal
+                </button>
               </div>
             )}
           </div>
@@ -3820,13 +4174,13 @@ function App() {
                 </div>
               </div>
 
-              {/* Blue Tick Verification Section with 4-Digit Email OTP */}
+              {/* Secret Society Membership & Verification Section */}
               <div className="form-group verification-section">
                 <div className="verification-header-row">
-                  <label className="form-label" style={{ margin: 0 }}>BLUE TICK VERIFICATION</label>
+                  <label className="form-label" style={{ margin: 0 }}>SOCIETY MEMBERSHIP & VERIFICATION</label>
                   {identity.isVerified && (
                     <span className="verified-pill">
-                      <VerifiedBlueTick size={13} /> VERIFIED
+                      <VerifiedBlueTick size={13} /> VERIFIED MEMBER
                     </span>
                   )}
                 </div>
@@ -3836,9 +4190,9 @@ function App() {
                     <div className="verified-active-text">
                       <VerifiedBlueTick size={22} />
                       <div>
-                        <strong>Account Verified</strong>
+                        <strong>Inducted Society Member</strong>
                         <p style={{ margin: '3px 0 0 0', fontSize: '0.8rem', opacity: 0.85 }}>
-                          Verified via Email ({identity.verifiedEmail || 'mesh user'}). Official Blue Tick is active on all your messages and transmissions.
+                          Official Verified Badge active across all transmissions ({identity.verifiedEmail || 'Society Member'}).
                         </p>
                       </div>
                     </div>
@@ -3846,32 +4200,32 @@ function App() {
                       <button
                         type="button"
                         className="btn-secondary verify-different-btn"
-                        onClick={startEmailVerification}
+                        onClick={openMembershipModal}
                       >
-                        <Mail size={14} /> Verify Different Email
+                        <ShieldCheck size={14} /> Update Application
                       </button>
                       <button
                         type="button"
                         className="btn-secondary revoke-btn"
                         onClick={() => setIdentity(prev => ({ ...prev, isVerified: false, verifiedEmail: null }))}
                       >
-                        Revoke
+                        Revoke Badge
                       </button>
                     </div>
                   </div>
                 ) : (
                   <div className="verification-box email-verification-box">
                     <p className="verification-desc">
-                      Enter your email address to receive a <strong>4-digit verification code</strong> and claim the official Verified Blue Tick badge.
+                      Verified members are inducted into the <strong>ShadowTalk Secret Society</strong>. Apply for vetting to receive your official Verified Blue Tick badge.
                     </p>
 
                     <button
                       type="button"
-                      className="email-verify-trigger-btn"
-                      onClick={startEmailVerification}
+                      className="email-verify-trigger-btn become-member-btn"
+                      onClick={openMembershipModal}
                     >
-                      <Mail size={18} />
-                      <span>Verify Email with 4-Digit OTP</span>
+                      <ShieldCheck size={18} />
+                      <span>Become a Member of the Secret Society</span>
                     </button>
                   </div>
                 )}

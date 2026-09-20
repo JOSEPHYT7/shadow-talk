@@ -4,6 +4,13 @@
  * with standard OpenAI-compatible tool calling.
  */
 
+const {
+  FREE_MODELS,
+  DEFAULT_MODEL,
+  VISION_MODELS,
+  FALLBACK_CHAIN
+} = require('./models');
+
 class BaseAIProvider {
   constructor(config = {}) {
     this.model = config.model;
@@ -30,8 +37,8 @@ class OpenRouterProvider extends BaseAIProvider {
   constructor(config = {}) {
     super(config);
     this.apiKey = config.apiKey || process.env.OPENROUTER_API_KEY;
-    // Use deepseek-v4-flash as requested by user
-    this.model = config.model || process.env.JAMES_MODEL || 'deepseek/deepseek-v4-flash-0731:free';
+    // Default to DeepSeek V4 Flash Free as configured in models.js
+    this.model = config.model || process.env.JAMES_MODEL || DEFAULT_MODEL;
     this.baseUrl = config.baseUrl || 'https://openrouter.ai/api/v1/chat/completions';
     // 85s timeout so free tier queue on OpenRouter never aborts prematurely
     this.timeoutMs = config.timeoutMs || 85000;
@@ -42,18 +49,26 @@ class OpenRouterProvider extends BaseAIProvider {
       throw new Error('Missing OPENROUTER_API_KEY');
     }
 
-    // Candidate free models: deepseek-v4-flash first, then openrouter/free auto-router and fallbacks
-    const candidateModels = [
-      this.model,
-      'deepseek/deepseek-v4-flash-0731:free',
-      'openrouter/free',
-      'meta-llama/llama-3.3-70b-instruct:free',
-      'qwen/qwen-2.5-72b-instruct:free'
-    ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
+    // Check if any message contains image data for vision models
+    const hasImages = messages.some(m => Array.isArray(m.content) && m.content.some(c => c.type === 'image_url'));
+
+    // Candidate free models:
+    // If vision is requested, prioritize free vision models from models.js
+    const candidateModels = hasImages
+      ? [
+          ...VISION_MODELS,
+          this.model
+        ]
+      : [
+          this.model,
+          ...FALLBACK_CHAIN
+        ];
+
+    const uniqueCandidates = candidateModels.filter((m, idx, arr) => m && arr.indexOf(m) === idx);
 
     let lastError = null;
 
-    for (const modelToTry of candidateModels) {
+    for (const modelToTry of uniqueCandidates) {
       try {
         const payload = {
           model: modelToTry,
@@ -351,6 +366,100 @@ class FallbackProvider extends BaseAIProvider {
             function: {
               name: 'generate_qr_code',
               arguments: JSON.stringify({ text: payload })
+            }
+          }
+        ]
+      };
+    }
+
+    // Timers & Reminders Fallback
+    const reminderMatch = userText.match(/remind\s+(?:me\s+)?(?:in\s+)?(\d+)\s*(s|sec|seconds?|m|min|minutes?|h|hours?)\s+(?:to\s+|that\s+)?(.*)/i);
+    if (reminderMatch && tools.some(t => t.function?.name === 'set_reminder')) {
+      const amount = parseInt(reminderMatch[1]) || 60;
+      const unit = reminderMatch[2].toLowerCase();
+      let seconds = amount;
+      if (unit.startsWith('m')) seconds = amount * 60;
+      else if (unit.startsWith('h')) seconds = amount * 3600;
+      const reminderText = (reminderMatch[3] || 'Reminder').trim();
+      return {
+        content: null,
+        toolCalls: [
+          {
+            id: `call_${Date.now()}_remind`,
+            type: 'function',
+            function: {
+              name: 'set_reminder',
+              arguments: JSON.stringify({
+                user_id_or_alias: 'User',
+                reminder_text: reminderText,
+                seconds: seconds
+              })
+            }
+          }
+        ]
+      };
+    }
+
+    // Community Polls Fallback
+    const pollMatch = userText.match(/(?:create|make|start)\s+(?:a\s+)?poll[:\s]+(.*)/i);
+    if (pollMatch && tools.some(t => t.function?.name === 'create_poll')) {
+      const pollQuery = pollMatch[1].trim();
+      const orParts = pollQuery.split(/\s+(?:or|vs\.?)\s+/i);
+      let question = pollQuery;
+      let options = ['Yes', 'No'];
+      if (orParts.length >= 2) {
+        question = pollQuery;
+        options = orParts.map(p => p.replace(/[?.,!]+$/g, '').trim());
+      }
+      return {
+        content: null,
+        toolCalls: [
+          {
+            id: `call_${Date.now()}_poll`,
+            type: 'function',
+            function: {
+              name: 'create_poll',
+              arguments: JSON.stringify({
+                question: question,
+                options: options
+              })
+            }
+          }
+        ]
+      };
+    }
+
+    // Voice Note Fallback
+    if (/voice\s*note|voice\s*message|speak|say\s+hello\s+in\s+a\s+voice/i.test(lower) && tools.some(t => t.function?.name === 'generate_voice')) {
+      const textToSpeak = userText.replace(/.*?say\s+(.*)/i, '$1').replace(/in a voice.*$/i, '').trim() || 'Hello! Hope you are having a wonderful day.';
+      return {
+        content: null,
+        toolCalls: [
+          {
+            id: `call_${Date.now()}_voice`,
+            type: 'function',
+            function: {
+              name: 'generate_voice',
+              arguments: JSON.stringify({ text: textToSpeak })
+            }
+          }
+        ]
+      };
+    }
+
+    // Code Sandbox Execution Fallback
+    const codeMatch = userText.match(/(?:run|execute|eval(?:uate)?)\s+(?:this\s+)?(?:js|javascript|code)?[:\s]+([\s\S]+)/i);
+    if (codeMatch && tools.some(t => t.function?.name === 'run_code')) {
+      const codeSnippet = codeMatch[1].trim();
+      return {
+        content: null,
+        toolCalls: [
+          {
+            id: `call_${Date.now()}_code`,
+            type: 'function',
+            function: {
+              name: 'run_code',
+              arguments: JSON.stringify({ code: codeSnippet })
             }
           }
         ]

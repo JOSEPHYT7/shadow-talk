@@ -1,25 +1,54 @@
 {
-  "updatedAt": 1789835542729,
+  "updatedAt": 1789928619230,
   "summary": "",
   "topics": [],
+  "welcomedUsers": [
+    "joseph",
+    "usr_78qzmjll4",
+    "kai_rivera24",
+    "usr_2i4zg49q8",
+    "aria_knight60",
+    "usr_j4ltzh3hg",
+    "diya",
+    "usr_bupie4fm0"
+  ],
+  "lastReturnGreetTime": {},
   "users": [
     {
       "key": "uid:usr_78qzmjll4",
       "userId": "usr_78qzmjll4",
       "alias": "joseph",
-      "count": 56,
+      "count": 84,
       "notes": [],
       "topics": [],
-      "lastSeen": 1789835537729
+      "lastSeen": 1789928617226
     },
     {
       "key": "uid:usr_2i4zg49q8",
       "userId": "usr_2i4zg49q8",
       "alias": "kai_rivera24",
-      "count": 5,
+      "count": 6,
       "notes": [],
       "topics": [],
-      "lastSeen": 1789835101841
+      "lastSeen": 1789928573959
+    },
+    {
+      "key": "uid:usr_j4ltzh3hg",
+      "userId": "usr_j4ltzh3hg",
+      "alias": "aria_knight60",
+      "count": 1,
+      "notes": [],
+      "topics": [],
+      "lastSeen": 1789916342119
+    },
+    {
+      "key": "uid:usr_bupie4fm0",
+      "userId": "usr_bupie4fm0",
+      "alias": "diya",
+      "count": 1,
+      "notes": [],
+      "topics": [],
+      "lastSeen": 1789926139050
     }
   ]
 }

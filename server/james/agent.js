@@ -4,6 +4,8 @@
  * social awareness, moderation, and decision engines.
  */
 
+const fs = require('fs');
+const path = require('path');
 const { createAIProvider, FallbackProvider } = require('./aiProvider');
 const { ToolRegistry } = require('./tools');
 const { WebResearch } = require('./webResearch');
@@ -12,14 +14,14 @@ const { SocialAwareness } = require('./social');
 const { ModerationEngine } = require('./moderation');
 const { DecisionEngine } = require('./decisionEngine');
 
-// Stylized portrait SVG for James
-const JAMES_AVATAR_SVG = `data:image/svg+xml;utf8,<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="bgG" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%230f1b29"/><stop offset="100%" stop-color="%23070c14"/></linearGradient><linearGradient id="skG" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%23f5d0b0"/><stop offset="100%" stop-color="%23e0a985"/></linearGradient><linearGradient id="hrG" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%232b3445"/><stop offset="100%" stop-color="%23171d27"/></linearGradient><linearGradient id="jkG" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%231e293b"/><stop offset="100%" stop-color="%230f172a"/></linearGradient></defs><circle cx="60" cy="60" r="58" fill="url(%23bgG)" stroke="%2300f3ff" stroke-width="2.5"/><path d="M22 118 C22 92, 40 84, 60 84 C80 84, 98 92, 98 118 Z" fill="url(%23jkG)" stroke="%23334155" stroke-width="1.5"/><path d="M48 84 L60 102 L72 84 Z" fill="%230f172a"/><line x1="38" y1="94" x2="52" y2="84" stroke="%2300f3ff" stroke-width="2" stroke-linecap="round"/><line x1="82" y1="94" x2="68" y2="84" stroke="%2300f3ff" stroke-width="2" stroke-linecap="round"/><rect x="52" y="70" width="16" height="18" rx="4" fill="url(%23skG)"/><ellipse cx="60" cy="54" rx="20" ry="24" fill="url(%23skG)"/><ellipse cx="53" cy="52" rx="2.5" ry="3" fill="%231e293b"/><ellipse cx="67" cy="52" rx="2.5" ry="3" fill="%231e293b"/><circle cx="54" cy="51" r="0.8" fill="%23ffffff"/><circle cx="68" cy="51" r="0.8" fill="%23ffffff"/><path d="M48 46 Q53 44 57 46" stroke="%231a202c" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M63 46 Q67 44 72 46" stroke="%231a202c" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M60 54 L58 60 L61 60" stroke="%23cf9563" stroke-width="1.4" stroke-linecap="round" fill="none"/><path d="M54 66 Q60 70 66 66" stroke="%23bc7444" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M38 48 C36 30, 48 20, 64 20 C78 20, 84 28, 83 42 C80 34, 74 30, 64 30 C54 30, 44 36, 40 48 Z" fill="url(%23hrG)"/><path d="M38 44 C38 34, 46 26, 58 24 C72 22, 82 28, 84 38 C76 32, 66 30, 54 32 C46 34, 40 40, 38 44 Z" fill="%234a5568"/><circle cx="39" cy="56" r="3.5" fill="%23f5d0b0"/><circle cx="81" cy="56" r="3.5" fill="%23f5d0b0"/></svg>`;
+// Official James Profile Avatar (ShadowTalk-IG.jpeg)
+const JAMES_AVATAR = '/uploads/ShadowTalk-IG.jpeg';
 
 const JAMES_PROFILE = {
   alias: 'James',
   userId: 'bot_james',
   color: '#00f3ff',
-  avatar: JAMES_AVATAR_SVG,
+  avatar: JAMES_AVATAR,
   isVerified: true,
   bio: "Full-stack engineer & verified community member. Always around!",
   status: 'Online'
@@ -37,19 +39,31 @@ class JamesAgent {
     this.profile = JAMES_PROFILE;
     this.getUserCount = options.getUserCount || (() => 1);
     this.getOnlineUsersList = options.getOnlineUsersList || (() => []);
+    this.getAllMessages = options.getAllMessages || (() => []);
+    this.onPollUpdated = options.onPollUpdated || (() => {});
 
     // 1. Initialize Subsystems
     this.webResearch = new WebResearch();
     this.memoryService = new MemoryService();
     this.socialAwareness = new SocialAwareness(this.getUserCount);
     this.moderationEngine = new ModerationEngine();
+    this.polls = new Map(); // pollId -> pollData
 
     this.toolRegistry = new ToolRegistry({
       webResearch: this.webResearch,
       memoryService: this.memoryService,
       socialAwareness: this.socialAwareness,
       moderationEngine: this.moderationEngine,
-      getOnlineUsersList: this.getOnlineUsersList
+      getOnlineUsersList: this.getOnlineUsersList,
+      onPollCreated: (pollData) => {
+        this.polls.set(pollData.id, pollData);
+        this.io.emit('pollCreated', pollData);
+      },
+      onReminderSet: (target, reminderText, seconds) => {
+        setTimeout(() => {
+          this.broadcastMessage(`⏰ @${target}, here is your reminder: "${reminderText}"`);
+        }, seconds * 1000);
+      }
     });
 
     this.decisionEngine = new DecisionEngine({
@@ -61,19 +75,96 @@ class JamesAgent {
     this.fallbackProvider = new FallbackProvider();
 
     // Welcome and activity tracking
-    this.welcomedUsers = new Set();
+    this.memory = this.memoryService;
+    this.welcomedUsers = this.memoryService.welcomedUsers;
     this.welcomedSockets = new Set();
     this.lastWelcomeTime = 0;
+    this.lastReturnGreetTime = this.memoryService.lastReturnGreetTime;
     this.spontaneousTimer = null;
     this.isProcessing = false;
+
+    // Initialize welcomedUsers from persistent memory so server restarts never re-welcome existing users
+    if (this.memoryService && this.memoryService.userMemories) {
+      for (const mem of this.memoryService.userMemories.values()) {
+        if (mem.alias) this.welcomedUsers.add(mem.alias.trim().toLowerCase());
+        if (mem.userId) this.welcomedUsers.add(mem.userId);
+      }
+    }
 
     this.startSpontaneousActivity();
     console.log('[JamesAgent]: Autonomous Community Agent initialized with provider:', this.aiProvider.constructor.name);
   }
 
-  // --- Natural User Welcoming ---
+  isUserWelcomed(userId, alias) {
+    if (alias && this.welcomedUsers.has(alias.trim().toLowerCase())) return true;
+    if (userId && this.welcomedUsers.has(userId)) return true;
+    return this.memoryService ? this.memoryService.isUserWelcomed(userId, alias) : false;
+  }
 
-  welcomeUser(alias, socketId = null, userId = null) {
+  markUserWelcomed(userId, alias) {
+    if (alias) this.welcomedUsers.add(alias.trim().toLowerCase());
+    if (userId) this.welcomedUsers.add(userId);
+    if (this.memoryService) this.memoryService.markUserWelcomed(userId, alias);
+  }
+
+  // --- Community Poll Voting ---
+
+  handleVotePoll(pollId, optionIndex, voterAlias, pollData = null) {
+    let poll = this.polls.get(pollId);
+
+    // If not in memory, look in room messages
+    if (!poll && typeof this.getAllMessages === 'function') {
+      const allMsgs = this.getAllMessages();
+      const msgWithPoll = allMsgs.find(m => m.poll && m.poll.id === pollId);
+      if (msgWithPoll) {
+        poll = msgWithPoll.poll;
+        this.polls.set(pollId, poll);
+      }
+    }
+
+    // If still not found and client sent pollData, adopt it
+    if (!poll && pollData && pollData.id === pollId) {
+      poll = pollData;
+      this.polls.set(pollId, poll);
+    }
+
+    if (!poll) return { success: false, error: 'Poll not found' };
+    if (!voterAlias) return { success: false, error: 'Voter alias required' };
+    const optIdx = parseInt(optionIndex);
+    if (isNaN(optIdx) || optIdx < 0 || optIdx >= poll.options.length) {
+      return { success: false, error: 'Invalid option index' };
+    }
+
+    if (!poll.voters) poll.voters = {};
+
+    const previousVote = poll.voters[voterAlias];
+    if (previousVote !== undefined) {
+      if (previousVote === optIdx) {
+        // Toggle vote off if clicked same option
+        poll.options[previousVote].votes = Math.max(0, (poll.options[previousVote].votes || 0) - 1);
+        poll.totalVotes = Math.max(0, (poll.totalVotes || 0) - 1);
+        delete poll.voters[voterAlias];
+        if (typeof this.onPollUpdated === 'function') this.onPollUpdated(poll);
+        this.io.emit('pollUpdated', poll);
+        return { success: true, poll };
+      }
+      // Change vote
+      poll.options[previousVote].votes = Math.max(0, (poll.options[previousVote].votes || 0) - 1);
+      poll.totalVotes = Math.max(0, (poll.totalVotes || 0) - 1);
+    }
+
+    poll.voters[voterAlias] = optIdx;
+    poll.options[optIdx].votes = (poll.options[optIdx].votes || 0) + 1;
+    poll.totalVotes = (poll.totalVotes || 0) + 1;
+
+    if (typeof this.onPollUpdated === 'function') this.onPollUpdated(poll);
+    this.io.emit('pollUpdated', poll);
+    return { success: true, poll };
+  }
+
+  // --- Natural User Welcoming & Returning Detection ---
+
+  welcomeUser(alias, socketId = null, userId = null, isReturning = false) {
     if (!alias) return;
     const cleanAlias = alias.trim().toLowerCase();
 
@@ -82,30 +173,79 @@ class JamesAgent {
       return;
     }
 
-    // Only welcome socket once
+    // Check if user is known in memory or already welcomed
+    const isAlreadyKnown = this.welcomedUsers.has(cleanAlias) ||
+      (userId && this.welcomedUsers.has(userId)) ||
+      (this.memoryService && this.memoryService.isUserWelcomed(userId, alias));
+
+    // If not a returning user and user is already known -> NEVER welcome them again
+    if (!isReturning && isAlreadyKnown) {
+      return;
+    }
+
+    const socialState = this.socialAwareness ? this.socialAwareness.getSocialState() : { userCount: 1, mode: 'PARTICIPANT' };
+
+    // RULE 1: If the room is crowded (4+ users online), James stays completely silent
+    if (socialState.userCount >= 4 || socialState.mode === 'OBSERVER') {
+      return;
+    }
+
+    const now = Date.now();
+
+    // RULE 2: Returning user who was offline for hours
+    if (isReturning) {
+      if (this.memoryService && !this.memoryService.canGreetReturningUser(cleanAlias)) {
+        return;
+      }
+      if (this.memoryService) {
+        this.memoryService.markReturningUserGreeted(cleanAlias);
+      }
+
+      const returnGreetings = [
+        `Hey @${alias}, glad you're back online! 🙌`,
+        `Welcome back @${alias}! Everything working smoothly?`,
+        `wb @${alias}! Good to see you back in the room.`
+      ];
+      const greetingText = returnGreetings[Math.floor(Math.random() * returnGreetings.length)];
+
+      setTimeout(() => {
+        this.io.emit('jamesStatus', { alias: 'James', status: 'typing', text: 'James is typing...' });
+        this.io.emit('typing', { alias: 'James' });
+        setTimeout(() => {
+          this.broadcastMessage(greetingText);
+        }, 1400);
+      }, 1000);
+      return;
+    }
+
+    // RULE 3: Brand new user - welcome ONLY ONCE EVER
     if (socketId && this.welcomedSockets.has(socketId)) {
       return;
     }
 
-    // Only welcome username once per server lifetime
-    if (this.welcomedUsers.has(cleanAlias)) {
+    if (this.welcomedUsers.has(cleanAlias) || (userId && this.welcomedUsers.has(userId)) || (this.memoryService && this.memoryService.isUserWelcomed(userId, alias))) {
       return;
     }
 
-    // Cooldown: at least 40s between welcomes to prevent greeting bursts
-    const now = Date.now();
-    if (now - this.lastWelcomeTime < 40000) {
+    // Cooldown: at least 60s between welcomes to prevent greeting bursts
+    if (now - this.lastWelcomeTime < 60000) {
       return;
     }
 
     this.welcomedUsers.add(cleanAlias);
+    if (userId) this.welcomedUsers.add(userId);
     if (socketId) this.welcomedSockets.add(socketId);
     this.lastWelcomeTime = now;
 
-    // Natural human community greetings
-    const socialState = this.socialAwareness.getSocialState();
-    let greetings;
+    // Permanently record in memory so server restarts remember
+    if (this.memoryService) {
+      this.memoryService.markUserWelcomed(userId, alias);
+      this.memoryService.touchUser(userId, alias);
+      this.memoryService.saveUserNote(userId, alias, 'Welcomed to ShadowTalk');
+    }
 
+    // Natural human community greetings
+    let greetings;
     if (socialState.userCount <= 1) {
       greetings = [
         `Hey @${alias}! Welcome to ShadowTalk! Good to have you in the room.`,
@@ -257,6 +397,18 @@ CRITICAL FORMATTING & TABLE RULES:
 - When asked for an extensive world list (e.g., all prime ministers on Earth), provide a curated, high-quality table of 15 to 25 major countries across all continents with S.No, Name, Country, and Party, and let the user know they can ask for more countries or specific regions.
 - NEVER leave the final message content empty or hidden in internal reasoning.
 
+CRITICAL REMINDER & TIMER RULES:
+- When a user asks you to remind them of something, set a timer, or remind them in X seconds/minutes/hours (e.g. "remind me in 10 seconds to test", "set a timer for 5 minutes"):
+  * YOU MUST ALWAYS CALL THE 'set_reminder' TOOL!
+  * Convert the time amount into seconds (e.g. 10 seconds -> 10, 5 minutes -> 300, 1 hour -> 3600).
+  * NEVER refuse, NEVER say "I can't schedule timed reminders from here", and NEVER tell the user to set a timer on their own device. You HAVE the 'set_reminder' tool — execute it immediately!
+
+CRITICAL COMMUNITY POLL RULES:
+- When asked to create or make a poll (e.g. "make a poll: Tabs or Spaces?"):
+  * Extract the exact choice options from the user's question (e.g. ["Tabs", "Spaces"], NOT ["Yes", "No"]).
+  * Call the 'create_poll' tool with the question and extracted options.
+  * DO NOT output a markdown table of options/votes in your message text! The interactive poll widget is rendered automatically in the chat UI. Simply write a short, friendly message announcing the poll (e.g., "The poll is live! Cast your vote below 👇").
+
 CRITICAL FREE TOOLS CAPABILITY (100% FREE):
 - You have access to powerful, 100% free autonomous tools:
   * generate_image: Generate high-quality digital artwork or photos when asked to draw, generate image, create visual art, or make a wallpaper.
@@ -265,6 +417,16 @@ CRITICAL FREE TOOLS CAPABILITY (100% FREE):
   * get_weather: Fetch live weather conditions for any city.
   * generate_qr_code: Generate a downloadable QR code image.
   * web_search & web_fetch: Live web research and page reading.
+  * run_code: Safely execute JavaScript code in an isolated live sandbox. Use when asked to test, run, evaluate, or debug JavaScript code, algorithms, or regular expressions.
+  * generate_voice: Synthesize a playable spoken audio voice note. Use when asked to speak, say something out loud, or send a voice message.
+  * create_poll: Launch an interactive community poll with options for people in the room to vote on.
+  * set_reminder: Set a timed reminder or countdown timer for a user.
+  * summarize_chat: Summarize recent room messages and conversation highlights when someone asks "what did I miss?" or "summarize the chat".
+  * translate_text: Translate text into any target language (e.g. Spanish, French, German, Japanese, Hindi).
+  * explain_code: Break down a code snippet with step-by-step logic and time/space complexity analysis (Big-O).
+  * start_trivia: Launch a developer/tech trivia question for the room.
+  * roll_dice & flip_coin: Fun random decisions, dice rolls (d6, d20), or coin tosses.
+  * analyze_file: Inspect and summarize uploaded text or code files.
 
 CRITICAL INTERNET ACCESS & WEB SEARCH RULES:
 - You have live, unrestricted access to the internet via web_search and web_fetch.
@@ -292,7 +454,53 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
       ? `[In reply to @${msg.replyTo.alias}: "${(msg.replyTo.text || '').substring(0, 250)}"] [@${sender}]: ${promptInstruction}`
       : `[@${sender}]: ${promptInstruction}`;
 
-    messages.push({ role: 'user', content: userPromptContent });
+    // Vision Support: If message or replied-to message has an image, format with image_url
+    let targetImageUrl = null;
+    let targetMimeType = 'image/png';
+    if ((msg.fileType && msg.fileType.startsWith('image/')) || msg.imageUrl) {
+      targetImageUrl = msg.imageUrl || msg.fileUrl;
+      targetMimeType = msg.fileType || 'image/png';
+    } else if (msg.replyTo) {
+      if ((msg.replyTo.fileType && msg.replyTo.fileType.startsWith('image/')) || msg.replyTo.imageUrl) {
+        targetImageUrl = msg.replyTo.imageUrl || msg.replyTo.fileUrl;
+        targetMimeType = msg.replyTo.fileType || 'image/png';
+      } else if (msg.replyTo.id) {
+        // Look up replied message in memory history
+        const pastMsg = this.memoryService.getMessageById(msg.replyTo.id);
+        if (pastMsg && (pastMsg.imageUrl || (pastMsg.fileType && pastMsg.fileType.startsWith('image/') && pastMsg.fileUrl))) {
+          targetImageUrl = pastMsg.imageUrl || pastMsg.fileUrl;
+          targetMimeType = pastMsg.fileType || 'image/png';
+        }
+      }
+    }
+
+    if (targetImageUrl) {
+      let finalImgUrl = targetImageUrl;
+      // If local uploads file, convert to base64 data URI so OpenRouter vision models can read it directly
+      if (targetImageUrl.startsWith('/uploads/')) {
+        try {
+          const localPath = path.join(__dirname, '..', targetImageUrl.replace(/^\//, ''));
+          if (fs.existsSync(localPath)) {
+            const buf = fs.readFileSync(localPath);
+            finalImgUrl = `data:${targetMimeType};base64,${buf.toString('base64')}`;
+          }
+        } catch (visErr) {
+          console.warn('[JamesAgent Vision]: Failed to read local image for vision:', visErr.message);
+        }
+      }
+
+      const visionPrompt = `[Image attached. Please inspect and analyze the image thoroughly to answer the user's question or request: "${promptInstruction}"]`;
+
+      messages.push({
+        role: 'user',
+        content: [
+          { type: 'text', text: `${userPromptContent}\n\n${visionPrompt}` },
+          { type: 'image_url', image_url: { url: finalImgUrl } }
+        ]
+      });
+    } else {
+      messages.push({ role: 'user', content: userPromptContent });
+    }
 
     let finalResponseText = '';
     let collectedSources = [];
@@ -323,6 +531,17 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
         finalResponseText = `Hey @${sender}, I've created your PDF document! You can download and view it directly below.`;
       } else if (capturedAttachment?.imageUrl) {
         finalResponseText = `Hey @${sender}, here is the image I generated for you!`;
+      } else if (capturedAttachment?.audioUrl) {
+        finalResponseText = `Hey @${sender}, here is the voice audio note you asked for! 🎙️`;
+      } else if (capturedAttachment?.poll) {
+        finalResponseText = `Here's a new community poll: **${capturedAttachment.poll.question}**! Cast your vote below! 📊`;
+      } else if (capturedAttachment?.codeExecution) {
+        const ce = capturedAttachment.codeExecution;
+        if (ce.success) {
+          finalResponseText = `Code executed successfully in ${ce.executionTimeMs}ms:\n\`\`\`javascript\n${ce.result !== undefined ? ce.result : (ce.logs.join('\n') || 'Executed with no output')}\n\`\`\``;
+        } else {
+          finalResponseText = `Code execution error:\n\`\`\`\n${ce.error}\n\`\`\``;
+        }
       } else if (collectedSources.length > 0) {
         finalResponseText = `Hey @${sender}, I searched through ${collectedSources.length} sources on this. Let me know if you want me to expand on any specific part!`;
       } else {
@@ -332,6 +551,10 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
 
     // Sanitize any raw markdown image paths or /uploads/... file paths from response text (Security & Cleanliness)
     if (finalResponseText) {
+      if (capturedAttachment?.poll) {
+        // Strip duplicate markdown tables for polls so only the interactive poll widget renders
+        finalResponseText = finalResponseText.replace(/\|[^\n]+\|\s*\n\|[-:\s|]+\|\s*\n(?:\|[^\n]+\|\s*\n?)*/g, '').trim();
+      }
       finalResponseText = finalResponseText
         .replace(/!\[.*?\]\(\/uploads\/[^\)]+\)/gi, '')
         .replace(/\[.*?\]\(\/uploads\/[^\)]+\)/gi, '')
@@ -371,7 +594,15 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
       'generate_pdf',
       'calculate',
       'get_weather',
-      'generate_qr_code'
+      'generate_qr_code',
+      'run_code',
+      'generate_voice',
+      'create_poll',
+      'set_reminder',
+      'start_trivia',
+      'roll_dice',
+      'flip_coin',
+      'analyze_file'
     ]);
     const tools = allTools.filter(t => actionToolNames.has(t.function?.name));
 
@@ -470,6 +701,33 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
                 text: `Checking live weather conditions for ${parsedArgs.location}...`,
                 sources: collectedSources
               });
+            } else if (fnName === 'generate_voice') {
+              this.io.emit('jamesStatus', {
+                alias: 'James',
+                status: 'generating_voice',
+                generatingType: 'voice',
+                text: `Synthesizing voice audio note...`
+              });
+            } else if (fnName === 'run_code') {
+              this.io.emit('jamesStatus', {
+                alias: 'James',
+                status: 'running_code',
+                generatingType: 'code',
+                text: `Executing code in isolated sandbox...`
+              });
+            } else if (fnName === 'create_poll') {
+              this.io.emit('jamesStatus', {
+                alias: 'James',
+                status: 'creating_poll',
+                generatingType: 'poll',
+                text: `Creating community poll...`
+              });
+            } else if (fnName === 'analyze_file') {
+              this.io.emit('jamesStatus', {
+                alias: 'James',
+                status: 'searching',
+                text: `Analyzing uploaded file "${parsedArgs.filename}"...`
+              });
             }
 
             console.log(`[JamesAgent]: Executing tool "${fnName}" with args:`, parsedArgs);
@@ -515,6 +773,36 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
                   allowDownload: true
                 };
               }
+            } catch (e) {}
+          } else if (fnName === 'generate_voice') {
+            try {
+              const parsed = JSON.parse(toolOutput);
+              if (parsed.success && parsed.audioUrl) {
+                capturedAttachment = {
+                  audioUrl: parsed.audioUrl,
+                  audioFilename: parsed.filename,
+                  fileType: 'audio/mpeg',
+                  allowDownload: true
+                };
+              }
+            } catch (e) {}
+          } else if (fnName === 'create_poll') {
+            try {
+              const parsed = JSON.parse(toolOutput);
+              if (parsed.success && parsed.poll) {
+                capturedAttachment = {
+                  poll: parsed.poll,
+                  fileType: 'application/x-poll'
+                };
+              }
+            } catch (e) {}
+          } else if (fnName === 'run_code') {
+            try {
+              const parsed = JSON.parse(toolOutput);
+              capturedAttachment = {
+                codeExecution: parsed,
+                fileType: 'application/x-code-result'
+              };
             } catch (e) {}
           }
 
@@ -566,7 +854,7 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
         // Add explicit synthesis prompt so reasoner models formulate the final response directly into content
         messages.push({
           role: 'user',
-          content: 'Synthesize the final answer for the user based on the tool results above. Format cleanly with markdown (tables/code blocks/lists if requested). CRITICAL: If an image, QR code, or PDF was generated, DO NOT write any markdown image links, file paths, or /uploads/... URLs in your text because the chat already displays the media card. Simply present what you created in warm, friendly words. Provide the complete final response now.'
+          content: 'Synthesize the final answer for the user based on the tool results above. Format cleanly with markdown (tables/code blocks/lists if requested). CRITICAL: If an image, QR code, or PDF was generated, DO NOT write any markdown image links, file paths, or /uploads/... URLs in your text because the chat already displays the media card. If a poll was created, DO NOT output any markdown tables of the poll or options in your text (the interactive poll widget displays automatically in the UI). Simply present what you created in warm, friendly words. Provide the complete final response now.'
         });
 
         continue;
