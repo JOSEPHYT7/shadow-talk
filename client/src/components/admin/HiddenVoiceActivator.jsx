@@ -88,6 +88,7 @@ export function HiddenVoiceActivator({
           const res = await fetch(`${serverUrl}/api/admin/auth/voice`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({
               sessionId,
               sessionToken,
@@ -119,6 +120,7 @@ export function HiddenVoiceActivator({
           const res = await fetch(`${serverUrl}/api/admin/auth/voice`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({
               sessionId,
               sessionToken,
@@ -158,6 +160,7 @@ export function HiddenVoiceActivator({
             const res = await fetch(`${serverUrl}/api/admin/auth/voice`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
               body: JSON.stringify({
                 sessionId,
                 sessionToken,

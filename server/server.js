@@ -63,7 +63,8 @@ const server = http.createServer(app);
 // Configure Socket.io with 100MB buffer and generous timeouts to prevent mobile/cloud disconnections
 const io = new Server(server, {
   cors: {
-    origin: '*',
+    origin: (origin, callback) => callback(null, true),
+    credentials: true,
     methods: ['GET', 'POST']
   },
   maxHttpBufferSize: 1e8, // 100 MB
@@ -71,7 +72,13 @@ const io = new Server(server, {
   pingTimeout: 30000
 });
 
-app.use(cors());
+// Configure CORS to support credentialed cross-origin requests (HttpOnly cookies + headers)
+app.use(cors({
+  origin: (origin, callback) => callback(null, true),
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-requested-with']
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
