@@ -58,7 +58,13 @@ function getClientIp(req) {
 
 // Anti-Brute-Force check
 function isRateLimited(ip) {
-  const record = ipAttemptTracker.get(ip);
+  const cleanIp = String(ip || '').replace(/^::ffff:/, '').trim();
+  // Never lock out local development loopback
+  if (cleanIp === '127.0.0.1' || cleanIp === '::1' || cleanIp === 'localhost' || cleanIp === '') {
+    return false;
+  }
+
+  const record = ipAttemptTracker.get(cleanIp);
   if (!record) return false;
 
   const now = Date.now();
@@ -81,11 +87,17 @@ function isRateLimited(ip) {
 }
 
 function recordFailedAttempt(ip, reason = 'Verification failure') {
+  const cleanIp = String(ip || '').replace(/^::ffff:/, '').trim();
+  if (cleanIp === '127.0.0.1' || cleanIp === '::1' || cleanIp === 'localhost' || cleanIp === '') {
+    logAuditEvent('AUTH_ATTEMPT_FAILED', { reason, localDev: true }, cleanIp);
+    return;
+  }
+
   const now = Date.now();
-  let record = ipAttemptTracker.get(ip);
+  let record = ipAttemptTracker.get(cleanIp);
   if (!record) {
     record = { count: 0, lockedUntil: null, attempts: [] };
-    ipAttemptTracker.set(ip, record);
+    ipAttemptTracker.set(cleanIp, record);
   }
 
   record.attempts.push(now);
