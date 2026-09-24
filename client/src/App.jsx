@@ -5036,14 +5036,16 @@ function App() {
       )}
 
       {/* --- Hidden Voice Activator (Zero UI / 100% Invisible) --- */}
-      <HiddenVoiceActivator
-        active={adminAuthFlow.active && adminAuthFlow.stage === 'INITIATED'}
-        sessionId={adminAuthFlow.sessionId}
-        sessionToken={adminAuthFlow.sessionToken}
-        serverUrl={SERVER_URL}
-        onVoiceSuccess={handleVoiceSuccess}
-        onVoiceFailure={handleVoiceFailure}
-      />
+      {adminAuthFlow.active && adminAuthFlow.stage === 'INITIATED' && (
+        <HiddenVoiceActivator
+          active={true}
+          sessionId={adminAuthFlow.sessionId}
+          sessionToken={adminAuthFlow.sessionToken}
+          serverUrl={SERVER_URL}
+          onVoiceSuccess={handleVoiceSuccess}
+          onVoiceFailure={handleVoiceFailure}
+        />
+      )}
 
       {/* --- Secret Administrator Command Console --- */}
       {showAdminPanel && adminToken && (

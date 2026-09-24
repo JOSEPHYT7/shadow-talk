@@ -37,11 +37,6 @@ export function HiddenVoiceActivator({
   activeRef.current = active;
 
   useEffect(() => {
-    if (!active || !sessionId || !sessionToken) {
-      cleanup();
-      return;
-    }
-
     let isTerminated = false;
 
     // Cleanup resources
@@ -71,6 +66,11 @@ export function HiddenVoiceActivator({
         streamRef.current = null;
       }
       setActivationHeard(false);
+    }
+
+    if (!active || !sessionId || !sessionToken) {
+      cleanup();
+      return;
     }
 
     // Start speech recognition session
