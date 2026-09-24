@@ -152,6 +152,78 @@ class ToolRegistry {
       {
         type: 'function',
         function: {
+          name: 'get_world_news',
+          description: 'Collect and broadcast the latest verified worldwide news across categories (GEOPOLITICS, TECH, HEALTHCARE, SCIENCE, FINANCE, WORLD). Use whenever asked about latest news, what is happening in the world, Russia-Ukraine war, tech developments, medical breakthroughs, or financial markets.',
+          parameters: {
+            type: 'object',
+            properties: {
+              category: {
+                type: 'string',
+                enum: ['geopolitics', 'tech', 'healthcare', 'science', 'finance', 'world'],
+                description: 'The news category to retrieve. Default is tech or geopolitics.'
+              },
+              topic: {
+                type: 'string',
+                description: 'Optional specific topic or keyword (e.g. "Ukraine", "AI models", "cancer research").'
+              }
+            }
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_crypto_prices',
+          description: 'Fetch real-time live prices and 24h market movements for cryptocurrencies (Bitcoin, Ethereum, Solana, etc.) via free public CoinGecko API.',
+          parameters: {
+            type: 'object',
+            properties: {
+              coins: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'List of coin IDs (e.g. ["bitcoin", "ethereum", "solana"]).'
+              }
+            }
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'inspect_github_repo',
+          description: 'Inspect live metadata, stars, forks, primary language, and open issues for any open-source GitHub repository via public GitHub API.',
+          parameters: {
+            type: 'object',
+            properties: {
+              repository: {
+                type: 'string',
+                description: 'The owner/repository name or URL (e.g. "facebook/react" or "torvalds/linux").'
+              }
+            },
+            required: ['repository']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_wiki_summary',
+          description: 'Retrieve an accurate, verified encyclopedic summary and thumbnail image for any concept, person, scientific topic, or historical event via Wikipedia REST API.',
+          parameters: {
+            type: 'object',
+            properties: {
+              topic: {
+                type: 'string',
+                description: 'The topic, person, or term to look up on Wikipedia.'
+              }
+            },
+            required: ['topic']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
           name: 'get_site_state',
           description: 'Check the real-time community activity, online user count, room quietness, and conversation state.',
           parameters: {
@@ -557,6 +629,43 @@ class ToolRegistry {
             return JSON.stringify({ error: 'Free tools service unavailable.' });
           }
           const result = await this.freeTools.generateQrCode(text);
+          return JSON.stringify(result);
+        }
+
+        case 'get_world_news': {
+          const category = args.category || 'tech';
+          const topic = args.topic || null;
+          if (!this.freeTools) {
+            return JSON.stringify({ error: 'Free tools service unavailable.' });
+          }
+          const result = await this.freeTools.getVerifiedNews(category, topic);
+          return JSON.stringify(result);
+        }
+
+        case 'get_crypto_prices': {
+          const coins = args.coins || ['bitcoin', 'ethereum', 'solana'];
+          if (!this.freeTools) {
+            return JSON.stringify({ error: 'Free tools service unavailable.' });
+          }
+          const result = await this.freeTools.getCryptoPrices(coins);
+          return JSON.stringify(result);
+        }
+
+        case 'inspect_github_repo': {
+          const repo = args.repository || '';
+          if (!this.freeTools) {
+            return JSON.stringify({ error: 'Free tools service unavailable.' });
+          }
+          const result = await this.freeTools.inspectGitHubRepo(repo);
+          return JSON.stringify(result);
+        }
+
+        case 'get_wiki_summary': {
+          const topic = args.topic || '';
+          if (!this.freeTools) {
+            return JSON.stringify({ error: 'Free tools service unavailable.' });
+          }
+          const result = await this.freeTools.getWikiSummary(topic);
           return JSON.stringify(result);
         }
 

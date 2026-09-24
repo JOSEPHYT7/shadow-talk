@@ -527,7 +527,17 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
     }
 
     if (!finalResponseText) {
-      if (capturedAttachment?.fileUrl) {
+      if (capturedAttachment?.weatherCard) {
+        finalResponseText = `Here is the current live weather report for **${capturedAttachment.weatherCard.location}**:`;
+      } else if (capturedAttachment?.newsCard) {
+        finalResponseText = `${capturedAttachment.newsCard.categoryTag} **${capturedAttachment.newsCard.headline}**\n\n${capturedAttachment.newsCard.summary}`;
+      } else if (capturedAttachment?.cryptoCard) {
+        finalResponseText = `Here are the latest live cryptocurrency market prices:`;
+      } else if (capturedAttachment?.repoCard) {
+        finalResponseText = `Here is the GitHub repository overview for **${capturedAttachment.repoCard.name}**:`;
+      } else if (capturedAttachment?.wikiCard) {
+        finalResponseText = `Here is the verified encyclopedic brief for **${capturedAttachment.wikiCard.title}**:`;
+      } else if (capturedAttachment?.fileUrl) {
         finalResponseText = `Hey @${sender}, I've created your PDF document! You can download and view it directly below.`;
       } else if (capturedAttachment?.imageUrl) {
         finalResponseText = `Hey @${sender}, here is the image I generated for you!`;
@@ -594,6 +604,10 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
       'generate_pdf',
       'calculate',
       'get_weather',
+      'get_world_news',
+      'get_crypto_prices',
+      'inspect_github_repo',
+      'get_wiki_summary',
       'generate_qr_code',
       'run_code',
       'generate_voice',
@@ -701,6 +715,34 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
                 text: `Checking live weather conditions for ${parsedArgs.location}...`,
                 sources: collectedSources
               });
+            } else if (fnName === 'get_world_news') {
+              this.io.emit('jamesStatus', {
+                alias: 'James',
+                status: 'searching',
+                text: `Gathering verified worldwide news on ${parsedArgs.category || 'global headlines'}...`,
+                sources: collectedSources
+              });
+            } else if (fnName === 'get_crypto_prices') {
+              this.io.emit('jamesStatus', {
+                alias: 'James',
+                status: 'searching',
+                text: `Fetching live cryptocurrency market rates...`,
+                sources: collectedSources
+              });
+            } else if (fnName === 'inspect_github_repo') {
+              this.io.emit('jamesStatus', {
+                alias: 'James',
+                status: 'searching',
+                text: `Inspecting GitHub repository "${parsedArgs.repository}"...`,
+                sources: collectedSources
+              });
+            } else if (fnName === 'get_wiki_summary') {
+              this.io.emit('jamesStatus', {
+                alias: 'James',
+                status: 'searching',
+                text: `Querying Wikipedia knowledge base for "${parsedArgs.topic}"...`,
+                sources: collectedSources
+              });
             } else if (fnName === 'generate_voice') {
               this.io.emit('jamesStatus', {
                 alias: 'James',
@@ -804,6 +846,61 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
                 fileType: 'application/x-code-result'
               };
             } catch (e) {}
+          } else if (fnName === 'get_weather') {
+            try {
+              const parsed = JSON.parse(toolOutput);
+              if (parsed.success && parsed.weatherCard) {
+                capturedAttachment = {
+                  ...(capturedAttachment || {}),
+                  weatherCard: parsed.weatherCard,
+                  fileType: 'application/x-weather-card'
+                };
+              }
+            } catch (e) {}
+          } else if (fnName === 'get_world_news') {
+            try {
+              const parsed = JSON.parse(toolOutput);
+              if (parsed.success && parsed.newsCard) {
+                capturedAttachment = {
+                  ...(capturedAttachment || {}),
+                  newsCard: parsed.newsCard,
+                  fileType: 'application/x-news-card'
+                };
+              }
+            } catch (e) {}
+          } else if (fnName === 'get_crypto_prices') {
+            try {
+              const parsed = JSON.parse(toolOutput);
+              if (parsed.success && parsed.cryptoCard) {
+                capturedAttachment = {
+                  ...(capturedAttachment || {}),
+                  cryptoCard: parsed.cryptoCard,
+                  fileType: 'application/x-crypto-card'
+                };
+              }
+            } catch (e) {}
+          } else if (fnName === 'inspect_github_repo') {
+            try {
+              const parsed = JSON.parse(toolOutput);
+              if (parsed.success && parsed.repoCard) {
+                capturedAttachment = {
+                  ...(capturedAttachment || {}),
+                  repoCard: parsed.repoCard,
+                  fileType: 'application/x-repo-card'
+                };
+              }
+            } catch (e) {}
+          } else if (fnName === 'get_wiki_summary') {
+            try {
+              const parsed = JSON.parse(toolOutput);
+              if (parsed.success && parsed.wikiCard) {
+                capturedAttachment = {
+                  ...(capturedAttachment || {}),
+                  wikiCard: parsed.wikiCard,
+                  fileType: 'application/x-wiki-card'
+                };
+              }
+            } catch (e) {}
           }
 
           // Extract web sources for ChatGPT-style source badges (deduplicated by domain)
@@ -881,13 +978,48 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
     return { content: null, sources: collectedSources, attachment: capturedAttachment };
   }
 
-  // --- Spontaneous Activity ---
+  // --- Spontaneous Activity & Periodic Verified News ---
+
+  async broadcastPeriodicWorldNews(forceCategory = null) {
+    try {
+      const categories = ['geopolitics', 'tech', 'healthcare', 'science', 'finance', 'world'];
+      const cat = forceCategory || categories[Math.floor(Math.random() * categories.length)];
+      const res = await this.toolRegistry.freeTools.getVerifiedNews(cat);
+      if (res && res.newsCard) {
+        const card = res.newsCard;
+        const msgText = `${card.categoryTag} **${card.headline}**\n\n${card.summary}`;
+        this.broadcastMessage(msgText, null, [{
+          title: card.source,
+          url: card.sourceUrl,
+          domain: card.source
+        }], {
+          newsCard: card,
+          fileType: 'application/x-news-card'
+        });
+        console.log(`[JamesAgent]: Broadcasted verified world news: ${card.categoryTag} - ${card.headline.slice(0, 40)}...`);
+        return true;
+      }
+    } catch (err) {
+      console.error('[JamesAgent]: Failed to broadcast world news:', err.message);
+    }
+    return false;
+  }
 
   startSpontaneousActivity() {
-    const CHECK_INTERVAL = 15 * 60 * 1000; // Check every 15 minutes
+    const CHECK_INTERVAL = 20 * 60 * 1000; // Check every 20 minutes
+    let counter = 0;
+
     this.spontaneousTimer = setInterval(async () => {
+      counter++;
       if (this.socialAwareness.canInitiateSpontaneous()) {
         const state = this.socialAwareness.getSocialState();
+
+        // Every other spontaneous cycle (approx every 40-60 mins), broadcast verified worldwide news
+        if (counter % 2 === 0) {
+          const newsBroadcasted = await this.broadcastPeriodicWorldNews();
+          if (newsBroadcasted) return;
+        }
+
         if (state.mode === 'COMPANION') {
           const companionChimes = [
             `Hey, just checking in—how's the project coming along? 💻`,

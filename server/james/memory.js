@@ -58,6 +58,18 @@ class MemoryService {
     if (this.conversationHistory.length > this.maxHistory) {
       this.conversationHistory.shift();
     }
+    this.cleanupOldHistory();
+  }
+
+  /**
+   * Purge conversation history turns older than 24 hours.
+   */
+  cleanupOldHistory() {
+    const now = Date.now();
+    const MS_24_HOURS = 24 * 60 * 60 * 1000;
+    this.conversationHistory = this.conversationHistory.filter(
+      m => (now - (m.timestamp || 0)) < MS_24_HOURS
+    );
   }
 
   /**

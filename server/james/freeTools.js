@@ -7,6 +7,22 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const PDFDocument = require('pdfkit');
+const { NewsService } = require('./newsService');
+
+function mapWmoWeather(code, isDay = true) {
+  const c = parseInt(code) || 0;
+  if (c === 0) return { condition: isDay ? 'Clear Sky' : 'Clear Night', icon: isDay ? 'sun' : 'moon', theme: isDay ? 'sunny' : 'night' };
+  if (c === 1) return { condition: 'Mainly Clear', icon: isDay ? 'sun-cloud' : 'moon-cloud', theme: isDay ? 'sunny' : 'night' };
+  if (c === 2) return { condition: 'Partly Cloudy', icon: 'cloud-sun', theme: 'cloudy' };
+  if (c === 3) return { condition: 'Overcast', icon: 'cloud', theme: 'overcast' };
+  if (c === 45 || c === 48) return { condition: 'Fog & Mist', icon: 'cloud-fog', theme: 'fog' };
+  if (c >= 51 && c <= 57) return { condition: 'Light Drizzle', icon: 'cloud-drizzle', theme: 'rainy' };
+  if (c >= 61 && c <= 67) return { condition: 'Rain Showers', icon: 'cloud-rain', theme: 'rainy' };
+  if (c >= 71 && c <= 77) return { condition: 'Snowfall', icon: 'snowflake', theme: 'snowy' };
+  if (c >= 80 && c <= 82) return { condition: 'Heavy Showers', icon: 'cloud-rain-heavy', theme: 'rainy' };
+  if (c >= 95 && c <= 99) return { condition: 'Thunderstorm', icon: 'cloud-lightning', theme: 'stormy' };
+  return { condition: 'Fair', icon: 'cloud', theme: 'cloudy' };
+}
 
 class FreeToolsService {
   constructor(uploadsDir) {
@@ -14,6 +30,7 @@ class FreeToolsService {
     if (!fs.existsSync(this.uploadsDir)) {
       fs.mkdirSync(this.uploadsDir, { recursive: true });
     }
+    this.newsService = new NewsService();
   }
 
   /**
@@ -388,7 +405,7 @@ class FreeToolsService {
   }
 
   /**
-   * 4. Free Weather API via Open-Meteo (100% Free, No Key)
+   * 4. Free Weather API via Open-Meteo with Rich Visual Card Data
    */
   async getWeather(location) {
     if (!location) return { success: false, error: 'Location required' };
@@ -404,20 +421,170 @@ class FreeToolsService {
         return { success: false, error: `Could not find coordinates for "${location}"` };
       }
 
-      // 2. Fetch current weather
-      const weatherRes = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`,
-        { signal: AbortSignal.timeout(6000) }
-      );
+      // 2. Fetch current weather and multi-day forecast
+      const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,uv_index,is_day,precipitation&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max&timezone=auto`;
+      const weatherRes = await fetch(weatherUrl, { signal: AbortSignal.timeout(6000) });
       const weatherData = await weatherRes.json();
       const current = weatherData.current;
+      const daily = weatherData.daily;
+
+      const conditionInfo = mapWmoWeather(current.weather_code, current.is_day === 1);
+
+      // Build 3-day forecast pills
+      const forecast = [];
+      const dayNames = ['Today', 'Tomorrow', 'Day After', 'Next Day'];
+      if (daily && Array.isArray(daily.time)) {
+        for (let i = 0; i < Math.min(3, daily.time.length); i++) {
+          const dayCode = daily.weather_code?.[i] || 0;
+          const dayCondition = mapWmoWeather(dayCode, true);
+          forecast.push({
+            day: dayNames[i] || daily.time[i],
+            high: Math.round(daily.temperature_2m_max?.[i] || 0),
+            low: Math.round(daily.temperature_2m_min?.[i] || 0),
+            condition: dayCondition.condition,
+            weatherCode: dayCode,
+            icon: dayCondition.icon
+          });
+        }
+      }
+
+      const weatherCard = {
+        location: `${place.name}${place.country ? ', ' + place.country : ''}`,
+        latitude: place.latitude,
+        longitude: place.longitude,
+        temperature: Math.round(current.temperature_2m),
+        unit: '°C',
+        condition: conditionInfo.condition,
+        weatherCode: current.weather_code,
+        icon: conditionInfo.icon,
+        theme: conditionInfo.theme,
+        isDay: current.is_day === 1,
+        feelsLike: Math.round(current.apparent_temperature !== undefined ? current.apparent_temperature : current.temperature_2m),
+        humidity: Math.round(current.relative_humidity_2m || 0),
+        windSpeed: Math.round(current.wind_speed_10m || 0),
+        windDirection: Math.round(current.wind_direction_10m || 0),
+        uvIndex: Math.round(current.uv_index || 0),
+        precipitation: current.precipitation || 0,
+        forecast
+      };
 
       return {
         success: true,
-        location: `${place.name}, ${place.country || ''}`,
-        temperature: `${current.temperature_2m}°C`,
-        humidity: `${current.relative_humidity_2m}%`,
-        windSpeed: `${current.wind_speed_10m} km/h`
+        location: weatherCard.location,
+        temperature: `${weatherCard.temperature}°C`,
+        condition: weatherCard.condition,
+        humidity: `${weatherCard.humidity}%`,
+        windSpeed: `${weatherCard.windSpeed} km/h`,
+        weatherCard
+      };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * 4b. Verified Worldwide News Collection across key categories
+   */
+  async getVerifiedNews(category = 'tech', customQuery = null) {
+    try {
+      const result = await this.newsService.getVerifiedNews(category, customQuery, 4);
+      const featured = result.articles?.[0] || null;
+      return {
+        success: true,
+        category: result.category,
+        tag: result.tag,
+        color: result.color,
+        newsCard: featured,
+        articles: result.articles
+      };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * 4c. Real-Time Cryptocurrency & Market Asset Prices (CoinGecko Free API)
+   */
+  async getCryptoPrices(coins = ['bitcoin', 'ethereum', 'solana']) {
+    try {
+      const coinList = Array.isArray(coins) ? coins.join(',') : String(coins);
+      const res = await fetch(
+        `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(coinList)}&vs_currencies=usd&include_24hr_change=true`,
+        { signal: AbortSignal.timeout(6000) }
+      );
+      if (!res.ok) throw new Error(`CoinGecko HTTP ${res.status}`);
+      const data = await res.json();
+      const assets = [];
+      for (const [id, val] of Object.entries(data)) {
+        assets.push({
+          id,
+          name: id.toUpperCase(),
+          priceUsd: val.usd,
+          change24h: val.usd_24h_change ? Number(val.usd_24h_change.toFixed(2)) : 0
+        });
+      }
+      return {
+        success: true,
+        cryptoCard: {
+          assets,
+          updatedAt: 'Live Market'
+        }
+      };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * 4d. GitHub Repository Live Metadata Inspector (GitHub Free Public API)
+   */
+  async inspectGitHubRepo(repoStr) {
+    if (!repoStr) return { success: false, error: 'Repository name required (e.g. facebook/react)' };
+    const cleanRepo = repoStr.replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '').trim();
+    try {
+      const res = await fetch(`https://api.github.com/repos/${cleanRepo}`, {
+        headers: { 'User-Agent': 'ShadowTalk-AI-Agent' },
+        signal: AbortSignal.timeout(6000)
+      });
+      if (!res.ok) throw new Error(`GitHub API HTTP ${res.status}`);
+      const data = await res.json();
+      return {
+        success: true,
+        repoCard: {
+          name: data.full_name,
+          description: data.description || 'No description provided.',
+          stars: data.stargazers_count,
+          forks: data.forks_count,
+          language: data.language || 'Code',
+          url: data.html_url,
+          openIssues: data.open_issues_count
+        }
+      };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * 4e. Wikipedia Verified Knowledge Summary (Wikipedia Free REST API)
+   */
+  async getWikiSummary(topic) {
+    if (!topic) return { success: false, error: 'Topic required' };
+    try {
+      const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(topic)}`, {
+        headers: { 'User-Agent': 'ShadowTalk-AI-Agent' },
+        signal: AbortSignal.timeout(6000)
+      });
+      if (!res.ok) throw new Error(`Wikipedia API HTTP ${res.status}`);
+      const data = await res.json();
+      return {
+        success: true,
+        wikiCard: {
+          title: data.title,
+          extract: data.extract,
+          thumbnailUrl: data.thumbnail?.source || null,
+          url: data.content_urls?.desktop?.page || null
+        }
       };
     } catch (err) {
       return { success: false, error: err.message };

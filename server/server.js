@@ -686,12 +686,15 @@ io.on('connection', (socket) => {
   });
 });
 
-// Periodic cleanup of messages & uploads older than 24 hours
+// Periodic cleanup of messages & uploads older than 24 hours (User & James messages)
 const runPeriodicCleanup = () => {
   const prevCount = messages.length;
   messages = cleanupMessages(messages);
-  cleanupUploads();
+  cleanupUploads(messages);
   saveMessages(messages);
+  if (jamesBot && jamesBot.memoryService && typeof jamesBot.memoryService.cleanupOldHistory === 'function') {
+    jamesBot.memoryService.cleanupOldHistory();
+  }
   if (messages.length !== prevCount) {
     console.log(`[24h Auto-Cleanup]: Purged ${prevCount - messages.length} messages older than 24h.`);
     io.emit('allMessages', messages);

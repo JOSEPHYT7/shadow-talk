@@ -40,7 +40,23 @@ import {
   Copy,
   QrCode,
   BarChart2,
-  Volume2
+  Volume2,
+  Cloud,
+  Sun,
+  CloudRain,
+  CloudLightning,
+  Snowflake,
+  Wind,
+  Droplets,
+  Thermometer,
+  MapPin,
+  TrendingUp,
+  TrendingDown,
+  GitFork,
+  Star,
+  BookOpen,
+  Newspaper,
+  Radio
 } from 'lucide-react';
 import { PRESET_AVATARS } from './avatars';
 import JAMES_AVATAR_IMG from './assets/ShadowTalk-IG.jpeg';
@@ -916,6 +932,290 @@ function JamesPollGenerationCard() {
   );
 }
 
+// --- Rich Visual Cards for James Agent ---
+
+function WeatherCard({ card }) {
+  if (!card) return null;
+
+  const renderWeatherIcon = (iconName, size = 32) => {
+    switch (iconName) {
+      case 'sun':
+        return <Sun size={size} className="weather-svg-sun" />;
+      case 'moon':
+        return <Sun size={size} className="weather-svg-moon" />;
+      case 'sun-cloud':
+      case 'cloud-sun':
+        return <Cloud size={size} className="weather-svg-sun-cloud" />;
+      case 'cloud-rain':
+      case 'cloud-drizzle':
+      case 'cloud-rain-heavy':
+        return <CloudRain size={size} className="weather-svg-rain" />;
+      case 'cloud-lightning':
+        return <CloudLightning size={size} className="weather-svg-storm" />;
+      case 'snowflake':
+        return <Snowflake size={size} className="weather-svg-snow" />;
+      case 'cloud-fog':
+      case 'cloud':
+      default:
+        return <Cloud size={size} className="weather-svg-cloud" />;
+    }
+  };
+
+  const themeClass = card.theme ? `theme-${card.theme}` : 'theme-cloudy';
+
+  return (
+    <div className={`visual-weather-card ${themeClass}`}>
+      <div className="weather-card-ambient" />
+
+      {/* Top Header */}
+      <div className="weather-card-top">
+        <div className="weather-location-pill">
+          <MapPin size={13} className="weather-loc-icon" />
+          <span className="weather-loc-name">{card.location}</span>
+        </div>
+        <div className="weather-condition-badge">
+          <span className="weather-condition-dot" />
+          <span>{card.condition}</span>
+        </div>
+      </div>
+
+      {/* Main Temperature Hero Display */}
+      <div className="weather-hero-row">
+        <div className="weather-hero-left">
+          <div className="weather-temp-number">
+            <span className="weather-deg-val">{card.temperature}</span>
+            <span className="weather-deg-unit">{card.unit || '°C'}</span>
+          </div>
+          <div className="weather-feels-like">
+            <span>Feels like {card.feelsLike}{card.unit || '°C'}</span>
+          </div>
+        </div>
+        <div className="weather-hero-right">
+          <div className="weather-icon-bubble">
+            {renderWeatherIcon(card.icon, 44)}
+          </div>
+        </div>
+      </div>
+
+      {/* Key Atmospheric Metrics Grid */}
+      <div className="weather-metrics-grid">
+        <div className="weather-metric-item">
+          <div className="metric-item-label">
+            <Droplets size={12} />
+            <span>HUMIDITY</span>
+          </div>
+          <div className="metric-item-value">{card.humidity}%</div>
+          <div className="metric-mini-bar">
+            <div className="metric-bar-fill" style={{ width: `${Math.min(100, card.humidity)}%` }} />
+          </div>
+        </div>
+
+        <div className="weather-metric-item">
+          <div className="metric-item-label">
+            <Wind size={12} />
+            <span>WIND</span>
+          </div>
+          <div className="metric-item-value">{card.windSpeed} <small>km/h</small></div>
+          <div className="metric-mini-bar">
+            <div className="metric-bar-fill" style={{ width: `${Math.min(100, (card.windSpeed / 50) * 100)}%` }} />
+          </div>
+        </div>
+
+        <div className="weather-metric-item">
+          <div className="metric-item-label">
+            <Sun size={12} />
+            <span>UV INDEX</span>
+          </div>
+          <div className="metric-item-value">{card.uvIndex} <small>{card.uvIndex <= 2 ? 'Low' : card.uvIndex <= 5 ? 'Mod' : 'High'}</small></div>
+          <div className="metric-mini-bar">
+            <div className="metric-bar-fill" style={{ width: `${Math.min(100, (card.uvIndex / 11) * 100)}%` }} />
+          </div>
+        </div>
+
+        <div className="weather-metric-item">
+          <div className="metric-item-label">
+            <CloudRain size={12} />
+            <span>PRECIP</span>
+          </div>
+          <div className="metric-item-value">{card.precipitation} <small>mm</small></div>
+          <div className="metric-mini-bar">
+            <div className="metric-bar-fill" style={{ width: `${Math.min(100, card.precipitation * 10)}%` }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Multi-Day Forecast Strip */}
+      {card.forecast && card.forecast.length > 0 && (
+        <div className="weather-forecast-strip">
+          <div className="forecast-strip-title">3-DAY OUTLOOK</div>
+          <div className="forecast-days-row">
+            {card.forecast.map((fc, fIdx) => (
+              <div key={fIdx} className="forecast-day-pill">
+                <span className="fc-day-name">{fc.day}</span>
+                <div className="fc-day-icon">
+                  {renderWeatherIcon(fc.icon, 18)}
+                </div>
+                <div className="fc-day-temps">
+                  <span className="fc-temp-high">{fc.high}°</span>
+                  <span className="fc-temp-low">{fc.low}°</span>
+                </div>
+                <span className="fc-day-condition">{fc.condition}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NewsCard({ card }) {
+  if (!card) return null;
+
+  const categoryColor = card.color || '#00f3ff';
+  const categoryTag = card.categoryTag || `[${card.category || 'NEWS'}]`;
+
+  return (
+    <div className="visual-news-card" style={{ '--news-accent': categoryColor }}>
+      {/* Category & Publisher Header Row */}
+      <div className="news-card-header">
+        <div className="news-category-badge" style={{ borderColor: categoryColor, color: categoryColor }}>
+          <Radio size={11} className="news-pulse-icon" />
+          <span>{categoryTag}</span>
+        </div>
+        <div className="news-verified-source">
+          <ShieldCheck size={13} className="news-shield-icon" />
+          <span className="news-source-name">{card.source || 'Verified Wire'}</span>
+          <span className="news-time-ago">&bull; {card.publishedAt || 'Recent'}</span>
+        </div>
+      </div>
+
+      {/* High-Impact Visual News Cover */}
+      {card.imageUrl && (
+        <div className="news-image-frame" onClick={() => card.sourceUrl && window.open(card.sourceUrl, '_blank', 'noopener,noreferrer')}>
+          <img
+            src={card.imageUrl}
+            alt={card.headline}
+            className="news-cover-img"
+            loading="lazy"
+            onError={(e) => {
+              e.target.style.display = 'none';
+            }}
+          />
+          <div className="news-image-overlay" />
+          <span className="news-live-tag">VERIFIED DISPATCH</span>
+        </div>
+      )}
+
+      {/* News Content */}
+      <div className="news-content-body">
+        <h4 className="news-headline-text" onClick={() => card.sourceUrl && window.open(card.sourceUrl, '_blank', 'noopener,noreferrer')}>
+          {card.headline}
+        </h4>
+        {card.summary && (
+          <p className="news-summary-text">{card.summary}</p>
+        )}
+      </div>
+
+      {/* Action Footer */}
+      {card.sourceUrl && (
+        <div className="news-card-footer">
+          <a
+            href={card.sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="news-dispatch-btn"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span>Read Verified Dispatch</span>
+            <ExternalLink size={13} />
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CryptoCard({ card }) {
+  if (!card || !card.assets) return null;
+  return (
+    <div className="visual-crypto-card">
+      <div className="crypto-card-header">
+        <div className="crypto-card-title">
+          <TrendingUp size={14} />
+          <span>LIVE CRYPTO ASSET METRICS</span>
+        </div>
+        <span className="crypto-live-badge">COINGECKO API</span>
+      </div>
+      <div className="crypto-assets-grid">
+        {card.assets.map((asset, idx) => {
+          const isUp = asset.change24h >= 0;
+          return (
+            <div key={idx} className="crypto-asset-item">
+              <div className="crypto-asset-left">
+                <span className="crypto-asset-symbol">{asset.name}</span>
+                <span className="crypto-asset-price">${asset.priceUsd?.toLocaleString()}</span>
+              </div>
+              <div className={`crypto-asset-change ${isUp ? 'positive' : 'negative'}`}>
+                {isUp ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                <span>{isUp ? '+' : ''}{asset.change24h}%</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function RepoCard({ card }) {
+  if (!card) return null;
+  return (
+    <div className="visual-repo-card" onClick={() => card.url && window.open(card.url, '_blank', 'noopener,noreferrer')}>
+      <div className="repo-card-header">
+        <div className="repo-title-wrapper">
+          <Terminal size={14} className="repo-icon" />
+          <span className="repo-full-name">{card.name}</span>
+        </div>
+        <ExternalLink size={12} className="repo-ext-icon" />
+      </div>
+      <p className="repo-description">{card.description}</p>
+      <div className="repo-stats-footer">
+        <span className="repo-stat-pill"><Star size={12} /> {card.stars?.toLocaleString()}</span>
+        <span className="repo-stat-pill"><GitFork size={12} /> {card.forks?.toLocaleString()}</span>
+        <span className="repo-stat-pill lang"><span className="repo-lang-dot" /> {card.language}</span>
+      </div>
+    </div>
+  );
+}
+
+function WikiCard({ card }) {
+  if (!card) return null;
+  return (
+    <div className="visual-wiki-card" onClick={() => card.url && window.open(card.url, '_blank', 'noopener,noreferrer')}>
+      <div className="wiki-card-header">
+        <BookOpen size={14} className="wiki-badge-icon" />
+        <span>WIKIPEDIA VERIFIED BRIEF</span>
+      </div>
+      <div className="wiki-card-body">
+        {card.thumbnailUrl && (
+          <img src={card.thumbnailUrl} alt={card.title} className="wiki-thumbnail-img" />
+        )}
+        <div className="wiki-content-text">
+          <h4 className="wiki-title">{card.title}</h4>
+          <p className="wiki-extract">{card.extract}</p>
+        </div>
+      </div>
+      {card.url && (
+        <a href={card.url} target="_blank" rel="noopener noreferrer" className="wiki-read-btn" onClick={e => e.stopPropagation()}>
+          <span>Read on Wikipedia</span>
+          <ExternalLink size={12} />
+        </a>
+      )}
+    </div>
+  );
+}
+
 function App() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -1295,22 +1595,33 @@ function App() {
     });
 
     socketRef.current.on('init', (msgs) => {
-      if (Array.isArray(msgs) && msgs.length > 0) {
-        setMessages(msgs);
+      const now = Date.now();
+      const MS_24_HOURS = 24 * 60 * 60 * 1000;
+      const validMsgs = Array.isArray(msgs)
+        ? msgs.filter(m => m && (now - (m.timestamp || 0)) < MS_24_HOURS)
+        : [];
+
+      if (validMsgs.length > 0) {
+        setMessages(validMsgs);
         try {
-          localStorage.setItem('shadowtalk_cached_messages', JSON.stringify(msgs.slice(-100)));
+          localStorage.setItem('shadowtalk_cached_messages', JSON.stringify(validMsgs.slice(-100)));
         } catch (e) {}
       } else {
-        // If server sends empty array (e.g. freshly deployed before sync), fallback to cached messages
+        // If server sends empty array, fallback to cached messages, but strictly enforce 24h expiration
         try {
           const cached = localStorage.getItem('shadowtalk_cached_messages');
           if (cached) {
             const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setMessages(parsed);
-              return;
+            if (Array.isArray(parsed)) {
+              const freshCached = parsed.filter(m => m && (now - (m.timestamp || 0)) < MS_24_HOURS);
+              if (freshCached.length > 0) {
+                setMessages(freshCached);
+                localStorage.setItem('shadowtalk_cached_messages', JSON.stringify(freshCached.slice(-100)));
+                return;
+              }
             }
           }
+          localStorage.removeItem('shadowtalk_cached_messages');
         } catch (e) {}
         setMessages([]);
       }
@@ -1355,7 +1666,13 @@ function App() {
     // 24h Periodic Real-Time Chat Sync from Server
     socketRef.current.on('allMessages', (allMsgs) => {
       if (Array.isArray(allMsgs)) {
-        setMessages(allMsgs);
+        const now = Date.now();
+        const MS_24_HOURS = 24 * 60 * 60 * 1000;
+        const valid = allMsgs.filter(m => m && (now - (m.timestamp || 0)) < MS_24_HOURS);
+        setMessages(valid);
+        try {
+          localStorage.setItem('shadowtalk_cached_messages', JSON.stringify(valid.slice(-100)));
+        } catch (e) {}
       }
     });
 
@@ -3217,6 +3534,31 @@ function App() {
                             </div>
                           );
                         })()}
+
+                        {/* Rich Visual Weather Card */}
+                        {dmsg.weatherCard && (
+                          <WeatherCard card={dmsg.weatherCard} />
+                        )}
+
+                        {/* Worldwide Verified News Card */}
+                        {dmsg.newsCard && (
+                          <NewsCard card={dmsg.newsCard} />
+                        )}
+
+                        {/* Live Crypto Asset Card */}
+                        {dmsg.cryptoCard && (
+                          <CryptoCard card={dmsg.cryptoCard} />
+                        )}
+
+                        {/* GitHub Repository Card */}
+                        {dmsg.repoCard && (
+                          <RepoCard card={dmsg.repoCard} />
+                        )}
+
+                        {/* Wikipedia Brief Card */}
+                        {dmsg.wikiCard && (
+                          <WikiCard card={dmsg.wikiCard} />
+                        )}
 
                         {/* Safe Code Sandbox Output Card */}
                         {dmsg.codeExecution && (
