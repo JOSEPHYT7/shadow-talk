@@ -94,9 +94,13 @@ module.exports = function createAdminRouter(serverContext) {
         sessionToken: newToken
       });
     } else {
-      invalidateSession(sessionId);
-      recordFailedAttempt(ip, 'Voice phrase mismatch');
-      return res.status(401).json({ success: false });
+      session.voiceAttempts = (session.voiceAttempts || 0) + 1;
+      if (session.voiceAttempts >= 20) {
+        invalidateSession(sessionId);
+        recordFailedAttempt(ip, 'Voice phrase mismatch limit exceeded');
+        return res.status(401).json({ success: false, error: 'Maximum attempts exceeded' });
+      }
+      return res.status(200).json({ success: false, retry: true });
     }
   });
 

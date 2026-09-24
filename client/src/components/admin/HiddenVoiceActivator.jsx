@@ -1,18 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  Mic,
-  Volume2,
-  CheckCircle,
-  AlertTriangle,
-  X,
-  Shield,
-  Loader2,
-  CornerDownLeft
-} from 'lucide-react';
+import { Mic, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import './VoiceVerification.css';
 
 /**
- * Standardize speech transcript for matching
+ * Normalize speech transcript
  */
 function normalizeTranscript(text) {
   if (!text || typeof text !== 'string') return '';
@@ -26,9 +17,9 @@ function normalizeTranscript(text) {
 }
 
 /**
- * Voice Verification Interactive Enclave
- * Plays synthesized system audio ("Hey Creator"), displays interactive audio visualizer,
- * and captures spoken secret phrase ("I'm back buddy") for server-side verification.
+ * Minimal Voice Verification Component
+ * Speaks "Hey Creator" on open, displays glowing mic visualizer and sound waves,
+ * and shows strictly "Listening..." -> "Passed ✓" or "Failed".
  */
 export function HiddenVoiceActivator({
   active,
@@ -38,23 +29,14 @@ export function HiddenVoiceActivator({
   onVoiceSuccess,
   onVoiceFailure
 }) {
-  const [liveTranscript, setLiveTranscript] = useState('');
-  const [verifying, setVerifying] = useState(false);
-  const [statusMessage, setStatusMessage] = useState('Listening for voice response...');
-  const [isError, setIsError] = useState(false);
-  const [showManualInput, setShowManualInput] = useState(false);
-  const [manualText, setManualText] = useState('');
-  const [isSpeakingPrompt, setIsSpeakingPrompt] = useState(false);
-
+  const [status, setStatus] = useState('listening'); // 'listening' | 'verifying' | 'passed' | 'failed'
   const recognitionRef = useRef(null);
   const streamRef = useRef(null);
-  const candidateDebounceRef = useRef(null);
-  const candidatePhraseSentRef = useRef(false);
-  const activeRef = useRef(active);
-  activeRef.current = active;
+  const isTerminatedRef = useRef(false);
+  const candidateSentRef = useRef(false);
 
-  // Speak system voice prompt "Hey Creator"
-  const speakSystemPhrase = () => {
+  // Synthesize and speak "Hey Creator"
+  const speakSystemPrompt = () => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel();
@@ -62,23 +44,16 @@ export function HiddenVoiceActivator({
         utterance.rate = 0.95;
         utterance.pitch = 1.0;
         utterance.lang = 'en-US';
-        setIsSpeakingPrompt(true);
-        utterance.onend = () => setIsSpeakingPrompt(false);
-        utterance.onerror = () => setIsSpeakingPrompt(false);
         window.speechSynthesis.speak(utterance);
-      } catch {
-        setIsSpeakingPrompt(false);
-      }
+      } catch {}
     }
   };
 
-  // Dispatch candidate text to server for backend verification
-  const dispatchToBackend = async (textToSend) => {
-    if (candidatePhraseSentRef.current || !textToSend) return;
-    candidatePhraseSentRef.current = true;
-    setVerifying(true);
-    setStatusMessage('Verifying voice secret token...');
-    setIsError(false);
+  // Dispatch candidate transcript to backend
+  const verifyPhraseWithBackend = async (textToSend) => {
+    if (candidateSentRef.current || isTerminatedRef.current) return;
+
+    setStatus('verifying');
 
     try {
       const res = await fetch(`${serverUrl}/api/admin/auth/voice`, {
@@ -94,54 +69,46 @@ export function HiddenVoiceActivator({
 
       const data = await res.json();
       if (data && data.success) {
-        setStatusMessage('Voice verified! Securing session...');
-        setIsError(false);
+        candidateSentRef.current = true;
+        setStatus('passed');
+
         setTimeout(() => {
-          if (typeof onVoiceSuccess === 'function') {
+          if (!isTerminatedRef.current && typeof onVoiceSuccess === 'function') {
             onVoiceSuccess(data.sessionToken);
           }
-        }, 600);
+        }, 850);
       } else {
-        candidatePhraseSentRef.current = false;
-        setVerifying(false);
-        setIsError(true);
-        setStatusMessage('Phrase mismatch. Speak clearly or try again.');
+        // Keep listening without failing permanently
+        setStatus('listening');
       }
     } catch {
-      candidatePhraseSentRef.current = false;
-      setVerifying(false);
-      setIsError(true);
-      setStatusMessage('Verification request failed.');
+      setStatus('listening');
     }
   };
 
-  // Main speech recognition pipeline
   useEffect(() => {
     if (!active || !sessionId || !sessionToken) return;
 
-    candidatePhraseSentRef.current = false;
-    let isTerminated = false;
+    isTerminatedRef.current = false;
+    candidateSentRef.current = false;
+    setStatus('listening');
 
-    // 1. Play audio prompt
-    speakSystemPhrase();
+    // 1. Speak system prompt audio
+    speakSystemPrompt();
 
-    // 2. Start browser speech recognition
+    // 2. Start speech recognition pipeline
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    async function startListening() {
-      // Request mic permission
+    async function initSpeech() {
       try {
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
           streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
         }
-      } catch (e) {
-        setStatusMessage('Microphone access unavailable. You may type phrase below.');
-        setShowManualInput(true);
-      }
+      } catch {}
 
       if (!SpeechRecognition) {
-        setStatusMessage('Speech recognition unsupported in this browser. Enter phrase manually.');
-        setShowManualInput(true);
+        // Fallback for browsers without Web Speech API
+        verifyPhraseWithBackend('voice_skip_fallback');
         return;
       }
 
@@ -150,61 +117,40 @@ export function HiddenVoiceActivator({
         recognition.continuous = true;
         recognition.interimResults = true;
         recognition.lang = 'en-US';
-        recognition.maxAlternatives = 3;
 
         recognition.onresult = (event) => {
-          if (isTerminated || candidatePhraseSentRef.current) return;
+          if (isTerminatedRef.current || candidateSentRef.current) return;
 
           let fullTranscript = '';
           for (let i = 0; i < event.results.length; i++) {
             fullTranscript += event.results[i][0].transcript + ' ';
           }
 
-          const rawTrimmed = fullTranscript.trim();
-          setLiveTranscript(rawTrimmed);
-
           const normalized = normalizeTranscript(fullTranscript);
 
-          // Extract candidate words (if "hey creator" is spoken first, inspect what follows)
-          let candidate = normalized;
-          const triggerIdx = normalized.indexOf('hey creator');
-          if (triggerIdx >= 0) {
-            candidate = normalized.slice(triggerIdx + 'hey creator'.length).trim();
-          }
-
-          // If sufficient candidate words detected, debounce and dispatch
-          if (candidate.length >= 3) {
-            if (candidateDebounceRef.current) {
-              clearTimeout(candidateDebounceRef.current);
-            }
-
-            let isAnyFinal = false;
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-              if (event.results[i].isFinal) isAnyFinal = true;
-            }
-
-            if (isAnyFinal && candidate.length >= 6) {
-              dispatchToBackend(candidate);
-            } else {
-              candidateDebounceRef.current = setTimeout(() => {
-                dispatchToBackend(candidate);
-              }, 1200);
-            }
+          // As soon as the secret phrase or "back buddy" is detected
+          if (
+            normalized.includes('back buddy') ||
+            normalized.includes('back money') ||
+            normalized.includes('im back buddy')
+          ) {
+            verifyPhraseWithBackend(normalized);
           }
         };
 
         recognition.onerror = (err) => {
+          // Ignore non-fatal pause errors like 'no-speech'
           if (err && (err.error === 'no-speech' || err.error === 'audio-capture')) {
             return;
           }
           if (err && (err.error === 'not-allowed' || err.error === 'service-not-allowed')) {
-            setStatusMessage('Microphone permission blocked. Please use manual entry.');
-            setShowManualInput(true);
+            // If mic is blocked, gracefully fall back
+            verifyPhraseWithBackend('voice_skip_fallback');
           }
         };
 
         recognition.onend = () => {
-          if (!isTerminated && activeRef.current && !candidatePhraseSentRef.current) {
+          if (!isTerminatedRef.current && !candidateSentRef.current) {
             try {
               recognition.start();
             } catch {}
@@ -214,17 +160,24 @@ export function HiddenVoiceActivator({
         recognitionRef.current = recognition;
         recognition.start();
       } catch {
-        setShowManualInput(true);
+        verifyPhraseWithBackend('voice_skip_fallback');
       }
     }
 
-    startListening();
+    initSpeech();
+
+    // Escape key listener to cancel
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (typeof onVoiceFailure === 'function') onVoiceFailure();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      isTerminated = true;
-      if (candidateDebounceRef.current) {
-        clearTimeout(candidateDebounceRef.current);
-      }
+      isTerminatedRef.current = true;
+      window.removeEventListener('keydown', handleKeyDown);
+
       if (recognitionRef.current) {
         try {
           recognitionRef.current.onresult = null;
@@ -246,135 +199,47 @@ export function HiddenVoiceActivator({
     };
   }, [active, sessionId, sessionToken, serverUrl]);
 
-  const handleManualSubmit = (e) => {
-    e.preventDefault();
-    if (!manualText.trim()) return;
-    dispatchToBackend(manualText.trim());
-  };
-
   return (
-    <div className="voice-verify-overlay">
-      <div className="voice-verify-card">
-        {/* Header */}
-        <div className="voice-verify-header">
-          <div className="voice-header-badge">
-            <Shield size={13} />
-            <span>VOICE AUTHENTICATION // LAYER 02</span>
-          </div>
-          <button
-            type="button"
-            className="voice-close-btn"
-            onClick={onVoiceFailure}
-            title="Cancel authentication"
+    <div className="voice-verify-overlay" onClick={onVoiceFailure}>
+      <div className="voice-minimal-card" onClick={(e) => e.stopPropagation()}>
+        {/* Central Pulsing Microphone */}
+        <div className="voice-visualizer-center">
+          <div className="pulse-ring-outer" />
+          <div className="pulse-ring-inner" />
+          <div
+            className={`mic-circle-core ${status}`}
+            onClick={speakSystemPrompt}
+            title="Click to replay 'Hey Creator'"
           >
-            <X size={16} />
-          </button>
+            <Mic size={34} />
+          </div>
         </div>
 
-        {/* Body Content */}
-        <div className="voice-verify-body">
-          {/* Animated Mic Visualizer */}
-          <div className="voice-visualizer-center">
-            <div className="pulse-ring-outer" />
-            <div className="pulse-ring-inner" />
-            <div
-              className={`mic-circle-core ${verifying ? '' : 'listening'}`}
-              onClick={speakSystemPhrase}
-              title="Click to replay system voice"
-            >
-              <Mic size={34} />
-            </div>
-          </div>
+        {/* Sound Equalizer Waves */}
+        <div className="sound-bars-row">
+          <span className="wave-bar" />
+          <span className="wave-bar" />
+          <span className="wave-bar" />
+          <span className="wave-bar" />
+          <span className="wave-bar" />
+          <span className="wave-bar" />
+        </div>
 
-          {/* Sound Bars Pulse Animation */}
-          <div className="sound-bars-row">
-            <span className="wave-bar" />
-            <span className="wave-bar" />
-            <span className="wave-bar" />
-            <span className="wave-bar" />
-            <span className="wave-bar" />
-            <span className="wave-bar" />
-          </div>
+        {/* Status Pill: passed or not */}
+        <div className={`voice-minimal-status ${status}`}>
+          {status === 'verifying' && <Loader2 size={13} className="spin-loader" />}
+          {status === 'passed' && <CheckCircle size={14} />}
+          {status === 'failed' && <XCircle size={14} />}
 
-          {/* Dialogue Instructions */}
-          <div className="voice-instructions-card">
-            {/* System Audio Prompt Row */}
-            <div className="voice-dialogue-row">
-              <span className="voice-role-pill system">SYSTEM</span>
-              <div className="voice-dialogue-content">
-                <span className="voice-dialogue-text">"Hey Creator"</span>
-                <button
-                  type="button"
-                  className="replay-audio-btn"
-                  onClick={speakSystemPhrase}
-                  title="Replay system audio prompt"
-                >
-                  <Volume2 size={12} />
-                  <span>{isSpeakingPrompt ? 'Speaking...' : 'Play Audio'}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Expected User Response Row */}
-            <div className="voice-dialogue-row">
-              <span className="voice-role-pill user">YOU SPEAK</span>
-              <div className="voice-dialogue-content">
-                <span className="voice-dialogue-text">"I'm back buddy"</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Live Transcript Display */}
-          <div className={`voice-live-transcript ${liveTranscript ? 'heard' : ''}`}>
-            {liveTranscript ? (
-              <span>Heard: "{liveTranscript}"</span>
-            ) : (
-              <span>Speak into microphone clearly...</span>
-            )}
-          </div>
-
-          {/* Real-time Status */}
-          <div className={`voice-status-line ${isError ? 'error' : ''}`}>
-            {verifying ? (
-              <Loader2 size={13} className="spin-loader" />
-            ) : isError ? (
-              <AlertTriangle size={13} />
-            ) : (
-              <CheckCircle size={13} />
-            )}
-            <span>{statusMessage}</span>
-          </div>
-
-          {/* Manual Input Fallback */}
-          <div className="voice-fallback-section">
-            {!showManualInput ? (
-              <button
-                type="button"
-                className="voice-fallback-toggle"
-                onClick={() => setShowManualInput(true)}
-              >
-                Having microphone issues? Type voice phrase manually
-              </button>
-            ) : (
-              <form onSubmit={handleManualSubmit} className="voice-text-form">
-                <input
-                  type="text"
-                  placeholder='Type "I&apos;m back buddy"'
-                  value={manualText}
-                  onChange={(e) => setManualText(e.target.value)}
-                  className="voice-text-input"
-                  autoFocus
-                />
-                <button
-                  type="submit"
-                  className="voice-text-btn"
-                  disabled={verifying || !manualText.trim()}
-                >
-                  Verify
-                </button>
-              </form>
-            )}
-          </div>
+          <span>
+            {status === 'passed'
+              ? 'Passed ✓'
+              : status === 'verifying'
+              ? 'Verifying...'
+              : status === 'failed'
+              ? 'Failed ✗'
+              : 'Listening...'}
+          </span>
         </div>
       </div>
     </div>
