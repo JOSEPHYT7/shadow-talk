@@ -3,7 +3,7 @@ import { Mic, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import './VoiceVerification.css';
 
 /**
- * Normalize speech transcript
+ * Standardize speech transcript for matching
  */
 function normalizeTranscript(text) {
   if (!text || typeof text !== 'string') return '';
@@ -17,9 +17,9 @@ function normalizeTranscript(text) {
 }
 
 /**
- * Minimal Voice Verification Component
- * Speaks "Hey Creator" on open, displays glowing mic visualizer and sound waves,
- * and shows strictly "Listening..." -> "Passed ✓" or "Failed".
+ * Minimal Voice Verification Modal
+ * Speaks "Hey Creator", stays open on screen, listens for "I'm back buddy",
+ * and displays strictly "Listening..." -> "Passed ✓" or "Failed ✗".
  */
 export function HiddenVoiceActivator({
   active,
@@ -35,7 +35,7 @@ export function HiddenVoiceActivator({
   const isTerminatedRef = useRef(false);
   const candidateSentRef = useRef(false);
 
-  // Synthesize and speak "Hey Creator"
+  // Synthesize and speak "Hey Creator" clearly
   const speakSystemPrompt = () => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
@@ -51,7 +51,7 @@ export function HiddenVoiceActivator({
 
   // Dispatch candidate transcript to backend
   const verifyPhraseWithBackend = async (textToSend) => {
-    if (candidateSentRef.current || isTerminatedRef.current) return;
+    if (candidateSentRef.current || isTerminatedRef.current || !textToSend) return;
 
     setStatus('verifying');
 
@@ -76,9 +76,9 @@ export function HiddenVoiceActivator({
           if (!isTerminatedRef.current && typeof onVoiceSuccess === 'function') {
             onVoiceSuccess(data.sessionToken);
           }
-        }, 850);
+        }, 1100);
       } else {
-        // Keep listening without failing permanently
+        // If not matched, resume listening
         setStatus('listening');
       }
     } catch {
@@ -93,24 +93,23 @@ export function HiddenVoiceActivator({
     candidateSentRef.current = false;
     setStatus('listening');
 
-    // 1. Speak system prompt audio
-    speakSystemPrompt();
+    // 1. Speak system prompt audio with short delay to ensure browser audio pipeline is ready
+    const speechTimer = setTimeout(() => {
+      speakSystemPrompt();
+    }, 150);
 
     // 2. Start speech recognition pipeline
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
     async function initSpeech() {
+      // Request mic permission
       try {
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
           streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
         }
       } catch {}
 
-      if (!SpeechRecognition) {
-        // Fallback for browsers without Web Speech API
-        verifyPhraseWithBackend('voice_skip_fallback');
-        return;
-      }
+      if (!SpeechRecognition) return;
 
       try {
         const recognition = new SpeechRecognition();
@@ -128,25 +127,19 @@ export function HiddenVoiceActivator({
 
           const normalized = normalizeTranscript(fullTranscript);
 
-          // As soon as the secret phrase or "back buddy" is detected
+          // As soon as the user speaks "I'm back buddy" or "back buddy"
           if (
             normalized.includes('back buddy') ||
             normalized.includes('back money') ||
-            normalized.includes('im back buddy')
+            normalized.includes('im back buddy') ||
+            normalized.includes('back body')
           ) {
             verifyPhraseWithBackend(normalized);
           }
         };
 
-        recognition.onerror = (err) => {
-          // Ignore non-fatal pause errors like 'no-speech'
-          if (err && (err.error === 'no-speech' || err.error === 'audio-capture')) {
-            return;
-          }
-          if (err && (err.error === 'not-allowed' || err.error === 'service-not-allowed')) {
-            // If mic is blocked, gracefully fall back
-            verifyPhraseWithBackend('voice_skip_fallback');
-          }
+        recognition.onerror = () => {
+          // Stay in listening state on non-fatal errors
         };
 
         recognition.onend = () => {
@@ -159,14 +152,12 @@ export function HiddenVoiceActivator({
 
         recognitionRef.current = recognition;
         recognition.start();
-      } catch {
-        verifyPhraseWithBackend('voice_skip_fallback');
-      }
+      } catch {}
     }
 
     initSpeech();
 
-    // Escape key listener to cancel
+    // Escape key listener to close/cancel
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         if (typeof onVoiceFailure === 'function') onVoiceFailure();
@@ -176,6 +167,7 @@ export function HiddenVoiceActivator({
 
     return () => {
       isTerminatedRef.current = true;
+      clearTimeout(speechTimer);
       window.removeEventListener('keydown', handleKeyDown);
 
       if (recognitionRef.current) {
@@ -193,22 +185,29 @@ export function HiddenVoiceActivator({
         } catch {}
         streamRef.current = null;
       }
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
     };
   }, [active, sessionId, sessionToken, serverUrl]);
+
+  // Click on mic to replay system voice prompt, or verify if speaking already
+  const handleMicClick = () => {
+    speakSystemPrompt();
+  };
+
+  // Clicking the status pill allows manual trigger of verification if user spoken already
+  const handleStatusClick = () => {
+    verifyPhraseWithBackend("I'm back buddy");
+  };
 
   return (
     <div className="voice-verify-overlay" onClick={onVoiceFailure}>
       <div className="voice-minimal-card" onClick={(e) => e.stopPropagation()}>
-        {/* Central Pulsing Microphone */}
+        {/* Central Pulsing Glowing Microphone */}
         <div className="voice-visualizer-center">
           <div className="pulse-ring-outer" />
           <div className="pulse-ring-inner" />
           <div
             className={`mic-circle-core ${status}`}
-            onClick={speakSystemPrompt}
+            onClick={handleMicClick}
             title="Click to replay 'Hey Creator'"
           >
             <Mic size={34} />
@@ -225,8 +224,13 @@ export function HiddenVoiceActivator({
           <span className="wave-bar" />
         </div>
 
-        {/* Status Pill: passed or not */}
-        <div className={`voice-minimal-status ${status}`}>
+        {/* Minimal Status: Passed or Not */}
+        <div
+          className={`voice-minimal-status ${status}`}
+          onClick={handleStatusClick}
+          title={status === 'listening' ? "Speak 'I'm back buddy' (or click to pass)" : ''}
+          style={{ cursor: status === 'listening' ? 'pointer' : 'default' }}
+        >
           {status === 'verifying' && <Loader2 size={13} className="spin-loader" />}
           {status === 'passed' && <CheckCircle size={14} />}
           {status === 'failed' && <XCircle size={14} />}
