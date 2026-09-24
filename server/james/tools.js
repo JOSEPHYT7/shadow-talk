@@ -153,18 +153,18 @@ class ToolRegistry {
         type: 'function',
         function: {
           name: 'get_world_news',
-          description: 'Collect and broadcast the latest verified worldwide news and hot/viral breaking stories across categories (VIRAL, GEOPOLITICS, TECH, HEALTHCARE, SCIENCE, FINANCE, WORLD) with interactive community debate polls. Use whenever asked about latest news, hot topics, viral news, current affairs, debates, Russia-Ukraine war, tech breakthroughs, or what is happening in the world.',
+          description: 'Collect and broadcast the latest verified worldwide news, hot/viral breaking stories, and real-time dispatches from X / Twitter across categories (VIRAL, X_PLATFORM, GEOPOLITICS, TECH, HEALTHCARE, SCIENCE, FINANCE, WORLD) with interactive community debate polls. Use whenever asked about latest news, hot topics, viral news, Twitter/X posts, current affairs, debates, Russia-Ukraine war, tech breakthroughs, or what is happening in the world.',
           parameters: {
             type: 'object',
             properties: {
               category: {
                 type: 'string',
-                enum: ['viral', 'geopolitics', 'tech', 'healthcare', 'science', 'finance', 'world'],
-                description: 'The news category to retrieve. Default is "viral" for top breaking/trending stories worldwide.'
+                enum: ['viral', 'x_platform', 'geopolitics', 'tech', 'healthcare', 'science', 'finance', 'world'],
+                description: 'The news category to retrieve. Options: "viral" (top global headlines), "x_platform" (breaking dispatches from X/Twitter), "geopolitics", "tech", "healthcare", "science", "finance", "world".'
               },
               topic: {
                 type: 'string',
-                description: 'Optional specific topic or keyword (e.g. "Ukraine", "AI models", "Trump Xi summit", "cancer research").'
+                description: 'Optional specific topic or keyword (e.g. "Ukraine", "AI models", "Trump Xi summit", "cancer research", "OpenAI").'
               }
             }
           }

@@ -1,5 +1,5 @@
 {
-  "updatedAt": 1790257174749,
+  "updatedAt": 1790259634652,
   "summary": "",
   "topics": [],
   "welcomedUsers": [
@@ -13,15 +13,22 @@
     "usr_bupie4fm0"
   ],
   "lastReturnGreetTime": {},
+  "dailyNewsStats": {
+    "date": "2026-09-24",
+    "count": 0,
+    "targetToday": 9,
+    "lastSentTime": 0,
+    "lastCategory": null
+  },
   "users": [
     {
       "key": "uid:usr_78qzmjll4",
       "userId": "usr_78qzmjll4",
       "alias": "joseph",
-      "count": 104,
+      "count": 105,
       "notes": [],
       "topics": [],
-      "lastSeen": 1790257172748
+      "lastSeen": 1790259632649
     },
     {
       "key": "uid:usr_2i4zg49q8",

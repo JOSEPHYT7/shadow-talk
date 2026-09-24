@@ -1073,42 +1073,76 @@ function WeatherCard({ card }) {
   );
 }
 
+function XPlatformLogo({ size = 11, className = '', style = {} }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
+    >
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+    </svg>
+  );
+}
+
 function NewsCard({ card }) {
   if (!card) return null;
 
-  const categoryColor = card.color || '#00f3ff';
-  const categoryTag = card.categoryTag || `[${card.category || 'NEWS'}]`;
-  const imageList = Array.isArray(card.images) && card.images.length > 0
+  const isXPlatform =
+    card.category === 'X WIRE' ||
+    (typeof card.categoryTag === 'string' && card.categoryTag.toLowerCase().includes('x')) ||
+    (typeof card.source === 'string' && (card.source.toLowerCase().includes('x.com') || card.source.toLowerCase().includes('x platform') || card.source.toLowerCase().includes('twitter'))) ||
+    (typeof card.sourceUrl === 'string' && (card.sourceUrl.toLowerCase().includes('x.com') || card.sourceUrl.toLowerCase().includes('twitter.com')));
+
+  const categoryColor = isXPlatform ? '#1d9bf0' : (card.color || '#00f3ff');
+  const categoryTag = card.categoryTag || (isXPlatform ? '[DISPATCH VIA X]' : `[${card.category || 'NEWS'}]`);
+
+  // Robustly extract valid related images only
+  const rawImages = (Array.isArray(card.images) && card.images.length > 0)
     ? card.images
     : (card.imageUrl ? [card.imageUrl] : []);
 
+  const [failedImages, setFailedImages] = useState(new Set());
+  const validImages = rawImages.filter(img => typeof img === 'string' && img.trim().length > 0 && !failedImages.has(img));
+
   const [activeImageIdx, setActiveImageIdx] = useState(0);
 
+  const handleImageError = (imgUrl) => {
+    setFailedImages(prev => new Set([...prev, imgUrl]));
+  };
+
   return (
-    <div className="visual-news-card" style={{ '--news-accent': categoryColor }}>
+    <div className={`visual-news-card ${isXPlatform ? 'x-platform-news' : ''}`} style={{ '--news-accent': categoryColor }}>
       {/* Category & Publisher Header Row */}
       <div className="news-card-header">
         <div className="news-category-badge" style={{ borderColor: categoryColor, color: categoryColor }}>
-          <Radio size={11} className="news-pulse-icon" />
+          {isXPlatform ? <XPlatformLogo size={11} className="news-pulse-icon" /> : <Radio size={11} className="news-pulse-icon" />}
           <span>{categoryTag}</span>
         </div>
         <div className="news-verified-source">
-          <ShieldCheck size={13} className="news-shield-icon" />
-          <span className="news-source-name">{card.source || 'Verified Wire'}</span>
+          {isXPlatform ? (
+            <XPlatformLogo size={12} style={{ color: '#1d9bf0' }} />
+          ) : (
+            <ShieldCheck size={13} className="news-shield-icon" />
+          )}
+          <span className="news-source-name">{card.source || (isXPlatform ? 'X Platform (@x.com)' : 'Verified Wire')}</span>
           <span className="news-time-ago">&bull; {card.publishedAt || 'Recent'}</span>
         </div>
       </div>
 
       {/* Strategic Impact Tag if available */}
       {card.impact && (
-        <div className="news-impact-strip">
-          <Zap size={11} className="news-impact-icon" />
+        <div className="news-impact-strip" style={isXPlatform ? { background: 'rgba(29, 155, 240, 0.08)', color: '#38bdf8', borderColor: 'rgba(29, 155, 240, 0.2)' } : undefined}>
+          <Zap size={11} className="news-impact-icon" style={isXPlatform ? { color: '#38bdf8' } : undefined} />
           <span>{card.impact}</span>
         </div>
       )}
 
-      {/* Visual Gallery: 1 Hero Image OR 3-4 Multi-Image Gallery */}
-      {imageList.length > 0 && (
+      {/* Visual Gallery: ONLY rendered if authentic related images exist */}
+      {validImages.length > 0 && (
         <div className="news-gallery-container">
           {/* Main Active Image */}
           <div
@@ -1116,28 +1150,28 @@ function NewsCard({ card }) {
             onClick={() => card.sourceUrl && window.open(card.sourceUrl, '_blank', 'noopener,noreferrer')}
           >
             <img
-              src={imageList[activeImageIdx] || imageList[0]}
+              src={validImages[activeImageIdx] || validImages[0]}
               alt={card.headline}
               className="news-cover-img"
               loading="lazy"
-              onError={(e) => { e.target.style.display = 'none'; }}
+              onError={() => handleImageError(validImages[activeImageIdx] || validImages[0])}
             />
             <div className="news-image-overlay" />
             <div className="news-badge-cluster">
-              <span className="news-live-tag">VERIFIED WIRE</span>
-              {imageList.length > 1 && (
+              <span className="news-live-tag">{isXPlatform ? 'X VERIFIED POST' : 'VERIFIED WIRE'}</span>
+              {validImages.length > 1 && (
                 <span className="news-gallery-count-tag">
                   <Camera size={11} />
-                  <span>{imageList.length} Photos</span>
+                  <span>{validImages.length} Photos</span>
                 </span>
               )}
             </div>
           </div>
 
           {/* Multi-Image Thumbnails Bar (if 2, 3, or 4 images) */}
-          {imageList.length > 1 && (
+          {validImages.length > 1 && (
             <div className="news-thumbnails-row">
-              {imageList.map((img, idx) => (
+              {validImages.map((img, idx) => (
                 <div
                   key={idx}
                   className={`news-thumb-pill ${activeImageIdx === idx ? 'active' : ''}`}
@@ -1146,7 +1180,12 @@ function NewsCard({ card }) {
                     setActiveImageIdx(idx);
                   }}
                 >
-                  <img src={img} alt={`Angle ${idx + 1}`} className="news-thumb-img" />
+                  <img
+                    src={img}
+                    alt={`Angle ${idx + 1}`}
+                    className="news-thumb-img"
+                    onError={() => handleImageError(img)}
+                  />
                 </div>
               ))}
             </div>
@@ -1154,12 +1193,12 @@ function NewsCard({ card }) {
         </div>
       )}
 
-      {/* Embedded Video Player if Video Available */}
-      {card.videoUrl && (
+      {/* Embedded Video Player: ONLY rendered if authentic related video exists */}
+      {card.videoUrl && typeof card.videoUrl === 'string' && card.videoUrl.trim().length > 0 && (
         <div className="news-video-container">
           <div className="news-video-label">
             <Video size={12} className="news-video-icon" />
-            <span>LIVE VIDEO WIRE BROADCAST</span>
+            <span>{isXPlatform ? 'X VIDEO CLIP TRANSMISSION' : 'LIVE VIDEO WIRE BROADCAST'}</span>
           </div>
           <div className="news-video-frame">
             <video
@@ -1167,7 +1206,7 @@ function NewsCard({ card }) {
               controls
               playsInline
               preload="metadata"
-              poster={imageList[0] || card.imageUrl}
+              poster={validImages.length > 0 ? validImages[0] : undefined}
               className="news-video-player"
             />
           </div>
@@ -1182,10 +1221,10 @@ function NewsCard({ card }) {
 
         {/* Key Takeaway Pill */}
         {card.takeaway && (
-          <div className="news-takeaway-box">
+          <div className="news-takeaway-box" style={isXPlatform ? { borderColor: 'rgba(29, 155, 240, 0.25)', background: 'rgba(29, 155, 240, 0.05)' } : undefined}>
             <div className="takeaway-header">
-              <Flame size={12} className="takeaway-flame-icon" />
-              <span>CORE TRANSMISSION</span>
+              <Flame size={12} className="takeaway-flame-icon" style={isXPlatform ? { color: '#38bdf8' } : undefined} />
+              <span style={isXPlatform ? { color: '#38bdf8' } : undefined}>{isXPlatform ? 'DISPATCH HIGHLIGHT' : 'CORE TRANSMISSION'}</span>
             </div>
             <p className="takeaway-text">{card.takeaway}</p>
           </div>
@@ -1201,7 +1240,7 @@ function NewsCard({ card }) {
           <div className="news-bullets-list">
             {card.bullets.map((b, bIdx) => (
               <div key={bIdx} className="news-bullet-item">
-                <span className="bullet-dot">&#9670;</span>
+                <span className="bullet-dot" style={isXPlatform ? { color: '#1d9bf0' } : undefined}>&#9670;</span>
                 <span className="bullet-text">{b}</span>
               </div>
             ))}
@@ -1217,10 +1256,21 @@ function NewsCard({ card }) {
             target="_blank"
             rel="noopener noreferrer"
             className="news-dispatch-btn"
+            style={isXPlatform ? { borderColor: 'rgba(29, 155, 240, 0.35)', background: 'rgba(29, 155, 240, 0.08)', color: '#38bdf8' } : undefined}
             onClick={(e) => e.stopPropagation()}
           >
-            <span>Read Verified Dispatch</span>
-            <ExternalLink size={13} />
+            {isXPlatform ? (
+              <>
+                <XPlatformLogo size={12} />
+                <span>View Dispatch on X</span>
+                <ExternalLink size={12} style={{ marginLeft: 3 }} />
+              </>
+            ) : (
+              <>
+                <span>Read Verified Dispatch</span>
+                <ExternalLink size={13} />
+              </>
+            )}
           </a>
         </div>
       )}

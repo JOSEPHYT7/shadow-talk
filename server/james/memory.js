@@ -74,7 +74,7 @@ class MemoryService {
   }
 
   pickNextDailyNewsCategory() {
-    const allCategories = ['viral', 'geopolitics', 'tech', 'healthcare', 'science', 'finance', 'world'];
+    const allCategories = ['viral', 'x_platform', 'geopolitics', 'tech', 'healthcare', 'science', 'finance', 'world'];
     const candidates = allCategories.filter(c => c !== this.dailyNewsStats.lastCategory);
     return candidates[Math.floor(Math.random() * candidates.length)] || 'viral';
   }
