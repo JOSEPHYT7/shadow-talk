@@ -3507,7 +3507,28 @@ function App() {
                           const seen = new Set();
                           const uniqueSources = [];
                           for (const s of dmsg.sources) {
-                            const d = (s.domain || '').replace(/^https?:\/\//, '').split('/')[0].replace(/^www\./, '').toLowerCase().trim();
+                            let d = (s.domain || '').replace(/^https?:\/\//, '').split('/')[0].replace(/^www\./, '').toLowerCase().trim();
+                            // If s.url has a valid hostname, prefer it
+                            if (s.url) {
+                              try {
+                                const parsedHost = new URL(s.url.startsWith('http') ? s.url : `https://${s.url}`).hostname.replace(/^www\./, '').toLowerCase().trim();
+                                if (parsedHost && parsedHost.includes('.')) {
+                                  d = parsedHost;
+                                }
+                              } catch (e) {}
+                            }
+                            // Map well-known publisher abbreviations to actual FQDN
+                            if (!d.includes('.')) {
+                              const cleanName = d.toLowerCase();
+                              if (cleanName.includes('bbc')) d = 'bbc.com';
+                              else if (cleanName.includes('reuters')) d = 'reuters.com';
+                              else if (cleanName.includes('ap') || cleanName.includes('associated')) d = 'apnews.com';
+                              else if (cleanName.includes('washington') || cleanName.includes('wapo')) d = 'washingtonpost.com';
+                              else if (cleanName.includes('times') || cleanName.includes('nyt')) d = 'nytimes.com';
+                              else if (cleanName.includes('cnn')) d = 'cnn.com';
+                              else if (cleanName.includes('politico')) d = 'politico.com';
+                              else if (cleanName.includes('twitter') || cleanName === 'x') d = 'x.com';
+                            }
                             if (d && !seen.has(d)) {
                               seen.add(d);
                               uniqueSources.push({ ...s, domain: d });
@@ -3526,32 +3547,37 @@ function App() {
                                 title="Click to browse visited sites"
                               >
                                 <div className="chat-sources-favicons-cluster">
-                                  {uniqueSources.slice(0, 4).map((src, sIdx) => (
-                                    <a
-                                      key={sIdx}
-                                      href={src.url || `https://${src.domain}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="source-circle-avatar clickable"
-                                      title={`Visit ${src.domain}: ${src.title || src.url}`}
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <img
-                                        src={`https://www.google.com/s2/favicons?domain=${src.domain}&sz=64`}
-                                        alt=""
-                                        className="source-circle-img"
-                                        onError={(e) => {
-                                          e.target.style.display = 'none';
-                                          if (e.target.nextElementSibling) {
-                                            e.target.nextElementSibling.style.display = 'flex';
-                                          }
-                                        }}
-                                      />
-                                      <span className="source-fallback-letter" style={{ display: 'none' }}>
-                                        {(src.domain || '?')[0].toUpperCase()}
-                                      </span>
-                                    </a>
-                                  ))}
+                                  {uniqueSources.slice(0, 4).map((src, sIdx) => {
+                                    const hasValidDomain = src.domain && src.domain.includes('.');
+                                    return (
+                                      <a
+                                        key={sIdx}
+                                        href={src.url || `https://${src.domain}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="source-circle-avatar clickable"
+                                        title={`Visit ${src.domain}: ${src.title || src.url}`}
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        {hasValidDomain ? (
+                                          <img
+                                            src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(src.domain)}&sz=64`}
+                                            alt=""
+                                            className="source-circle-img"
+                                            onError={(e) => {
+                                              e.target.style.display = 'none';
+                                              if (e.target.nextElementSibling) {
+                                                e.target.nextElementSibling.style.display = 'flex';
+                                              }
+                                            }}
+                                          />
+                                        ) : null}
+                                        <span className="source-fallback-letter" style={hasValidDomain ? { display: 'none' } : { display: 'flex' }}>
+                                          {(src.domain || '?')[0].toUpperCase()}
+                                        </span>
+                                      </a>
+                                    );
+                                  })}
                                 </div>
                                 <span className="chat-sources-count-label">
                                   Searched {uniqueSources.length} {uniqueSources.length === 1 ? 'site' : 'sites'}
@@ -3580,35 +3606,40 @@ function App() {
                                     </button>
                                   </div>
                                   <div className="popover-sources-list">
-                                    {uniqueSources.map((src, sIdx) => (
-                                      <a
-                                        key={sIdx}
-                                        href={src.url || `https://${src.domain}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="popover-source-item"
-                                      >
-                                        <span className="source-circle-avatar mini">
-                                          <img
-                                            src={`https://www.google.com/s2/favicons?domain=${src.domain}&sz=64`}
-                                            alt=""
-                                            className="source-circle-img"
-                                            onError={(e) => {
-                                              e.target.style.display = 'none';
-                                              if (e.target.nextElementSibling) e.target.nextElementSibling.style.display = 'flex';
-                                            }}
-                                          />
-                                          <span className="source-fallback-letter" style={{ display: 'none' }}>
-                                            {(src.domain || '?')[0].toUpperCase()}
+                                    {uniqueSources.map((src, sIdx) => {
+                                      const hasValidDomain = src.domain && src.domain.includes('.');
+                                      return (
+                                        <a
+                                          key={sIdx}
+                                          href={src.url || `https://${src.domain}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="popover-source-item"
+                                        >
+                                          <span className="source-circle-avatar mini">
+                                            {hasValidDomain ? (
+                                              <img
+                                                src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(src.domain)}&sz=64`}
+                                                alt=""
+                                                className="source-circle-img"
+                                                onError={(e) => {
+                                                  e.target.style.display = 'none';
+                                                  if (e.target.nextElementSibling) e.target.nextElementSibling.style.display = 'flex';
+                                                }}
+                                              />
+                                            ) : null}
+                                            <span className="source-fallback-letter" style={hasValidDomain ? { display: 'none' } : { display: 'flex' }}>
+                                              {(src.domain || '?')[0].toUpperCase()}
+                                            </span>
                                           </span>
-                                        </span>
-                                        <div className="popover-source-info">
-                                          <span className="popover-source-domain">{src.domain}</span>
-                                          <span className="popover-source-title">{src.title || src.snippet || src.url}</span>
-                                        </div>
-                                        <ExternalLink size={12} className="popover-external-icon" />
-                                      </a>
-                                    ))}
+                                          <div className="popover-source-info">
+                                            <span className="popover-source-domain">{src.domain}</span>
+                                            <span className="popover-source-title">{src.title || src.snippet || src.url}</span>
+                                          </div>
+                                          <ExternalLink size={12} className="popover-external-icon" />
+                                        </a>
+                                      );
+                                    })}
                                   </div>
                                 </div>
                               )}

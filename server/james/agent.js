@@ -1033,10 +1033,19 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
 
         const msgText = `🔥 **VIRAL WORLD DISPATCH**: ${card.categoryTag}\n### ${card.headline}\n\n${card.summary}${debatePrompt}`;
 
+        let sourceDomain = 'news.google.com';
+        if (card.sourceUrl) {
+          try {
+            sourceDomain = new URL(card.sourceUrl).hostname.replace(/^www\./, '');
+          } catch (e) {}
+        } else if (card.source && card.source.includes('.')) {
+          sourceDomain = card.source.replace(/^@/, '').toLowerCase().trim();
+        }
+
         this.broadcastMessage(msgText, null, [{
           title: card.source,
           url: card.sourceUrl,
-          domain: card.source
+          domain: sourceDomain
         }], {
           newsCard: card,
           poll: debatePoll,

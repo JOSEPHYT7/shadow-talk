@@ -354,24 +354,62 @@ class NewsService {
       let summary = '';
       const descMatch = itemBlock.match(/<description>([\s\S]*?)<\/description>/i);
       if (descMatch) {
-        const cleanDesc = descMatch[1]
-          .replace(/<!\[CDATA\[(.*?)\]\]>/gi, '$1')
+        let rawDesc = descMatch[1]
+          .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, '$1')
           .replace(/&lt;/g, '<')
           .replace(/&gt;/g, '>')
           .replace(/&quot;/g, '"')
           .replace(/&#39;/g, "'")
           .replace(/&amp;/g, '&')
-          .replace(/&nbsp;/gi, ' ')
-          .replace(/<[^>]+>/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-        if (cleanDesc && cleanDesc.length > 15) {
-          summary = cleanDesc.slice(0, 240) + (cleanDesc.length > 240 ? '...' : '');
+          .replace(/&nbsp;/gi, ' ');
+
+        // If Google News list format (<ol><li>...</li></ol>)
+        if (rawDesc.includes('<li') || rawDesc.includes('<ol')) {
+          const liItems = [];
+          const liRegex = /<li[^>]*>([\s\S]*?)<\/li>/gi;
+          let liM;
+          while ((liM = liRegex.exec(rawDesc)) !== null) {
+            const liContent = liM[1];
+            // Extract publisher name from <font> or domain
+            const pubMatch = liContent.match(/<font[^>]*>(.*?)<\/font>/i);
+            const pubName = pubMatch ? pubMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+            // Extract headline
+            const aMatch = liContent.match(/<a[^>]*>(.*?)<\/a>/i);
+            const headText = aMatch ? aMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+            if (headText) {
+              liItems.push({ headline: headText, publisher: pubName });
+            }
+          }
+
+          if (liItems.length > 0) {
+            const pubList = [...new Set(liItems.map(it => it.publisher).filter(Boolean))];
+            const pubStr = pubList.length > 1
+              ? `${pubList.slice(0, 3).join(', ')} and other wire services`
+              : (pubList[0] || source);
+
+            // Find a secondary angle that adds genuine context beyond re-stating the headline
+            const candidateStory = liItems.find(it => it.headline && !title.toLowerCase().includes(it.headline.toLowerCase().slice(0, 25))) || liItems[0];
+            if (candidateStory && candidateStory.headline) {
+              summary = `${candidateStory.headline}. Developing coverage corroborated across reporting from ${pubStr}.`;
+            } else {
+              summary = `High-impact developments corroborated across international coverage reported by ${pubStr}.`;
+            }
+          }
+        } else {
+          // Standard article snippet / clean text
+          const cleanDesc = rawDesc
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+          if (cleanDesc && cleanDesc.length > 15) {
+            summary = cleanDesc.slice(0, 240) + (cleanDesc.length > 240 ? '...' : '');
+          }
         }
       }
+
       if (!summary) {
         summary = isXPlatform
-          ? `Breaking real-time dispatch reported live on X (${source}).`
+          ? `Real-time public transmission breaking on X platform reported live by ${source}.`
           : `Verified global report on recent developments in ${categoryMeta.name.toLowerCase()} confirmed via ${source}.`;
       }
 
