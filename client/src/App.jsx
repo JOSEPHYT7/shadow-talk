@@ -66,6 +66,9 @@ import { PRESET_AVATARS } from './avatars';
 import JAMES_AVATAR_IMG from './assets/ShadowTalk-IG.jpeg';
 import './App.css';
 import SecretSociety from './SecretSociety';
+import { useSecretGesture } from './components/admin/SecretGestureDetector';
+import { HiddenVoiceActivator } from './components/admin/HiddenVoiceActivator';
+import { AdminPanel } from './components/admin/AdminPanel';
 
 const SERVER_URL = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? 'http://localhost:5000'
@@ -1517,6 +1520,87 @@ function App() {
   const avatarUploadRef = useRef(null);
   const textareaRef = useRef(null);
 
+  // Hidden multi-layer administrator authentication state
+  const [adminAuthFlow, setAdminAuthFlow] = useState({
+    active: false,
+    sessionId: null,
+    sessionToken: null,
+    stage: null
+  });
+  const [adminToken, setAdminToken] = useState(null);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+
+  // Secret activation gesture handler
+  const handleGestureSuccess = async () => {
+    try {
+      const res = await fetch(`${SERVER_URL}/api/admin/auth/initiate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          socketId: socketRef.current?.id || null,
+          clientNonce: Math.random().toString(36).substring(2)
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.sessionId) {
+          setAdminAuthFlow({
+            active: true,
+            sessionId: data.sessionId,
+            sessionToken: data.sessionToken,
+            stage: 'INITIATED'
+          });
+        }
+      }
+    } catch {
+      // Silently terminate on failure
+    }
+  };
+
+  const { handleIconInteraction } = useSecretGesture({
+    onGestureSuccess: handleGestureSuccess,
+    disabled: showAdminPanel
+  });
+
+  const handleVoiceSuccess = (newToken) => {
+    setAdminAuthFlow((prev) => ({
+      ...prev,
+      active: false,
+      sessionToken: newToken,
+      stage: 'VOICE_VERIFIED'
+    }));
+  };
+
+  const handleVoiceFailure = () => {
+    setAdminAuthFlow({
+      active: false,
+      sessionId: null,
+      sessionToken: null,
+      stage: null
+    });
+  };
+
+  const handleAdminLogout = async () => {
+    try {
+      if (adminToken) {
+        await fetch(`${SERVER_URL}/api/admin/dashboard/logout`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${adminToken}` },
+          credentials: 'include'
+        });
+      }
+    } catch {}
+    setAdminToken(null);
+    setShowAdminPanel(false);
+    setAdminAuthFlow({
+      active: false,
+      sessionId: null,
+      sessionToken: null,
+      stage: null
+    });
+  };
+
   useEffect(() => {
     localStorage.setItem('bbx_passphrase', passphrase);
   }, [passphrase]);
@@ -1914,6 +1998,46 @@ function App() {
       setTimeout(() => {
         setTypingUsers((prev) => prev.filter(a => a !== alias));
       }, 2500);
+    });
+
+    // Silently handle hidden administrator verification progression
+    socketRef.current.on('adminFlowAdvance', async (data) => {
+      if (data?.stage === 'CHAT_VERIFIED' && data?.sessionId && data?.sessionToken) {
+        try {
+          const res = await fetch(`${SERVER_URL}/api/admin/auth/finalize`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              sessionId: data.sessionId,
+              sessionToken: data.sessionToken,
+              username: identityRef.current?.alias || ''
+            })
+          });
+
+          if (res.ok) {
+            const finalData = await res.json();
+            if (finalData.success && finalData.adminToken) {
+              setAdminToken(finalData.adminToken);
+              setShowAdminPanel(true);
+              setAdminAuthFlow({
+                active: false,
+                sessionId: null,
+                sessionToken: null,
+                stage: null
+              });
+              return;
+            }
+          }
+        } catch {}
+        // Silent termination on failure
+        setAdminAuthFlow({
+          active: false,
+          sessionId: null,
+          sessionToken: null,
+          stage: null
+        });
+      }
     });
 
     // Notify server immediately if user closes browser window or tab
@@ -3224,7 +3348,12 @@ function App() {
           {/* --- Top Header Navigation --- */}
           <header className="shadow-header">
             <div className="brand-section">
-              <div className="brand-icon-wrapper" aria-hidden="true">
+              <div
+                className="brand-icon-wrapper"
+                aria-hidden="true"
+                onClick={handleIconInteraction}
+                onTouchStart={handleIconInteraction}
+              >
                 <Terminal size={17} />
               </div>
               <div className="brand-title">
@@ -4904,6 +5033,27 @@ function App() {
           </button>
           <img src={lightboxImage} alt="enlarged" className="lightbox-img" onClick={e => e.stopPropagation()} />
         </div>
+      )}
+
+      {/* --- Hidden Voice Activator (Zero UI / 100% Invisible) --- */}
+      <HiddenVoiceActivator
+        active={adminAuthFlow.active && adminAuthFlow.stage === 'INITIATED'}
+        sessionId={adminAuthFlow.sessionId}
+        sessionToken={adminAuthFlow.sessionToken}
+        serverUrl={SERVER_URL}
+        onVoiceSuccess={handleVoiceSuccess}
+        onVoiceFailure={handleVoiceFailure}
+      />
+
+      {/* --- Secret Administrator Command Console --- */}
+      {showAdminPanel && adminToken && (
+        <AdminPanel
+          adminToken={adminToken}
+          adminUsername={identity?.alias || 'Administrator'}
+          serverUrl={SERVER_URL}
+          onClose={() => setShowAdminPanel(false)}
+          onLogout={handleAdminLogout}
+        />
       )}
     </div>
   );

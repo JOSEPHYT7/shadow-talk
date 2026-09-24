@@ -80,7 +80,7 @@
   color: var(--accent-cyan);
   box-shadow: 0 0 10px var(--accent-cyan-glow);
   flex-shrink: 0;
-  pointer-events: none;
+  pointer-events: auto;
   cursor: default;
   user-select: none;
 }
