@@ -999,9 +999,23 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
 
   async broadcastPeriodicWorldNews(forceCategory = null) {
     try {
-      // Prioritize viral breaking topics and rotate through key categories
-      const categories = ['viral', 'geopolitics', 'tech', 'viral', 'healthcare', 'finance'];
-      const cat = forceCategory || categories[Math.floor(Math.random() * categories.length)];
+      // Condition 1: Must only send spontaneously if there are MORE than 5 members in the room
+      const activeMembers = typeof this.getUserCount === 'function' ? this.getUserCount() : 0;
+      if (!forceCategory && activeMembers <= 5) {
+        console.log(`[JamesAgent]: Periodic news skipped: ${activeMembers} members online (requires > 5 members).`);
+        return false;
+      }
+
+      // Condition 2: Daily limit of 5 to 10 news per day distributed across random categories
+      if (!forceCategory && this.memoryService && typeof this.memoryService.canSendDailyNews === 'function') {
+        if (!this.memoryService.canSendDailyNews()) {
+          console.log('[JamesAgent]: Daily news quota reached (5-10/day) or cooldown active.');
+          return false;
+        }
+      }
+
+      // Pick next category randomly, rotating between viral, geopolitics, tech, healthcare, science, finance, world
+      const cat = forceCategory || (this.memoryService?.pickNextDailyNewsCategory ? this.memoryService.pickNextDailyNewsCategory() : 'viral');
       const res = await this.toolRegistry.freeTools.getVerifiedNews(cat);
       if (res && res.newsCard) {
         const card = res.newsCard;
@@ -1028,6 +1042,12 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
           poll: debatePoll,
           fileType: 'application/x-news-card'
         });
+
+        // Record dispatch count for daily 5-10 quota
+        if (this.memoryService && typeof this.memoryService.recordNewsSent === 'function') {
+          this.memoryService.recordNewsSent(cat);
+        }
+
         console.log(`[JamesAgent]: Broadcasted verified hot news & debate poll: ${card.categoryTag} - ${card.headline.slice(0, 45)}...`);
         return true;
       }
@@ -1041,21 +1061,12 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
     const CHECK_INTERVAL = 15 * 60 * 1000; // Check every 15 minutes
     let counter = 0;
 
-    // Trigger an initial viral news dispatch 35 seconds after startup if users are online
-    setTimeout(() => {
-      try {
-        if (this.getUserCount() >= 1) {
-          this.broadcastPeriodicWorldNews('viral');
-        }
-      } catch (e) {}
-    }, 35000);
-
     this.spontaneousTimer = setInterval(async () => {
       counter++;
       if (this.socialAwareness.canInitiateSpontaneous()) {
         const state = this.socialAwareness.getSocialState();
 
-        // Every 2 cycles (approx every 30 minutes), broadcast hot viral news and launch an interactive debate
+        // Check for periodic world news broadcast (strictly enforces >5 members and 5-10 per day limit)
         if (counter % 2 === 0) {
           const newsBroadcasted = await this.broadcastPeriodicWorldNews();
           if (newsBroadcasted) return;

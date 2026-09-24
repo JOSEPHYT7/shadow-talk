@@ -56,7 +56,11 @@ import {
   Star,
   BookOpen,
   Newspaper,
-  Radio
+  Radio,
+  Video,
+  Layers,
+  Flame,
+  Zap
 } from 'lucide-react';
 import { PRESET_AVATARS } from './avatars';
 import JAMES_AVATAR_IMG from './assets/ShadowTalk-IG.jpeg';
@@ -1074,6 +1078,11 @@ function NewsCard({ card }) {
 
   const categoryColor = card.color || '#00f3ff';
   const categoryTag = card.categoryTag || `[${card.category || 'NEWS'}]`;
+  const imageList = Array.isArray(card.images) && card.images.length > 0
+    ? card.images
+    : (card.imageUrl ? [card.imageUrl] : []);
+
+  const [activeImageIdx, setActiveImageIdx] = useState(0);
 
   return (
     <div className="visual-news-card" style={{ '--news-accent': categoryColor }}>
@@ -1090,30 +1099,113 @@ function NewsCard({ card }) {
         </div>
       </div>
 
-      {/* High-Impact Visual News Cover */}
-      {card.imageUrl && (
-        <div className="news-image-frame" onClick={() => card.sourceUrl && window.open(card.sourceUrl, '_blank', 'noopener,noreferrer')}>
-          <img
-            src={card.imageUrl}
-            alt={card.headline}
-            className="news-cover-img"
-            loading="lazy"
-            onError={(e) => {
-              e.target.style.display = 'none';
-            }}
-          />
-          <div className="news-image-overlay" />
-          <span className="news-live-tag">VERIFIED DISPATCH</span>
+      {/* Strategic Impact Tag if available */}
+      {card.impact && (
+        <div className="news-impact-strip">
+          <Zap size={11} className="news-impact-icon" />
+          <span>{card.impact}</span>
         </div>
       )}
 
-      {/* News Content */}
+      {/* Visual Gallery: 1 Hero Image OR 3-4 Multi-Image Gallery */}
+      {imageList.length > 0 && (
+        <div className="news-gallery-container">
+          {/* Main Active Image */}
+          <div
+            className="news-image-frame"
+            onClick={() => card.sourceUrl && window.open(card.sourceUrl, '_blank', 'noopener,noreferrer')}
+          >
+            <img
+              src={imageList[activeImageIdx] || imageList[0]}
+              alt={card.headline}
+              className="news-cover-img"
+              loading="lazy"
+              onError={(e) => { e.target.style.display = 'none'; }}
+            />
+            <div className="news-image-overlay" />
+            <div className="news-badge-cluster">
+              <span className="news-live-tag">VERIFIED WIRE</span>
+              {imageList.length > 1 && (
+                <span className="news-gallery-count-tag">
+                  <Camera size={11} />
+                  <span>{imageList.length} Photos</span>
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Multi-Image Thumbnails Bar (if 2, 3, or 4 images) */}
+          {imageList.length > 1 && (
+            <div className="news-thumbnails-row">
+              {imageList.map((img, idx) => (
+                <div
+                  key={idx}
+                  className={`news-thumb-pill ${activeImageIdx === idx ? 'active' : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveImageIdx(idx);
+                  }}
+                >
+                  <img src={img} alt={`Angle ${idx + 1}`} className="news-thumb-img" />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Embedded Video Player if Video Available */}
+      {card.videoUrl && (
+        <div className="news-video-container">
+          <div className="news-video-label">
+            <Video size={12} className="news-video-icon" />
+            <span>LIVE VIDEO WIRE BROADCAST</span>
+          </div>
+          <div className="news-video-frame">
+            <video
+              src={card.videoUrl}
+              controls
+              playsInline
+              preload="metadata"
+              poster={imageList[0] || card.imageUrl}
+              className="news-video-player"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Editorial Content Body */}
       <div className="news-content-body">
         <h4 className="news-headline-text" onClick={() => card.sourceUrl && window.open(card.sourceUrl, '_blank', 'noopener,noreferrer')}>
           {card.headline}
         </h4>
+
+        {/* Key Takeaway Pill */}
+        {card.takeaway && (
+          <div className="news-takeaway-box">
+            <div className="takeaway-header">
+              <Flame size={12} className="takeaway-flame-icon" />
+              <span>CORE TRANSMISSION</span>
+            </div>
+            <p className="takeaway-text">{card.takeaway}</p>
+          </div>
+        )}
+
+        {/* Narrative Summary */}
         {card.summary && (
           <p className="news-summary-text">{card.summary}</p>
+        )}
+
+        {/* Executive Strategic Bullets */}
+        {card.bullets && card.bullets.length > 0 && (
+          <div className="news-bullets-list">
+            {card.bullets.map((b, bIdx) => (
+              <div key={bIdx} className="news-bullet-item">
+                <span className="bullet-dot">&#9670;</span>
+                <span className="bullet-text">{b}</span>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 

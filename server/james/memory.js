@@ -19,10 +19,64 @@ class MemoryService {
     this.welcomedUsers = new Set();
     this.lastReturnGreetTime = new Map();
     
+    // Daily news dispatch tracking (5 to 10 news per day on different categories)
+    this.dailyNewsStats = {
+      date: new Date().toISOString().slice(0, 10),
+      count: 0,
+      targetToday: Math.floor(Math.random() * 6) + 5, // Random 5 to 10 per day
+      lastSentTime: 0,
+      lastCategory: null
+    };
+
     this.storagePath = options.storagePath || path.join(__dirname, '..', 'data', 'james_memory.json');
     this.saveTimeout = null;
 
     this.loadPersistedMemory();
+  }
+
+  // --- Daily News Limits & Category Rotation (5-10/day) ---
+
+  canSendDailyNews() {
+    const today = new Date().toISOString().slice(0, 10);
+    if (this.dailyNewsStats.date !== today) {
+      this.dailyNewsStats.date = today;
+      this.dailyNewsStats.count = 0;
+      this.dailyNewsStats.targetToday = Math.floor(Math.random() * 6) + 5; // 5 to 10
+      this.scheduleSave();
+    }
+
+    // Check daily ceiling (5-10 news per day)
+    if (this.dailyNewsStats.count >= this.dailyNewsStats.targetToday) {
+      return false;
+    }
+
+    // Minimum spacing between news dispatches: at least 60 minutes
+    const timeSinceLast = Date.now() - (this.dailyNewsStats.lastSentTime || 0);
+    if (timeSinceLast < 60 * 60 * 1000) {
+      return false;
+    }
+
+    return true;
+  }
+
+  recordNewsSent(category) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (this.dailyNewsStats.date !== today) {
+      this.dailyNewsStats.date = today;
+      this.dailyNewsStats.count = 0;
+      this.dailyNewsStats.targetToday = Math.floor(Math.random() * 6) + 5;
+    }
+    this.dailyNewsStats.count++;
+    this.dailyNewsStats.lastSentTime = Date.now();
+    this.dailyNewsStats.lastCategory = category;
+    this.scheduleSave();
+    console.log(`[MemoryService]: Recorded daily news dispatch (${this.dailyNewsStats.count}/${this.dailyNewsStats.targetToday} today) - Category: ${category}`);
+  }
+
+  pickNextDailyNewsCategory() {
+    const allCategories = ['viral', 'geopolitics', 'tech', 'healthcare', 'science', 'finance', 'world'];
+    const candidates = allCategories.filter(c => c !== this.dailyNewsStats.lastCategory);
+    return candidates[Math.floor(Math.random() * candidates.length)] || 'viral';
   }
 
   // --- Short-Term Conversation History ---
@@ -297,6 +351,9 @@ class MemoryService {
               if (k && v) this.lastReturnGreetTime.set(k.toLowerCase(), Number(v));
             }
           }
+          if (parsed.dailyNewsStats && typeof parsed.dailyNewsStats === 'object') {
+            this.dailyNewsStats = { ...this.dailyNewsStats, ...parsed.dailyNewsStats };
+          }
           if (parsed.summary) {
             this.conversationSummary = parsed.summary;
           }
@@ -336,6 +393,7 @@ class MemoryService {
         topics: Array.from(this.activeTopics),
         welcomedUsers: Array.from(this.welcomedUsers),
         lastReturnGreetTime: Object.fromEntries(this.lastReturnGreetTime),
+        dailyNewsStats: this.dailyNewsStats,
         users: usersArray
       };
 
