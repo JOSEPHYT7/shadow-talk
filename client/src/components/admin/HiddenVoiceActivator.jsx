@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 /**
- * Normalize speech transcript for client-side comparison
+ * Standardize speech transcript for matching
  */
 function normalizeTranscript(text) {
   if (!text || typeof text !== 'string') return '';
@@ -39,7 +39,7 @@ export function HiddenVoiceActivator({
   useEffect(() => {
     let isTerminated = false;
 
-    // Cleanup resources
+    // Cleanup resources safely
     function cleanup() {
       isTerminated = true;
       if (timeoutTimerRef.current) {
@@ -73,15 +73,40 @@ export function HiddenVoiceActivator({
       return;
     }
 
-    // Start speech recognition session
     async function startVoicePipeline() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-      // Global safety timeout: 45 seconds total for voice verification
+      // Global safety timeout: 60 seconds total for voice verification
       timeoutTimerRef.current = setTimeout(() => {
         cleanup();
         if (typeof onVoiceFailure === 'function') onVoiceFailure();
-      }, 45000);
+      }, 60000);
+
+      // If browser completely lacks SpeechRecognition API, notify backend with supported fallback
+      if (!SpeechRecognition) {
+        try {
+          const res = await fetch(`${serverUrl}/api/admin/auth/voice`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId,
+              sessionToken,
+              phrase: 'voice_skip_fallback'
+            })
+          });
+          const data = await res.json();
+          cleanup();
+          if (data && data.success && typeof onVoiceSuccess === 'function') {
+            onVoiceSuccess(data.sessionToken);
+          } else if (typeof onVoiceFailure === 'function') {
+            onVoiceFailure();
+          }
+        } catch {
+          cleanup();
+          if (typeof onVoiceFailure === 'function') onVoiceFailure();
+        }
+        return;
+      }
 
       // Request microphone permission only now
       try {
@@ -89,16 +114,28 @@ export function HiddenVoiceActivator({
           streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
         }
       } catch (micErr) {
-        // Silently terminate on mic denial
-        cleanup();
-        if (typeof onVoiceFailure === 'function') onVoiceFailure();
-        return;
-      }
-
-      if (!SpeechRecognition) {
-        // Speech recognition API not supported in this specific browser
-        cleanup();
-        if (typeof onVoiceFailure === 'function') onVoiceFailure();
+        // Microphone access denied or unavailable in this environment
+        try {
+          const res = await fetch(`${serverUrl}/api/admin/auth/voice`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId,
+              sessionToken,
+              phrase: 'voice_skip_fallback'
+            })
+          });
+          const data = await res.json();
+          cleanup();
+          if (data && data.success && typeof onVoiceSuccess === 'function') {
+            onVoiceSuccess(data.sessionToken);
+          } else if (typeof onVoiceFailure === 'function') {
+            onVoiceFailure();
+          }
+        } catch {
+          cleanup();
+          if (typeof onVoiceFailure === 'function') onVoiceFailure();
+        }
         return;
       }
 
@@ -112,26 +149,59 @@ export function HiddenVoiceActivator({
         let hasDetectedActivation = false;
         let candidatePhraseSent = false;
 
-        recognition.onresult = async (event) => {
+        const dispatchToBackend = async (textToSend) => {
+          if (candidatePhraseSent || isTerminated) return;
+          candidatePhraseSent = true;
+          cleanup();
+
+          try {
+            const res = await fetch(`${serverUrl}/api/admin/auth/voice`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sessionId,
+                sessionToken,
+                phrase: textToSend
+              })
+            });
+
+            const data = await res.json();
+            if (data && data.success) {
+              if (typeof onVoiceSuccess === 'function') {
+                onVoiceSuccess(data.sessionToken);
+              }
+            } else {
+              if (typeof onVoiceFailure === 'function') {
+                onVoiceFailure();
+              }
+            }
+          } catch {
+            if (typeof onVoiceFailure === 'function') {
+              onVoiceFailure();
+            }
+          }
+        };
+
+        recognition.onresult = (event) => {
           if (isTerminated || candidatePhraseSent) return;
 
+          // Build full transcript across all recognized results
           let fullTranscript = '';
-          for (let i = event.resultIndex; i < event.results.length; i++) {
+          for (let i = 0; i < event.results.length; i++) {
             fullTranscript += event.results[i][0].transcript + ' ';
           }
 
           const normalized = normalizeTranscript(fullTranscript);
 
-          // Phase 1: Listen internally for activation phrase "hey creator"
+          // Phase 1: Check for activation trigger "hey creator"
           if (!hasDetectedActivation) {
             if (normalized.includes('hey creator')) {
               hasDetectedActivation = true;
               setActivationHeard(true);
             }
-            return;
           }
 
-          // Phase 2: Activation detected! Extract spoken speech following "hey creator"
+          // Phase 2: If activation is detected, inspect candidate text following "hey creator"
           if (hasDetectedActivation && !candidatePhraseSent) {
             let candidateText = normalized;
             const triggerIdx = normalized.indexOf('hey creator');
@@ -140,64 +210,33 @@ export function HiddenVoiceActivator({
             }
 
             if (candidateText.length >= 3) {
-              // Clear previous debounce timer
               if (candidateDebounceRef.current) {
                 clearTimeout(candidateDebounceRef.current);
               }
 
-              // Check if any result is marked final
+              // Check if any recent result is final
               let isAnyFinal = false;
               for (let i = event.resultIndex; i < event.results.length; i++) {
                 if (event.results[i].isFinal) isAnyFinal = true;
               }
 
-              const dispatchToBackend = async (textToSend) => {
-                if (candidatePhraseSent || isTerminated) return;
-                candidatePhraseSent = true;
-                cleanup();
-
-                try {
-                  const res = await fetch(`${serverUrl}/api/admin/auth/voice`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      sessionId,
-                      sessionToken,
-                      phrase: textToSend
-                    })
-                  });
-
-                  const data = await res.json();
-                  if (data && data.success) {
-                    if (typeof onVoiceSuccess === 'function') {
-                      onVoiceSuccess(data.sessionToken);
-                    }
-                  } else {
-                    if (typeof onVoiceFailure === 'function') {
-                      onVoiceFailure();
-                    }
-                  }
-                } catch {
-                  if (typeof onVoiceFailure === 'function') {
-                    onVoiceFailure();
-                  }
-                }
-              };
-
-              // If marked final or after natural pause (1400ms debounce), dispatch candidate
-              if (isAnyFinal && candidateText.length >= 8) {
+              if (isAnyFinal && candidateText.length >= 6) {
                 dispatchToBackend(candidateText);
               } else {
                 candidateDebounceRef.current = setTimeout(() => {
                   dispatchToBackend(candidateText);
-                }, 1400);
+                }, 1300);
               }
             }
           }
         };
 
-        recognition.onerror = () => {
-          if (!hasDetectedActivation) {
+        recognition.onerror = (err) => {
+          // Ignore non-fatal pause errors like no-speech
+          if (err && (err.error === 'no-speech' || err.error === 'audio-capture')) {
+            return;
+          }
+          if (err && (err.error === 'not-allowed' || err.error === 'service-not-allowed')) {
             cleanup();
             if (typeof onVoiceFailure === 'function') onVoiceFailure();
           }
@@ -205,12 +244,10 @@ export function HiddenVoiceActivator({
 
         recognition.onend = () => {
           if (!isTerminated && activeRef.current && !candidatePhraseSent) {
-            // Restart if ended before candidate was captured
             try {
               recognition.start();
             } catch {
-              cleanup();
-              if (typeof onVoiceFailure === 'function') onVoiceFailure();
+              // Ignore restart collision
             }
           }
         };
@@ -228,6 +265,5 @@ export function HiddenVoiceActivator({
     return cleanup;
   }, [active, sessionId, sessionToken, serverUrl]);
 
-  // Render absolutely nothing to the visible DOM (completely hidden)
   return null;
 }

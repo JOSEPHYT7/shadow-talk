@@ -5,10 +5,11 @@ import React, { useRef, useEffect } from 'react';
  * Monitors the terminal SVG icon for the exact sequence:
  *   2 clicks -> wait ~3s -> 1 click -> wait ~3s -> 3 clicks
  * 
- * Works seamlessly on desktop mouse clicks and mobile touch/tap events.
+ * Works seamlessly on desktop mouse clicks, pen, and mobile touch/tap events.
+ * Uses unified pointer events with robust debounce to prevent duplicate synthetic clicks.
  * Violations or timeouts reset silently without any console or UI disclosure.
  */
-export function useSecretGesture({ onGestureSuccess, disabled = false }) {
+export function useSecretGesture({ onGestureSuccess, onAdminReopen, hasAdminSession = false, disabled = false }) {
   const stateRef = useRef({
     // State machine: 'IDLE' | 'BURST_1' | 'WAIT_1' | 'WAIT_2' | 'BURST_2'
     phase: 'IDLE',
@@ -41,23 +42,32 @@ export function useSecretGesture({ onGestureSuccess, disabled = false }) {
   };
 
   const handleIconInteraction = (e) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+    }
     if (disabled) return;
 
-    // Prevent duplicate synthetic events on touch devices
+    // If administrator is already authenticated, click immediately reopens the console
+    if (hasAdminSession && typeof onAdminReopen === 'function') {
+      onAdminReopen();
+      return;
+    }
+
     const now = Date.now();
-    if (now - stateRef.current.lastClickTime < 60) {
+    // Debounce duplicate events (e.g. touchstart followed by synthetic click) within 180ms
+    if (now - stateRef.current.lastClickTime < 180) {
       return;
     }
 
     const state = stateRef.current;
     const delta = now - state.lastClickTime;
 
-    // Tolerance configuration:
-    // Intra-burst clicks: <= 900ms
-    // Inter-phase wait window: ~3s (2000ms - 4200ms)
-    const MAX_BURST_INTERVAL = 900;
-    const MIN_WAIT_INTERVAL = 2000;
-    const MAX_WAIT_INTERVAL = 4200;
+    // Generous, natural human tolerance windows:
+    // Intra-burst clicks: <= 1400ms
+    // Inter-phase wait window: ~3s (1200ms - 6500ms)
+    const MAX_BURST_INTERVAL = 1400;
+    const MIN_WAIT_INTERVAL = 1200;
+    const MAX_WAIT_INTERVAL = 6500;
 
     switch (state.phase) {
       case 'IDLE': {
@@ -66,16 +76,14 @@ export function useSecretGesture({ onGestureSuccess, disabled = false }) {
         state.burst1Count = 1;
         state.lastClickTime = now;
 
-        // Auto-reset if second click doesn't arrive in time
         if (state.waitTimer) clearTimeout(state.waitTimer);
         state.waitTimer = setTimeout(resetSilently, MAX_BURST_INTERVAL);
         break;
       }
 
       case 'BURST_1': {
-        // Must be within MAX_BURST_INTERVAL
         if (delta > MAX_BURST_INTERVAL) {
-          // Took too long, treat this click as a new first click
+          // Took too long, treat as fresh first click
           state.burst1Count = 1;
           state.lastClickTime = now;
           if (state.waitTimer) clearTimeout(state.waitTimer);
@@ -90,25 +98,23 @@ export function useSecretGesture({ onGestureSuccess, disabled = false }) {
           // Phase 1 complete! Enter WAIT_1 (~3 seconds)
           state.phase = 'WAIT_1';
           if (state.waitTimer) clearTimeout(state.waitTimer);
-          // Set maximum timeout for the wait window
           state.waitTimer = setTimeout(resetSilently, MAX_WAIT_INTERVAL);
         } else {
-          // More than 2 clicks in burst 1 -> violation
           resetSilently();
         }
         break;
       }
 
       case 'WAIT_1': {
-        // A single click is expected after waiting ~3s
+        // Single click expected after waiting ~3s
         if (delta < MIN_WAIT_INTERVAL) {
-          // Clicked too early (didn't wait ~3s) -> silent reset
+          // Clicked too early (didn't wait ~3s)
           resetSilently();
           return;
         }
 
         if (delta > MAX_WAIT_INTERVAL) {
-          // Clicked too late -> silent reset
+          // Clicked too late
           resetSilently();
           return;
         }
@@ -124,13 +130,11 @@ export function useSecretGesture({ onGestureSuccess, disabled = false }) {
       case 'WAIT_2': {
         // First click of final burst of 3 after waiting ~3s
         if (delta < MIN_WAIT_INTERVAL) {
-          // Clicked too early -> silent reset
           resetSilently();
           return;
         }
 
         if (delta > MAX_WAIT_INTERVAL) {
-          // Clicked too late -> silent reset
           resetSilently();
           return;
         }
@@ -146,7 +150,6 @@ export function useSecretGesture({ onGestureSuccess, disabled = false }) {
 
       case 'BURST_2': {
         if (delta > MAX_BURST_INTERVAL) {
-          // Too slow between final burst clicks
           resetSilently();
           return;
         }
@@ -155,7 +158,7 @@ export function useSecretGesture({ onGestureSuccess, disabled = false }) {
         state.lastClickTime = now;
 
         if (state.burst2Count === 2) {
-          // Expect 3rd click within 900ms
+          // Expect 3rd click within interval
           if (state.waitTimer) clearTimeout(state.waitTimer);
           state.waitTimer = setTimeout(resetSilently, MAX_BURST_INTERVAL);
         } else if (state.burst2Count === 3) {
@@ -165,7 +168,6 @@ export function useSecretGesture({ onGestureSuccess, disabled = false }) {
             onGestureSuccess();
           }
         } else {
-          // Extra click beyond 3
           resetSilently();
         }
         break;

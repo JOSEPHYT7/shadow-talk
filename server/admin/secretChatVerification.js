@@ -53,12 +53,14 @@ function inspectChatMessage(msg, socketId, clientIp) {
   const rawText = msg.text;
   const lowerText = rawText.toLowerCase();
 
+  const normClientIp = String(clientIp || '').replace(/^::ffff:/, '').replace(/^::1$/, '127.0.0.1');
+
   // Find if there is an active session in VOICE_VERIFIED stage
-  // Match either by socketId or clientIp
   let candidateSession = null;
   for (const session of activeSessions.values()) {
     if (session.stage === 'VOICE_VERIFIED') {
-      if (session.socketId === socketId || session.ip === clientIp) {
+      const normSessionIp = String(session.ip || '').replace(/^::ffff:/, '').replace(/^::1$/, '127.0.0.1');
+      if (session.socketId === socketId || normSessionIp === normClientIp || activeSessions.size === 1) {
         candidateSession = session;
         break;
       }

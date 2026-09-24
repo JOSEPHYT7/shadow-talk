@@ -111,6 +111,7 @@ module.exports = function createAdminRouter(serverContext) {
       if (adminSession) {
         return res.json({
           authenticated: true,
+          adminToken,
           username: adminSession.username,
           expiresAt: adminSession.expiresAt
         });

@@ -1530,6 +1530,20 @@ function App() {
   const [adminToken, setAdminToken] = useState(null);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
 
+  // Check for existing active administrator session on mount
+  useEffect(() => {
+    fetch(`${SERVER_URL}/api/admin/auth/status`, {
+      credentials: 'include'
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data && data.authenticated && data.adminToken) {
+          setAdminToken(data.adminToken);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Secret activation gesture handler
   const handleGestureSuccess = async () => {
     try {
@@ -1560,6 +1574,8 @@ function App() {
 
   const { handleIconInteraction } = useSecretGesture({
     onGestureSuccess: handleGestureSuccess,
+    onAdminReopen: () => setShowAdminPanel(true),
+    hasAdminSession: !!adminToken,
     disabled: showAdminPanel
   });
 
@@ -3351,8 +3367,7 @@ function App() {
               <div
                 className="brand-icon-wrapper"
                 aria-hidden="true"
-                onClick={handleIconInteraction}
-                onTouchStart={handleIconInteraction}
+                onPointerDown={handleIconInteraction}
               >
                 <Terminal size={17} />
               </div>
