@@ -1,45 +1,21 @@
-import React, { useRef, useEffect } from 'react';
+import { useRef } from 'react';
 
 /**
  * Secret Gesture Detector
  * Monitors the terminal SVG icon for the exact sequence:
  *   2 clicks -> wait ~3s -> 1 click -> wait ~3s -> 3 clicks
  * 
- * Works seamlessly on desktop mouse clicks, pen, and mobile touch/tap events.
- * Uses unified pointer events with robust debounce to prevent duplicate synthetic clicks.
- * Violations or timeouts reset silently without any console or UI disclosure.
+ * Implemented using a resilient sliding-window timestamp buffer:
+ * - Natural human tolerance:
+ *     - Intra-burst double/triple clicks: <= 1800ms
+ *     - Inter-phase wait (~3 seconds): 1200ms to 7500ms
+ * - Rolling window design: accidental clicks or hesitation do not permanently break the sequence.
+ * - Deduplicates rapid synthetic events (< 60ms) across pointerdown and click.
+ * - Works identically across desktop mouse, trackpad, pen, and mobile touch.
  */
 export function useSecretGesture({ onGestureSuccess, onAdminReopen, hasAdminSession = false, disabled = false }) {
-  const stateRef = useRef({
-    // State machine: 'IDLE' | 'BURST_1' | 'WAIT_1' | 'WAIT_2' | 'BURST_2'
-    phase: 'IDLE',
-    burst1Count: 0,
-    burst2Count: 0,
-    lastClickTime: 0,
-    waitTimer: null
-  });
-
-  // Cleanup timers on unmount
-  useEffect(() => {
-    return () => {
-      if (stateRef.current.waitTimer) {
-        clearTimeout(stateRef.current.waitTimer);
-      }
-    };
-  }, []);
-
-  const resetSilently = () => {
-    if (stateRef.current.waitTimer) {
-      clearTimeout(stateRef.current.waitTimer);
-    }
-    stateRef.current = {
-      phase: 'IDLE',
-      burst1Count: 0,
-      burst2Count: 0,
-      lastClickTime: 0,
-      waitTimer: null
-    };
-  };
+  const timestampsRef = useRef([]);
+  const lastEventTimeRef = useRef(0);
 
   const handleIconInteraction = (e) => {
     if (e && e.stopPropagation) {
@@ -47,135 +23,53 @@ export function useSecretGesture({ onGestureSuccess, onAdminReopen, hasAdminSess
     }
     if (disabled) return;
 
-    // If administrator is already authenticated, click immediately reopens the console
+    // If administrator is already authenticated, clicking immediately reopens the console
     if (hasAdminSession && typeof onAdminReopen === 'function') {
       onAdminReopen();
       return;
     }
 
     const now = Date.now();
-    // Debounce duplicate events (e.g. touchstart followed by synthetic click) within 180ms
-    if (now - stateRef.current.lastClickTime < 180) {
+
+    // 1. Deduplicate rapid synthetic events (e.g. pointerdown followed by click within 60ms)
+    if (now - lastEventTimeRef.current < 60) {
       return;
     }
+    lastEventTimeRef.current = now;
 
-    const state = stateRef.current;
-    const delta = now - state.lastClickTime;
+    // 2. Append timestamp to rolling window buffer (keep up to last 12 interactions)
+    timestampsRef.current.push(now);
+    if (timestampsRef.current.length > 12) {
+      timestampsRef.current.shift();
+    }
 
-    // Generous, natural human tolerance windows:
-    // Intra-burst clicks: <= 1400ms
-    // Inter-phase wait window: ~3s (1200ms - 6500ms)
-    const MAX_BURST_INTERVAL = 1400;
-    const MIN_WAIT_INTERVAL = 1200;
-    const MAX_WAIT_INTERVAL = 6500;
+    // 3. Evaluate the last 6 timestamps
+    if (timestampsRef.current.length >= 6) {
+      const len = timestampsRef.current.length;
+      const [c0, c1, c2, c3, c4, c5] = timestampsRef.current.slice(len - 6);
 
-    switch (state.phase) {
-      case 'IDLE': {
-        // First click of Phase 1 (Burst of 2)
-        state.phase = 'BURST_1';
-        state.burst1Count = 1;
-        state.lastClickTime = now;
+      const gap0 = c1 - c0;       // click 1 to 2 (burst of 2)
+      const pause1 = c2 - c1;     // wait ~3s before single click
+      const pause2 = c3 - c2;     // wait ~3s before final burst
+      const gap1 = c4 - c3;       // click 1 to 2 (burst of 3)
+      const gap2 = c5 - c4;       // click 2 to 3 (burst of 3)
 
-        if (state.waitTimer) clearTimeout(state.waitTimer);
-        state.waitTimer = setTimeout(resetSilently, MAX_BURST_INTERVAL);
-        break;
+      // Validate sequence matching human cadence:
+      // Burst clicks: quick taps up to 1800ms apart
+      // Pauses: ~3 seconds (generous 1200ms - 7500ms tolerance)
+      const isMatch =
+        gap0 <= 1800 &&
+        pause1 >= 1200 && pause1 <= 7500 &&
+        pause2 >= 1200 && pause2 <= 7500 &&
+        gap1 <= 1800 &&
+        gap2 <= 1800;
+
+      if (isMatch) {
+        timestampsRef.current = []; // Clear on success
+        if (typeof onGestureSuccess === 'function') {
+          onGestureSuccess();
+        }
       }
-
-      case 'BURST_1': {
-        if (delta > MAX_BURST_INTERVAL) {
-          // Took too long, treat as fresh first click
-          state.burst1Count = 1;
-          state.lastClickTime = now;
-          if (state.waitTimer) clearTimeout(state.waitTimer);
-          state.waitTimer = setTimeout(resetSilently, MAX_BURST_INTERVAL);
-          return;
-        }
-
-        state.burst1Count += 1;
-        state.lastClickTime = now;
-
-        if (state.burst1Count === 2) {
-          // Phase 1 complete! Enter WAIT_1 (~3 seconds)
-          state.phase = 'WAIT_1';
-          if (state.waitTimer) clearTimeout(state.waitTimer);
-          state.waitTimer = setTimeout(resetSilently, MAX_WAIT_INTERVAL);
-        } else {
-          resetSilently();
-        }
-        break;
-      }
-
-      case 'WAIT_1': {
-        // Single click expected after waiting ~3s
-        if (delta < MIN_WAIT_INTERVAL) {
-          // Clicked too early (didn't wait ~3s)
-          resetSilently();
-          return;
-        }
-
-        if (delta > MAX_WAIT_INTERVAL) {
-          // Clicked too late
-          resetSilently();
-          return;
-        }
-
-        // Single click accepted! Enter WAIT_2 (~3 seconds)
-        state.phase = 'WAIT_2';
-        state.lastClickTime = now;
-        if (state.waitTimer) clearTimeout(state.waitTimer);
-        state.waitTimer = setTimeout(resetSilently, MAX_WAIT_INTERVAL);
-        break;
-      }
-
-      case 'WAIT_2': {
-        // First click of final burst of 3 after waiting ~3s
-        if (delta < MIN_WAIT_INTERVAL) {
-          resetSilently();
-          return;
-        }
-
-        if (delta > MAX_WAIT_INTERVAL) {
-          resetSilently();
-          return;
-        }
-
-        // First click of Burst 2 accepted!
-        state.phase = 'BURST_2';
-        state.burst2Count = 1;
-        state.lastClickTime = now;
-        if (state.waitTimer) clearTimeout(state.waitTimer);
-        state.waitTimer = setTimeout(resetSilently, MAX_BURST_INTERVAL);
-        break;
-      }
-
-      case 'BURST_2': {
-        if (delta > MAX_BURST_INTERVAL) {
-          resetSilently();
-          return;
-        }
-
-        state.burst2Count += 1;
-        state.lastClickTime = now;
-
-        if (state.burst2Count === 2) {
-          // Expect 3rd click within interval
-          if (state.waitTimer) clearTimeout(state.waitTimer);
-          state.waitTimer = setTimeout(resetSilently, MAX_BURST_INTERVAL);
-        } else if (state.burst2Count === 3) {
-          // ALL 3 CLICKS OF FINAL BURST COMPLETE! SEQUENCE SUCCESS!
-          resetSilently();
-          if (typeof onGestureSuccess === 'function') {
-            onGestureSuccess();
-          }
-        } else {
-          resetSilently();
-        }
-        break;
-      }
-
-      default:
-        resetSilently();
-        break;
     }
   };
 

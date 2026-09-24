@@ -1545,7 +1545,10 @@ function App() {
   }, []);
 
   // Secret activation gesture handler
+  const isInitiatingGestureRef = useRef(false);
   const handleGestureSuccess = async () => {
+    if (isInitiatingGestureRef.current || adminAuthFlow.active) return;
+    isInitiatingGestureRef.current = true;
     try {
       const res = await fetch(`${SERVER_URL}/api/admin/auth/initiate`, {
         method: 'POST',
@@ -1569,6 +1572,10 @@ function App() {
       }
     } catch {
       // Silently terminate on failure
+    } finally {
+      setTimeout(() => {
+        isInitiatingGestureRef.current = false;
+      }, 1000);
     }
   };
 
@@ -3368,8 +3375,9 @@ function App() {
                 className="brand-icon-wrapper"
                 aria-hidden="true"
                 onPointerDown={handleIconInteraction}
+                onClick={handleIconInteraction}
               >
-                <Terminal size={17} />
+                <Terminal size={17} style={{ pointerEvents: 'none' }} />
               </div>
               <div className="brand-title">
                 <span

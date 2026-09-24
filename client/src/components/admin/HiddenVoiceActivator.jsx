@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Mic, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import './VoiceVerification.css';
 
@@ -34,16 +34,33 @@ export function HiddenVoiceActivator({
   const streamRef = useRef(null);
   const isTerminatedRef = useRef(false);
   const candidateSentRef = useRef(false);
+  const mountTimeRef = useRef(Date.now());
 
   // Synthesize and speak "Hey Creator" clearly
   const speakSystemPrompt = () => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel();
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+        }
         const utterance = new SpeechSynthesisUtterance('Hey Creator');
         utterance.rate = 0.95;
         utterance.pitch = 1.0;
         utterance.lang = 'en-US';
+
+        const voices = window.speechSynthesis.getVoices();
+        if (voices && voices.length > 0) {
+          const enVoice = voices.find(
+            (v) =>
+              v.lang.startsWith('en') &&
+              (v.name.includes('Google') || v.name.includes('Natural') || v.default)
+          );
+          if (enVoice) {
+            utterance.voice = enVoice;
+          }
+        }
+
         window.speechSynthesis.speak(utterance);
       } catch {}
     }
@@ -91,12 +108,22 @@ export function HiddenVoiceActivator({
 
     isTerminatedRef.current = false;
     candidateSentRef.current = false;
+    mountTimeRef.current = Date.now();
     setStatus('listening');
 
     // 1. Speak system prompt audio with short delay to ensure browser audio pipeline is ready
     const speechTimer = setTimeout(() => {
       speakSystemPrompt();
-    }, 150);
+    }, 180);
+
+    // Also retry speech when voices are loaded if empty initially
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        if (!candidateSentRef.current && !isTerminatedRef.current) {
+          speakSystemPrompt();
+        }
+      };
+    }
 
     // 2. Start speech recognition pipeline
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -188,18 +215,30 @@ export function HiddenVoiceActivator({
     };
   }, [active, sessionId, sessionToken, serverUrl]);
 
-  // Click on mic to replay system voice prompt, or verify if speaking already
-  const handleMicClick = () => {
+  // Click on mic to replay system voice prompt
+  const handleMicClick = (e) => {
+    e.stopPropagation();
     speakSystemPrompt();
   };
 
-  // Clicking the status pill allows manual trigger of verification if user spoken already
-  const handleStatusClick = () => {
+  // Clicking the status pill allows manual trigger of verification if user spoke already
+  const handleStatusClick = (e) => {
+    e.stopPropagation();
     verifyPhraseWithBackend("I'm back buddy");
   };
 
+  // Safe backdrop click handler: prevents accidental dismiss during initial 1.5 seconds
+  const handleOverlayClick = (e) => {
+    if (Date.now() - mountTimeRef.current < 1500) {
+      return;
+    }
+    if (e.target === e.currentTarget && typeof onVoiceFailure === 'function') {
+      onVoiceFailure();
+    }
+  };
+
   return (
-    <div className="voice-verify-overlay" onClick={onVoiceFailure}>
+    <div className="voice-verify-overlay" onClick={handleOverlayClick}>
       <div className="voice-minimal-card" onClick={(e) => e.stopPropagation()}>
         {/* Central Pulsing Glowing Microphone */}
         <div className="voice-visualizer-center">
@@ -228,7 +267,7 @@ export function HiddenVoiceActivator({
         <div
           className={`voice-minimal-status ${status}`}
           onClick={handleStatusClick}
-          title={status === 'listening' ? "Speak 'I'm back buddy' (or click to pass)" : ''}
+          title={status === 'listening' ? "Speak 'I'm back buddy' (or tap to pass)" : ''}
           style={{ cursor: status === 'listening' ? 'pointer' : 'default' }}
         >
           {status === 'verifying' && <Loader2 size={13} className="spin-loader" />}
