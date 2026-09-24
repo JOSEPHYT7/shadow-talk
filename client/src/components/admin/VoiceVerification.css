@@ -175,3 +175,53 @@
   60% { transform: scale(1.08); }
   100% { transform: scale(1); }
 }
+
+/* Listened Words / Live Speech Transcript */
+.voice-listened-words {
+  margin-top: 0.15rem;
+  max-width: 250px;
+  min-height: 28px;
+  font-size: 0.8rem;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  color: rgba(255, 255, 255, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  word-break: break-word;
+  line-height: 1.35;
+  padding: 0.35rem 0.85rem;
+  border-radius: 10px;
+  background: rgba(0, 243, 255, 0.04);
+  border: 1px dashed rgba(0, 243, 255, 0.22);
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.voice-listened-words.has-words {
+  background: rgba(0, 243, 255, 0.09);
+  border: 1px solid rgba(0, 243, 255, 0.45);
+  color: #00f3ff;
+  text-shadow: 0 0 8px rgba(0, 243, 255, 0.6);
+}
+
+.voice-listened-words.passed {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.55);
+  color: #34d399;
+  text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+}
+
+.voice-listened-words.failed {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.55);
+  color: #f87171;
+  text-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+}
+
+.voice-listened-placeholder {
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.76rem;
+  letter-spacing: 0.02em;
+}
+

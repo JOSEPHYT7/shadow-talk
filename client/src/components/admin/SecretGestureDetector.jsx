@@ -7,15 +7,13 @@ import { useRef } from 'react';
  * 
  * Implemented using a resilient sliding-window timestamp buffer:
  * - Natural human tolerance:
- *     - Intra-burst double/triple clicks: <= 1800ms
- *     - Inter-phase wait (~3 seconds): 1200ms to 7500ms
- * - Rolling window design: accidental clicks or hesitation do not permanently break the sequence.
- * - Deduplicates rapid synthetic events (< 60ms) across pointerdown and click.
- * - Works identically across desktop mouse, trackpad, pen, and mobile touch.
+ *     - Intra-burst double/triple clicks: <= 2000ms
+ *     - Inter-phase wait (~3 seconds): 900ms to 8500ms
+ * - Rolling window design: accidental clicks or hesitation do not break the sequence.
+ * - Works reliably on desktop mouse, trackpad, pen, and mobile touch.
  */
 export function useSecretGesture({ onGestureSuccess, onAdminReopen, hasAdminSession = false, disabled = false }) {
   const timestampsRef = useRef([]);
-  const lastEventTimeRef = useRef(0);
 
   const handleIconInteraction = (e) => {
     if (e && e.stopPropagation) {
@@ -23,27 +21,18 @@ export function useSecretGesture({ onGestureSuccess, onAdminReopen, hasAdminSess
     }
     if (disabled) return;
 
-    // If administrator is already authenticated, clicking immediately reopens the console
-    if (hasAdminSession && typeof onAdminReopen === 'function') {
-      onAdminReopen();
-      return;
-    }
-
     const now = Date.now();
 
-    // 1. Deduplicate rapid synthetic events (e.g. pointerdown followed by click within 60ms)
-    if (now - lastEventTimeRef.current < 60) {
-      return;
-    }
-    lastEventTimeRef.current = now;
-
-    // 2. Append timestamp to rolling window buffer (keep up to last 12 interactions)
+    // Append timestamp to rolling window buffer (keep up to last 12 interactions)
     timestampsRef.current.push(now);
     if (timestampsRef.current.length > 12) {
       timestampsRef.current.shift();
     }
 
-    // 3. Evaluate the last 6 timestamps
+    const count = timestampsRef.current.length;
+    console.log(`[ShadowTalk Admin Gesture] Click registered (#${count}). Total in window: ${count}`);
+
+    // Evaluate the last 6 timestamps
     if (timestampsRef.current.length >= 6) {
       const len = timestampsRef.current.length;
       const [c0, c1, c2, c3, c4, c5] = timestampsRef.current.slice(len - 6);
@@ -54,19 +43,31 @@ export function useSecretGesture({ onGestureSuccess, onAdminReopen, hasAdminSess
       const gap1 = c4 - c3;       // click 1 to 2 (burst of 3)
       const gap2 = c5 - c4;       // click 2 to 3 (burst of 3)
 
+      console.log(`[ShadowTalk Admin Gesture] Timing check:
+  - Burst 1 gap (<=2000ms): ${gap0}ms
+  - Pause 1 (900ms-8500ms): ${pause1}ms
+  - Pause 2 (900ms-8500ms): ${pause2}ms
+  - Burst 2 gap 1 (<=2000ms): ${gap1}ms
+  - Burst 2 gap 2 (<=2000ms): ${gap2}ms`);
+
       // Validate sequence matching human cadence:
-      // Burst clicks: quick taps up to 1800ms apart
-      // Pauses: ~3 seconds (generous 1200ms - 7500ms tolerance)
+      // Burst clicks: quick taps up to 2000ms apart
+      // Pauses: ~3 seconds (generous 900ms - 8500ms tolerance)
       const isMatch =
-        gap0 <= 1800 &&
-        pause1 >= 1200 && pause1 <= 7500 &&
-        pause2 >= 1200 && pause2 <= 7500 &&
-        gap1 <= 1800 &&
-        gap2 <= 1800;
+        gap0 <= 2000 &&
+        pause1 >= 900 && pause1 <= 8500 &&
+        pause2 >= 900 && pause2 <= 8500 &&
+        gap1 <= 2000 &&
+        gap2 <= 2000;
 
       if (isMatch) {
+        console.log('[ShadowTalk Admin Gesture] MATCH SUCCESSFUL!');
         timestampsRef.current = []; // Clear on success
-        if (typeof onGestureSuccess === 'function') {
+        if (hasAdminSession && typeof onAdminReopen === 'function') {
+          console.log('[ShadowTalk Admin Gesture] Administrator session active. Reopening console...');
+          onAdminReopen();
+        } else if (typeof onGestureSuccess === 'function') {
+          console.log('[ShadowTalk Admin Gesture] Activating voice verification flow...');
           onGestureSuccess();
         }
       }

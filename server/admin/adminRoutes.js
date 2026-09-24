@@ -12,6 +12,7 @@ const {
   verifySessionToken,
   advanceSessionStage,
   invalidateSession,
+  createAdminSession,
   revokeAdminSession,
   verifyAdminToken,
   isRateLimited,
@@ -30,6 +31,8 @@ module.exports = function createAdminRouter(serverContext) {
   // ----------------------------------------------------------------
   // 1. HIDDEN AUTHENTICATION FLOW ENDPOINTS
   // ----------------------------------------------------------------
+
+
 
   /**
    * STEP 1: Initiate temporary auth session after secret click gesture

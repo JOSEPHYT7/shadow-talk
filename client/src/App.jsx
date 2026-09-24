@@ -1532,6 +1532,7 @@ function App() {
 
   // Check for existing active administrator session on mount
   useEffect(() => {
+
     fetch(`${SERVER_URL}/api/admin/auth/status`, {
       credentials: 'include'
     })
@@ -1547,7 +1548,7 @@ function App() {
   // Secret activation gesture handler
   const isInitiatingGestureRef = useRef(false);
   const handleGestureSuccess = async () => {
-    if (isInitiatingGestureRef.current || adminAuthFlow.active) return;
+    if (isInitiatingGestureRef.current) return;
     isInitiatingGestureRef.current = true;
     try {
       const res = await fetch(`${SERVER_URL}/api/admin/auth/initiate`, {
@@ -3374,7 +3375,6 @@ function App() {
               <div
                 className="brand-icon-wrapper"
                 aria-hidden="true"
-                onPointerDown={handleIconInteraction}
                 onClick={handleIconInteraction}
               >
                 <Terminal size={17} style={{ pointerEvents: 'none' }} />

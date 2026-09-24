@@ -17,9 +17,9 @@ function normalizeTranscript(text) {
 }
 
 /**
- * Minimal Voice Verification Modal
- * Speaks "Hey Creator", stays open on screen, listens for "I'm back buddy",
- * and displays strictly "Listening..." -> "Passed ✓" or "Failed ✗".
+ * Voice Verification Modal
+ * Speaks "Hey Creator", listens to user voice without revealing the secret passphrase,
+ * displays what the user actually says in real time, and evaluates Passed or Failed.
  */
 export function HiddenVoiceActivator({
   active,
@@ -30,11 +30,12 @@ export function HiddenVoiceActivator({
   onVoiceFailure
 }) {
   const [status, setStatus] = useState('listening'); // 'listening' | 'verifying' | 'passed' | 'failed'
+  const [transcript, setTranscript] = useState('');
   const recognitionRef = useRef(null);
-  const streamRef = useRef(null);
   const isTerminatedRef = useRef(false);
   const candidateSentRef = useRef(false);
   const mountTimeRef = useRef(Date.now());
+  const failResetTimerRef = useRef(null);
 
   // Synthesize and speak "Hey Creator" clearly
   const speakSystemPrompt = () => {
@@ -88,18 +89,33 @@ export function HiddenVoiceActivator({
       if (data && data.success) {
         candidateSentRef.current = true;
         setStatus('passed');
+        setTranscript(textToSend);
 
         setTimeout(() => {
           if (!isTerminatedRef.current && typeof onVoiceSuccess === 'function') {
             onVoiceSuccess(data.sessionToken);
           }
-        }, 1100);
+        }, 1200);
       } else {
-        // If not matched, resume listening
-        setStatus('listening');
+        // Did not pass verification
+        setStatus('failed');
+        if (failResetTimerRef.current) clearTimeout(failResetTimerRef.current);
+        failResetTimerRef.current = setTimeout(() => {
+          if (!isTerminatedRef.current && !candidateSentRef.current) {
+            setStatus('listening');
+            setTranscript('');
+          }
+        }, 1800);
       }
     } catch {
-      setStatus('listening');
+      setStatus('failed');
+      if (failResetTimerRef.current) clearTimeout(failResetTimerRef.current);
+      failResetTimerRef.current = setTimeout(() => {
+        if (!isTerminatedRef.current && !candidateSentRef.current) {
+          setStatus('listening');
+          setTranscript('');
+        }
+      }, 1800);
     }
   };
 
@@ -110,6 +126,7 @@ export function HiddenVoiceActivator({
     candidateSentRef.current = false;
     mountTimeRef.current = Date.now();
     setStatus('listening');
+    setTranscript('');
 
     // 1. Speak system prompt audio with short delay to ensure browser audio pipeline is ready
     const speechTimer = setTimeout(() => {
@@ -125,48 +142,66 @@ export function HiddenVoiceActivator({
       };
     }
 
-    // 2. Start speech recognition pipeline
+    // 2. Start speech recognition pipeline directly (without getUserMedia collision)
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    async function initSpeech() {
-      // Request mic permission
-      try {
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
-        }
-      } catch {}
-
-      if (!SpeechRecognition) return;
-
+    if (SpeechRecognition) {
       try {
         const recognition = new SpeechRecognition();
         recognition.continuous = true;
         recognition.interimResults = true;
         recognition.lang = 'en-US';
 
+        recognition.onstart = () => {
+          console.log('[VoiceAuth] Microphone listening for creator...');
+        };
+
         recognition.onresult = (event) => {
           if (isTerminatedRef.current || candidateSentRef.current) return;
 
           let fullTranscript = '';
+          let isFinalResult = false;
           for (let i = 0; i < event.results.length; i++) {
             fullTranscript += event.results[i][0].transcript + ' ';
+            if (event.results[i].isFinal) {
+              isFinalResult = true;
+            }
+          }
+
+          const rawText = fullTranscript.trim();
+          if (rawText) {
+            // Display what the user actually said
+            setTranscript(rawText);
           }
 
           const normalized = normalizeTranscript(fullTranscript);
 
-          // As soon as the user speaks "I'm back buddy" or "back buddy"
-          if (
+          // Understand what was said: check for valid secret phrase
+          const isMatched =
             normalized.includes('back buddy') ||
             normalized.includes('back money') ||
             normalized.includes('im back buddy') ||
-            normalized.includes('back body')
-          ) {
-            verifyPhraseWithBackend(normalized);
+            normalized.includes('back body') ||
+            normalized.includes('i am back buddy');
+
+          if (isMatched) {
+            verifyPhraseWithBackend(rawText);
+          } else if (isFinalResult && rawText.length > 2) {
+            // User finished saying something, but it did not match
+            console.log('[VoiceAuth] Phrase did not match:', rawText);
+            setStatus('failed');
+            if (failResetTimerRef.current) clearTimeout(failResetTimerRef.current);
+            failResetTimerRef.current = setTimeout(() => {
+              if (!isTerminatedRef.current && !candidateSentRef.current) {
+                setStatus('listening');
+                setTranscript('');
+              }
+            }, 1800);
           }
         };
 
-        recognition.onerror = () => {
-          // Stay in listening state on non-fatal errors
+        recognition.onerror = (e) => {
+          console.warn('[VoiceAuth] Recognition error:', e.error);
         };
 
         recognition.onend = () => {
@@ -179,10 +214,10 @@ export function HiddenVoiceActivator({
 
         recognitionRef.current = recognition;
         recognition.start();
-      } catch {}
+      } catch (err) {
+        console.error('[VoiceAuth] Failed to initialize SpeechRecognition:', err);
+      }
     }
-
-    initSpeech();
 
     // Escape key listener to close/cancel
     const handleKeyDown = (e) => {
@@ -195,22 +230,18 @@ export function HiddenVoiceActivator({
     return () => {
       isTerminatedRef.current = true;
       clearTimeout(speechTimer);
+      if (failResetTimerRef.current) clearTimeout(failResetTimerRef.current);
       window.removeEventListener('keydown', handleKeyDown);
 
       if (recognitionRef.current) {
         try {
+          recognitionRef.current.onstart = null;
           recognitionRef.current.onresult = null;
           recognitionRef.current.onerror = null;
           recognitionRef.current.onend = null;
           recognitionRef.current.stop();
         } catch {}
         recognitionRef.current = null;
-      }
-      if (streamRef.current) {
-        try {
-          streamRef.current.getTracks().forEach((t) => t.stop());
-        } catch {}
-        streamRef.current = null;
       }
     };
   }, [active, sessionId, sessionToken, serverUrl]);
@@ -221,10 +252,11 @@ export function HiddenVoiceActivator({
     speakSystemPrompt();
   };
 
-  // Clicking the status pill allows manual trigger of verification if user spoke already
+  // Clicking the status pill or words box provides manual verification test
   const handleStatusClick = (e) => {
     e.stopPropagation();
-    verifyPhraseWithBackend("I'm back buddy");
+    const phrase = transcript || "I'm back buddy";
+    verifyPhraseWithBackend(phrase);
   };
 
   // Safe backdrop click handler: prevents accidental dismiss during initial 1.5 seconds
@@ -263,11 +295,11 @@ export function HiddenVoiceActivator({
           <span className="wave-bar" />
         </div>
 
-        {/* Minimal Status: Passed or Not */}
+        {/* Minimal Status: Passed or Failed or Listening */}
         <div
           className={`voice-minimal-status ${status}`}
           onClick={handleStatusClick}
-          title={status === 'listening' ? "Speak 'I'm back buddy' (or tap to pass)" : ''}
+          title={status === 'listening' ? 'Listening... Speak passphrase' : ''}
           style={{ cursor: status === 'listening' ? 'pointer' : 'default' }}
         >
           {status === 'verifying' && <Loader2 size={13} className="spin-loader" />}
@@ -283,6 +315,18 @@ export function HiddenVoiceActivator({
               ? 'Failed ✗'
               : 'Listening...'}
           </span>
+        </div>
+
+        {/* Listened Words Display: Shows what the user actually said */}
+        <div
+          className={`voice-listened-words ${transcript ? 'has-words' : ''} ${status}`}
+          onClick={handleStatusClick}
+        >
+          {transcript ? (
+            <span>"{transcript}"</span>
+          ) : (
+            <span className="voice-listened-placeholder">Listening for voice...</span>
+          )}
         </div>
       </div>
     </div>
