@@ -153,18 +153,18 @@ class ToolRegistry {
         type: 'function',
         function: {
           name: 'get_world_news',
-          description: 'Collect and broadcast the latest verified worldwide news across categories (GEOPOLITICS, TECH, HEALTHCARE, SCIENCE, FINANCE, WORLD). Use whenever asked about latest news, what is happening in the world, Russia-Ukraine war, tech developments, medical breakthroughs, or financial markets.',
+          description: 'Collect and broadcast the latest verified worldwide news and hot/viral breaking stories across categories (VIRAL, GEOPOLITICS, TECH, HEALTHCARE, SCIENCE, FINANCE, WORLD) with interactive community debate polls. Use whenever asked about latest news, hot topics, viral news, current affairs, debates, Russia-Ukraine war, tech breakthroughs, or what is happening in the world.',
           parameters: {
             type: 'object',
             properties: {
               category: {
                 type: 'string',
-                enum: ['geopolitics', 'tech', 'healthcare', 'science', 'finance', 'world'],
-                description: 'The news category to retrieve. Default is tech or geopolitics.'
+                enum: ['viral', 'geopolitics', 'tech', 'healthcare', 'science', 'finance', 'world'],
+                description: 'The news category to retrieve. Default is "viral" for top breaking/trending stories worldwide.'
               },
               topic: {
                 type: 'string',
-                description: 'Optional specific topic or keyword (e.g. "Ukraine", "AI models", "cancer research").'
+                description: 'Optional specific topic or keyword (e.g. "Ukraine", "AI models", "Trump Xi summit", "cancer research").'
               }
             }
           }
@@ -633,12 +633,16 @@ class ToolRegistry {
         }
 
         case 'get_world_news': {
-          const category = args.category || 'tech';
+          const category = args.category || 'viral';
           const topic = args.topic || null;
           if (!this.freeTools) {
             return JSON.stringify({ error: 'Free tools service unavailable.' });
           }
           const result = await this.freeTools.getVerifiedNews(category, topic);
+          // If a debate poll was created for this hot news, register it so clients can immediately vote
+          if (result.debatePoll && typeof this.onPollCreated === 'function') {
+            this.onPollCreated(result.debatePoll);
+          }
           return JSON.stringify(result);
         }
 

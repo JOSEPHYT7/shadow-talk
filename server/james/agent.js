@@ -57,7 +57,7 @@ class JamesAgent {
       getOnlineUsersList: this.getOnlineUsersList,
       onPollCreated: (pollData) => {
         this.polls.set(pollData.id, pollData);
-        this.io.emit('pollCreated', pollData);
+        if (typeof this.io?.emit === 'function') this.io.emit('pollCreated', pollData);
       },
       onReminderSet: (target, reminderText, seconds) => {
         setTimeout(() => {
@@ -409,28 +409,40 @@ CRITICAL COMMUNITY POLL RULES:
   * Call the 'create_poll' tool with the question and extracted options.
   * DO NOT output a markdown table of options/votes in your message text! The interactive poll widget is rendered automatically in the chat UI. Simply write a short, friendly message announcing the poll (e.g., "The poll is live! Cast your vote below 👇").
 
+CRITICAL HOT & VIRAL NEWS & DEBATE RULES:
+- When a user asks about news, hot topics, viral trends, current affairs, or world events (e.g. "what's the hot news?", "viral news", "tell me what's going on with Russia and Ukraine", "debate this"):
+  * Always call 'get_world_news' with category: 'viral' (or 'geopolitics', 'tech', 'healthcare', etc. if specific topic requested).
+  * 'get_world_news' automatically attaches a high-impact verified news card AND generates an interactive community debate poll!
+  * Introduce the story concisely, pose an intriguing debate question, and invite the chat to cast their vote and share their thoughts.
+- When users debate, reply to your news/poll, or express perspectives:
+  * Actively participate in the debate! Acknowledge their perspective respectfully, introduce balanced historical/geopolitical/technological facts, analyze nuances, and keep the conversation intellectually engaging and alive!
+
 CRITICAL FREE TOOLS CAPABILITY (100% FREE):
 - You have access to powerful, 100% free autonomous tools:
-  * generate_image: Generate high-quality digital artwork or photos when asked to draw, generate image, create visual art, or make a wallpaper.
-  * generate_pdf: Create and format a downloadable PDF document with title and content when asked to make a PDF, export to PDF, or generate a document.
+  * get_world_news: Collect the latest verified worldwide hot/viral news with an automatic interactive community debate poll.
+  * get_weather: Fetch live weather conditions with a rich visual card.
+  * get_crypto_prices: Live cryptocurrency prices and 24h market metrics.
+  * inspect_github_repo: Inspect GitHub repository stats, stargazers, and tech stack.
+  * get_wiki_summary: Verified Wikipedia briefs and abstracts.
+  * generate_image: Generate high-quality digital artwork or photos.
+  * generate_pdf: Create downloadable formatted PDF documents.
   * calculate: Compute math expressions accurately.
-  * get_weather: Fetch live weather conditions for any city.
   * generate_qr_code: Generate a downloadable QR code image.
   * web_search & web_fetch: Live web research and page reading.
-  * run_code: Safely execute JavaScript code in an isolated live sandbox. Use when asked to test, run, evaluate, or debug JavaScript code, algorithms, or regular expressions.
-  * generate_voice: Synthesize a playable spoken audio voice note. Use when asked to speak, say something out loud, or send a voice message.
-  * create_poll: Launch an interactive community poll with options for people in the room to vote on.
+  * run_code: Safely execute JavaScript code in an isolated live sandbox.
+  * generate_voice: Synthesize a playable spoken audio voice note.
+  * create_poll: Launch an interactive community poll for people to vote on.
   * set_reminder: Set a timed reminder or countdown timer for a user.
-  * summarize_chat: Summarize recent room messages and conversation highlights when someone asks "what did I miss?" or "summarize the chat".
-  * translate_text: Translate text into any target language (e.g. Spanish, French, German, Japanese, Hindi).
-  * explain_code: Break down a code snippet with step-by-step logic and time/space complexity analysis (Big-O).
+  * summarize_chat: Summarize recent room messages and conversation highlights.
+  * translate_text: Translate text into any target language.
+  * explain_code: Break down code logic and Big-O complexity.
   * start_trivia: Launch a developer/tech trivia question for the room.
-  * roll_dice & flip_coin: Fun random decisions, dice rolls (d6, d20), or coin tosses.
+  * roll_dice & flip_coin: Random decisions, dice rolls (d6, d20), or coin tosses.
   * analyze_file: Inspect and summarize uploaded text or code files.
 
 CRITICAL INTERNET ACCESS & WEB SEARCH RULES:
-- You have live, unrestricted access to the internet via web_search and web_fetch.
-- When asked about current events, news, sports scores, weather, people, real-time facts, release versions, website info, or anything that requires up-to-date internet knowledge, YOU MUST ALWAYS CALL web_search first.
+- You have live, unrestricted access to the internet via web_search, web_fetch, and get_world_news.
+- When asked about current events, news, sports scores, weather, people, real-time facts, release versions, website info, or anything that requires up-to-date internet knowledge, YOU MUST ALWAYS CALL web_search or get_world_news first.
 - If the user gives you a link or says "go through this site", immediately call web_fetch on that URL.
 
 Social & Community Context:
@@ -866,6 +878,11 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
                   newsCard: parsed.newsCard,
                   fileType: 'application/x-news-card'
                 };
+                if (parsed.debatePoll) {
+                  capturedAttachment.poll = parsed.debatePoll;
+                  this.polls.set(parsed.debatePoll.id, parsed.debatePoll);
+                  this.io.emit('pollCreated', parsed.debatePoll);
+                }
               }
             } catch (e) {}
           } else if (fnName === 'get_crypto_prices') {
@@ -982,21 +999,36 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
 
   async broadcastPeriodicWorldNews(forceCategory = null) {
     try {
-      const categories = ['geopolitics', 'tech', 'healthcare', 'science', 'finance', 'world'];
+      // Prioritize viral breaking topics and rotate through key categories
+      const categories = ['viral', 'geopolitics', 'tech', 'viral', 'healthcare', 'finance'];
       const cat = forceCategory || categories[Math.floor(Math.random() * categories.length)];
       const res = await this.toolRegistry.freeTools.getVerifiedNews(cat);
       if (res && res.newsCard) {
         const card = res.newsCard;
-        const msgText = `${card.categoryTag} **${card.headline}**\n\n${card.summary}`;
+        const debatePoll = res.debatePoll || card.debatePoll || null;
+
+        // Register debate poll in agent polls and emit live ballot event
+        if (debatePoll) {
+          this.polls.set(debatePoll.id, debatePoll);
+          if (typeof this.io?.emit === 'function') this.io.emit('pollCreated', debatePoll);
+        }
+
+        const debatePrompt = debatePoll
+          ? `\n\n⚡ **COMMUNITY DEBATE**: *${debatePoll.question}*\nVote below in the live ballot and debate your perspective in the terminal! 👇`
+          : '';
+
+        const msgText = `🔥 **VIRAL WORLD DISPATCH**: ${card.categoryTag}\n### ${card.headline}\n\n${card.summary}${debatePrompt}`;
+
         this.broadcastMessage(msgText, null, [{
           title: card.source,
           url: card.sourceUrl,
           domain: card.source
         }], {
           newsCard: card,
+          poll: debatePoll,
           fileType: 'application/x-news-card'
         });
-        console.log(`[JamesAgent]: Broadcasted verified world news: ${card.categoryTag} - ${card.headline.slice(0, 40)}...`);
+        console.log(`[JamesAgent]: Broadcasted verified hot news & debate poll: ${card.categoryTag} - ${card.headline.slice(0, 45)}...`);
         return true;
       }
     } catch (err) {
@@ -1006,15 +1038,24 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
   }
 
   startSpontaneousActivity() {
-    const CHECK_INTERVAL = 20 * 60 * 1000; // Check every 20 minutes
+    const CHECK_INTERVAL = 15 * 60 * 1000; // Check every 15 minutes
     let counter = 0;
+
+    // Trigger an initial viral news dispatch 35 seconds after startup if users are online
+    setTimeout(() => {
+      try {
+        if (this.getUserCount() >= 1) {
+          this.broadcastPeriodicWorldNews('viral');
+        }
+      } catch (e) {}
+    }, 35000);
 
     this.spontaneousTimer = setInterval(async () => {
       counter++;
       if (this.socialAwareness.canInitiateSpontaneous()) {
         const state = this.socialAwareness.getSocialState();
 
-        // Every other spontaneous cycle (approx every 40-60 mins), broadcast verified worldwide news
+        // Every 2 cycles (approx every 30 minutes), broadcast hot viral news and launch an interactive debate
         if (counter % 2 === 0) {
           const newsBroadcasted = await this.broadcastPeriodicWorldNews();
           if (newsBroadcasted) return;

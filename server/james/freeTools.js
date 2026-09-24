@@ -485,16 +485,17 @@ class FreeToolsService {
   /**
    * 4b. Verified Worldwide News Collection across key categories
    */
-  async getVerifiedNews(category = 'tech', customQuery = null) {
+  async getVerifiedNews(category = 'viral', customQuery = null) {
     try {
       const result = await this.newsService.getVerifiedNews(category, customQuery, 4);
-      const featured = result.articles?.[0] || null;
+      const featured = result.newsCard || result.articles?.[0] || null;
       return {
         success: true,
         category: result.category,
         tag: result.tag,
         color: result.color,
         newsCard: featured,
+        debatePoll: result.debatePoll || featured?.debatePoll || null,
         articles: result.articles
       };
     } catch (err) {
