@@ -5,7 +5,11 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch --watch-exclude=data --watch-exclude=uploads server.js",
+    "start:cluster": "node cluster.js",
+    "start:lb": "node loadBalancer.js",
+    "dev": "nodemon server.js",
+    "clear:chat": "node clearChat.js",
+    "clear-chat": "node clearChat.js",
     "build": "echo \"No build step required for server backend\""
   },
   "keywords": [],
@@ -18,5 +22,8 @@
     "nodemailer": "^10.0.1",
     "pdfkit": "^0.20.2",
     "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
   }
 }

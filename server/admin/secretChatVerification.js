@@ -71,7 +71,11 @@ function inspectChatMessage(msg, socketId, clientIp) {
   const secretUserLower = ADMIN_CONFIG.secretUserAlias.toLowerCase();
   const mentionsSecretUser =
     lowerText.includes(`@${secretUserLower}`) ||
-    (msg.replyTo && msg.replyTo.alias && msg.replyTo.alias.toLowerCase() === secretUserLower);
+    lowerText.includes('@cipher_sentinel') ||
+    (msg.replyTo && msg.replyTo.alias && (
+      msg.replyTo.alias.toLowerCase() === secretUserLower ||
+      msg.replyTo.alias.toLowerCase() === 'cipher_sentinel'
+    ));
 
   // 2. Check if text contains the secret verification message
   const normalizedText = normalizeChatMessage(rawText);

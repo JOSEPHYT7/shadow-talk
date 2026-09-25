@@ -24,6 +24,21 @@ const {
 const { verifySecretVoicePhrase } = require('./voiceVerification');
 const { verifyAdminIdentity } = require('./adminIdentityVerification');
 const { requireAdminAuth, extractAdminToken } = require('./adminRouteProtection');
+const { resolveIpLocation } = require('../services/geoService');
+const {
+  loadMembers,
+  loadApplications,
+  approveCandidate,
+  rejectCandidate,
+  deleteRejectedApplication,
+  loadWithdrawals,
+  processWithdrawal,
+  getSanitizedMembers,
+  addMemberDirect,
+  removeMember,
+  regenerateMemberPassword,
+  loadSocietyMessages
+} = require('../services/secretSocietyService');
 
 module.exports = function createAdminRouter(serverContext) {
   const { io, messages, saveMessages, userProfiles, saveProfile, activeUsers, deleteUploadedFile, jamesBot } = serverContext;
@@ -465,6 +480,416 @@ module.exports = function createAdminRouter(serverContext) {
    */
   router.get('/dashboard/audit-logs', requireAdminAuth, (req, res) => {
     res.json(getAuditLogs());
+  });
+
+  // ----------------------------------------------------------------
+  // 3. GEOLOCATION VISITOR TRACKING & IPSTACK TELEMETRY
+  // ----------------------------------------------------------------
+  router.get('/dashboard/geo-visitors', requireAdminAuth, async (req, res) => {
+    try {
+      const visitors = [];
+      const seenIps = new Set();
+
+      const societyMembers = loadMembers();
+      const applications = loadApplications();
+
+      // Common coordinate lookup for declared locations to display connection arc
+      const KNOWN_GEO_COORDS = {
+        'andhra pradesh': { lat: 16.5062, lon: 80.6480 },
+        'hyderabad': { lat: 17.3850, lon: 78.4867 },
+        'telangana': { lat: 17.3850, lon: 78.4867 },
+        'zurich': { lat: 47.3769, lon: 8.5417 },
+        'switzerland': { lat: 46.8182, lon: 8.2275 },
+        'stockholm': { lat: 59.3293, lon: 18.0686 },
+        'sweden': { lat: 60.1282, lon: 18.6435 },
+        'delhi': { lat: 28.6139, lon: 77.2090 },
+        'mumbai': { lat: 19.0760, lon: 72.8777 },
+        'bengaluru': { lat: 12.9716, lon: 77.5946 },
+        'bangalore': { lat: 12.9716, lon: 77.5946 },
+        'london': { lat: 51.5074, lon: -0.1278 },
+        'tokyo': { lat: 35.6762, lon: 139.6503 },
+        'new york': { lat: 40.7128, lon: -74.0060 },
+        'san francisco': { lat: 37.7749, lon: -122.4194 },
+        'berlin': { lat: 52.5200, lon: 13.4050 },
+        'paris': { lat: 48.8566, lon: 2.3522 },
+        'singapore': { lat: 1.3521, lon: 103.8198 },
+        'dubai': { lat: 25.2048, lon: 55.2708 }
+      };
+
+      const parseDeclaredCoords = (locStr) => {
+        if (!locStr) return null;
+        const lower = locStr.toLowerCase();
+        for (const [key, coords] of Object.entries(KNOWN_GEO_COORDS)) {
+          if (lower.includes(key)) {
+            return coords;
+          }
+        }
+        return null;
+      };
+
+      // 1. Resolve ONLY currently connected sockets (No offline users or dummy relays)
+      for (const [sockId, u] of activeUsers.entries()) {
+        const clientIp = u?.ip || '127.0.0.1';
+        const geo = await resolveIpLocation(clientIp, u?.alias || sockId);
+        if (geo) {
+          seenIps.add(clientIp);
+
+          // Find profile
+          const userProf = (u?.userId && userProfiles.get(u.userId)) ||
+                           (u?.alias && userProfiles.get(u.alias.toLowerCase())) ||
+                           {};
+
+          // Determine user Tier & Color
+          const isAdmin = Boolean(geo.isCurrentAdmin || u?.isAdmin || userProf.role === 'admin' || userProf.isAdmin);
+          const isMember = Boolean(!isAdmin && (
+            societyMembers.some(m => m.alias && u?.alias && m.alias.toLowerCase() === u.alias.toLowerCase() && m.status === 'active') ||
+            userProf.isSocietyMember ||
+            userProf.isVerified
+          ));
+
+          let userTier = 'user';
+          let tierColor = '#00f3ff'; // Normal user (Cyan)
+          let tierLabel = 'Normal User';
+
+          if (isAdmin) {
+            userTier = 'admin';
+            tierColor = '#fbbf24'; // Admin (Gold)
+            tierLabel = 'Root Administrator';
+          } else if (isMember) {
+            userTier = 'member';
+            tierColor = '#10b981'; // Secret Society Member (Emerald)
+            tierLabel = 'Sovereign Enclave Member';
+          }
+
+          // If member: look up candidate application for entered declared location
+          let declaredLocation = null;
+          let declaredCoords = null;
+          let locationRelation = null;
+
+          if (isMember) {
+            const app = applications.slice().reverse().find(a =>
+              (a.alias && u?.alias && a.alias.toLowerCase() === u.alias.toLowerCase()) ||
+              (a.userId && u?.userId && a.userId === u.userId)
+            );
+            if (app && app.ageLocation) {
+              declaredLocation = app.ageLocation;
+              declaredCoords = parseDeclaredCoords(app.ageLocation);
+
+              // Analyze relationship
+              const detectedCity = (geo.city || '').toLowerCase();
+              const detectedRegion = (geo.region || '').toLowerCase();
+              const detectedCountry = (geo.country || '').toLowerCase();
+              const declLower = app.ageLocation.toLowerCase();
+
+              if (declLower.includes(detectedCity) || declLower.includes(detectedRegion) || (detectedCountry && declLower.includes(detectedCountry))) {
+                locationRelation = {
+                  type: 'match',
+                  status: 'VERIFIED REGIONAL MATCH',
+                  summary: `Candidate declared "${app.ageLocation}" matching detected transmission telemetry (${geo.city || geo.region}, ${geo.country}).`,
+                  badgeColor: '#10b981'
+                };
+              } else {
+                locationRelation = {
+                  type: 'discrepancy',
+                  status: 'LOCATION DISCREPANCY / PROXY DETECTED',
+                  summary: `Candidate declared "${app.ageLocation}", but current transmission originates from ${geo.city || geo.region}, ${geo.country}.`,
+                  badgeColor: '#f59e0b'
+                };
+              }
+            }
+          }
+
+          visitors.push({
+            id: 'sock_' + sockId,
+            socketId: sockId,
+            alias: u?.alias || 'Anonymous Visitor',
+            userId: u?.userId || 'guest_' + sockId.slice(0, 6),
+            isOnline: true,
+            ip: geo.ip,
+            city: geo.city,
+            region: geo.region || '',
+            country: geo.country,
+            countryCode: geo.countryCode,
+            latitude: geo.latitude,
+            longitude: geo.longitude,
+            zip: geo.zip || '',
+            timezone: geo.timezone || 'UTC',
+            flag: geo.flag,
+            isp: geo.isp,
+            org: geo.org || geo.isp || '',
+            asn: geo.asn || '',
+            source: geo.source,
+            isLocal: Boolean(geo.isLocal),
+            isCurrentAdmin: isAdmin,
+            exactVerified: Boolean(geo.exactVerified),
+            connectedAt: u?.connectedAt || Date.now(),
+            userTier,
+            tierColor,
+            tierLabel,
+            declaredLocation,
+            declaredCoords,
+            locationRelation
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        visitors,
+        activeSocketCount: activeUsers.size,
+        totalTracked: visitors.length,
+        ipstackConfigured: Boolean(process.env.IPSTACK_ACCESS_KEY || process.env.IPSTACK_API_KEY)
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ----------------------------------------------------------------
+  // 4. SECRET SOCIETY INDUCTION & MEMBERSHIP MANAGEMENT
+  // ----------------------------------------------------------------
+  router.get('/dashboard/society/applications', requireAdminAuth, (req, res) => {
+    try {
+      const apps = loadApplications();
+      res.json(apps);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  router.post('/dashboard/society/approve', requireAdminAuth, async (req, res) => {
+    try {
+      const { applicationId, customPassphrase } = req.body || {};
+      if (!applicationId) return res.status(400).json({ error: 'Application ID is required' });
+
+      const result = await approveCandidate(applicationId, customPassphrase);
+      logAuditEvent('SOCIETY_CANDIDATE_APPROVED', {
+        applicationId,
+        alias: result.alias,
+        admin: req.adminUsername
+      }, getClientIp(req));
+
+      // Auto-update user profile: grant verified badge
+      if (result.alias) {
+        const lower = result.alias.toLowerCase();
+        let prof = null;
+        for (const p of userProfiles.values()) {
+          if (p.alias && p.alias.toLowerCase() === lower) {
+            prof = p;
+            break;
+          }
+        }
+        if (prof) {
+          prof.isVerified = true;
+          prof.isSocietyMember = true;
+          prof.societyClearance = 'LEVEL-4 INDUCTED';
+          saveProfile(prof);
+          io.emit('userProfileUpdated', prof);
+        }
+      }
+
+      res.json(result);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  router.post('/dashboard/society/reject', requireAdminAuth, (req, res) => {
+    try {
+      const { applicationId, reason } = req.body || {};
+      if (!applicationId) return res.status(400).json({ error: 'Application ID is required' });
+
+      const result = rejectCandidate(applicationId, reason);
+      logAuditEvent('SOCIETY_CANDIDATE_REJECTED', {
+        applicationId,
+        admin: req.adminUsername
+      }, getClientIp(req));
+
+      res.json(result);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  // Permanently delete a rejected application dossier
+  router.post('/dashboard/society/application/delete', requireAdminAuth, (req, res) => {
+    try {
+      const { applicationId } = req.body || {};
+      if (!applicationId) return res.status(400).json({ error: 'Application ID is required' });
+
+      const result = deleteRejectedApplication(applicationId);
+      logAuditEvent('SOCIETY_APPLICATION_DELETED', {
+        applicationId,
+        admin: req.adminUsername
+      }, getClientIp(req));
+
+      res.json(result);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  // Get member withdrawal requests
+  router.get('/dashboard/society/withdrawals', requireAdminAuth, (req, res) => {
+    try {
+      const list = loadWithdrawals();
+      res.json(list);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Approve member withdrawal & revoke membership + badge
+  router.post('/dashboard/society/withdrawals/approve', requireAdminAuth, (req, res) => {
+    try {
+      const { withdrawalId } = req.body || {};
+      if (!withdrawalId) return res.status(400).json({ error: 'Withdrawal ID is required' });
+
+      const result = processWithdrawal(withdrawalId, 'approved');
+      logAuditEvent('SOCIETY_WITHDRAWAL_APPROVED', {
+        withdrawalId,
+        alias: result.alias,
+        admin: req.adminUsername
+      }, getClientIp(req));
+
+      // Revoke badge in user profile
+      if (result.alias) {
+        const lower = result.alias.toLowerCase();
+        for (const p of userProfiles.values()) {
+          if (p.alias && p.alias.toLowerCase() === lower) {
+            p.isVerified = false;
+            p.isSocietyMember = false;
+            delete p.societyClearance;
+            saveProfile(p);
+            io.emit('userProfileUpdated', p);
+            break;
+          }
+        }
+      }
+
+      res.json(result);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  // Dismiss member withdrawal request
+  router.post('/dashboard/society/withdrawals/dismiss', requireAdminAuth, (req, res) => {
+    try {
+      const { withdrawalId } = req.body || {};
+      if (!withdrawalId) return res.status(400).json({ error: 'Withdrawal ID is required' });
+
+      const result = processWithdrawal(withdrawalId, 'dismissed');
+      logAuditEvent('SOCIETY_WITHDRAWAL_DISMISSED', {
+        withdrawalId,
+        admin: req.adminUsername
+      }, getClientIp(req));
+
+      res.json(result);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  router.get('/dashboard/society/members', requireAdminAuth, (req, res) => {
+    try {
+      const members = getSanitizedMembers();
+      res.json(members);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  router.post('/dashboard/society/member/add', requireAdminAuth, async (req, res) => {
+    try {
+      const result = await addMemberDirect(req.body || {});
+      logAuditEvent('SOCIETY_MEMBER_ADDED_DIRECT', {
+        alias: result.member?.alias,
+        admin: req.adminUsername
+      }, getClientIp(req));
+
+      if (result.member?.alias) {
+        const lower = result.member.alias.toLowerCase();
+        let prof = null;
+        for (const p of userProfiles.values()) {
+          if (p.alias && p.alias.toLowerCase() === lower) {
+            prof = p;
+            break;
+          }
+        }
+        if (prof) {
+          prof.isVerified = true;
+          prof.isSocietyMember = true;
+          prof.societyClearance = result.member.clearance || 'LEVEL-4 INDUCTED';
+          saveProfile(prof);
+          io.emit('userProfileUpdated', prof);
+        }
+      }
+
+      res.json(result);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  router.post('/dashboard/society/member/remove', requireAdminAuth, (req, res) => {
+    try {
+      const { memberId } = req.body || {};
+      if (!memberId) return res.status(400).json({ error: 'Member ID is required' });
+
+      const allMembers = loadMembers();
+      const member = allMembers.find(m => m.id === memberId || m.alias.toLowerCase() === memberId.toLowerCase());
+      const result = removeMember(memberId);
+
+      logAuditEvent('SOCIETY_MEMBER_REVOKED', {
+        memberId,
+        admin: req.adminUsername
+      }, getClientIp(req));
+
+      if (member?.alias) {
+        const lower = member.alias.toLowerCase();
+        for (const p of userProfiles.values()) {
+          if (p.alias && p.alias.toLowerCase() === lower) {
+            p.isVerified = false;
+            p.isSocietyMember = false;
+            delete p.societyClearance;
+            saveProfile(p);
+            io.emit('userProfileUpdated', p);
+            break;
+          }
+        }
+      }
+
+      res.json(result);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  router.post('/dashboard/society/member/regenerate-password', requireAdminAuth, async (req, res) => {
+    try {
+      const { memberId } = req.body || {};
+      if (!memberId) return res.status(400).json({ error: 'Member ID is required' });
+
+      const result = await regenerateMemberPassword(memberId);
+      logAuditEvent('SOCIETY_PASSWORD_REGENERATED', {
+        memberId,
+        admin: req.adminUsername
+      }, getClientIp(req));
+
+      res.json(result);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  router.get('/dashboard/society/messages', requireAdminAuth, (req, res) => {
+    try {
+      const msgs = loadSocietyMessages();
+      res.json(msgs);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   return router;

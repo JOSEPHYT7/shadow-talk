@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Shield,
   Lock,
   Eye,
+  EyeOff,
   BookOpen,
   Compass,
   Award,
@@ -23,11 +24,19 @@ import {
   Zap,
   Activity,
   Skull,
-  ShieldAlert
+  ShieldAlert,
+  Globe,
+  Users,
+  MessageSquare,
+  Share2,
+  Sprout,
+  Sparkles,
+  Check,
+  Loader2
 } from 'lucide-react';
 import GlobeStudy from './components/ui/globe-study';
 
-export default function SecretSociety({ onReturn, onApply }) {
+export default function SecretSociety({ onReturn, onApply, serverUrl = 'http://localhost:5000', onOpenMemberChat }) {
   const [activeChamber, setActiveChamber] = useState(0);
   const [revealedDossiers, setRevealedDossiers] = useState({});
   const [activeDecipher, setActiveDecipher] = useState(null);
@@ -35,16 +44,141 @@ export default function SecretSociety({ onReturn, onApply }) {
   const [isDeciphering, setIsDeciphering] = useState(false);
   const [showHexDump, setShowHexDump] = useState(false);
 
+  // --- Member Secret Access Modal & Gesture States ---
+  const [showMemberAuthModal, setShowMemberAuthModal] = useState(false);
+  const [memberAlias, setMemberAlias] = useState('');
+  const [memberPassphrase, setMemberPassphrase] = useState('');
+  const [showPassphraseInput, setShowPassphraseInput] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [accessGrantedAnim, setAccessGrantedAnim] = useState(false);
+  const [sealPulseAnim, setSealPulseAnim] = useState(false);
+
+  // Hidden Cadence Gesture Detector: 2 clicks -> wait ~3s -> 4 clicks
+  const gestureTimestampsRef = useRef([]);
+
+  const handleSealSecretClick = (e) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+    }
+
+    const now = Date.now();
+    gestureTimestampsRef.current.push(now);
+    if (gestureTimestampsRef.current.length > 12) {
+      gestureTimestampsRef.current.shift();
+    }
+
+    // Trigger subtle visual pulse on seal
+    setSealPulseAnim(true);
+    setTimeout(() => setSealPulseAnim(false), 300);
+
+    const count = gestureTimestampsRef.current.length;
+    console.log(`[Secret Society Member Cadence] Seal tapped (#${count})`);
+
+    // Check last 6 clicks: 2 clicks -> wait ~3s -> 4 clicks
+    if (gestureTimestampsRef.current.length >= 6) {
+      const len = gestureTimestampsRef.current.length;
+      const [c0, c1, c2, c3, c4, c5] = gestureTimestampsRef.current.slice(len - 6);
+
+      const burst1 = c1 - c0;          // click 1 to 2
+      const waitPause = c2 - c1;       // wait ~3s (900ms - 8500ms)
+      const burst2_1 = c3 - c2;        // click 1 of 4
+      const burst2_2 = c4 - c3;        // click 2 of 4
+      const burst2_3 = c5 - c4;        // click 3 of 4
+
+      console.log(`[Member Cadence Check]
+  Burst 1 gap (<=2000ms): ${burst1}ms
+  Pause wait (900ms-8500ms): ${waitPause}ms
+  Burst 2 gaps (<=2000ms): ${burst2_1}ms, ${burst2_2}ms, ${burst2_3}ms`);
+
+      const isMatch =
+        burst1 <= 2000 &&
+        waitPause >= 900 && waitPause <= 8500 &&
+        burst2_1 <= 2000 &&
+        burst2_2 <= 2000 &&
+        burst2_3 <= 2000;
+
+      if (isMatch) {
+        console.log('[Secret Society] MEMBER SEQUENCE VERIFIED! Opening Passphrase Challenge...');
+        gestureTimestampsRef.current = [];
+        setAuthError('');
+        setShowMemberAuthModal(true);
+        if (navigator.vibrate) {
+          try { navigator.vibrate([60, 50, 60]); } catch { }
+        }
+      }
+    }
+  };
+
+  // Authenticate member passphrase with server
+  const handleVerifyMemberPassphrase = async (e) => {
+    e.preventDefault();
+    if (!memberAlias.trim()) {
+      setAuthError('Please enter your inducted @alias.');
+      return;
+    }
+    if (!memberPassphrase.trim()) {
+      setAuthError('Please enter the secret passphrase received from the Council.');
+      return;
+    }
+
+    setAuthLoading(true);
+    setAuthError('');
+
+    try {
+      const res = await fetch(`${serverUrl}/api/secret-society/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          alias: memberAlias.trim(),
+          passphrase: memberPassphrase.trim()
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setAuthError(data.error || 'Access Denied: Invalid credentials or uninducted alias.');
+        setAuthLoading(false);
+        return;
+      }
+
+      // Grant Access Animation
+      setAuthLoading(false);
+      setAccessGrantedAnim(true);
+
+      setTimeout(() => {
+        setAccessGrantedAnim(false);
+        setShowMemberAuthModal(false);
+        if (typeof onOpenMemberChat === 'function') {
+          onOpenMemberChat({
+            alias: data.alias,
+            token: data.societyToken || data.token,
+            societyToken: data.societyToken || data.token,
+            clearance: data.clearance || 'LEVEL-4 (INDUCTED)'
+          });
+        }
+      }, 1900);
+    } catch (err) {
+      console.error('Member auth error:', err);
+      setAuthError('Connection failed. Server load balancer or enclave gateway unavailable.');
+      setAuthLoading(false);
+    }
+  };
+
   // Global ESC key listener to return to public terminal
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
-        onReturn();
+        if (showMemberAuthModal) {
+          setShowMemberAuthModal(false);
+        } else {
+          onReturn();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onReturn]);
+  }, [onReturn, showMemberAuthModal]);
 
   const [consoleLogs, setConsoleLogs] = useState([
     '[INIT] ChaCha20-Poly1305 enclave handshake established.',
@@ -59,7 +193,8 @@ export default function SecretSociety({ onReturn, onApply }) {
     const events = [
       '[THE-CRYPT] 128-byte encrypted packet routed through Reykjavik relay.',
       '[THE-FOUNDRY] Member @solon committed PR to sovereign peer-to-peer daemon.',
-      '[WAR-ROOM] New ground dispatch submitted from Taipei Node (Verified).',
+      '[WAR-ROOM] Planetary Climate Anomaly report filed from North Atlantic Node.',
+      '[PLANETARY-ACTION] Energy Decentralization Council ratified Microgrid Blueprint v4.',
       '[COUNCIL] Processing induction dossier for Candidate #0852...',
       '[EPHEMERAL] Rotating Diffie-Hellman session keys across active rings.',
       '[BLACK-ARCHIVE] Archive #089 (Decentralized State Machines) accessed.',
@@ -103,6 +238,14 @@ export default function SecretSociety({ onReturn, onApply }) {
       encrypted: '90 e4 2b 17 c8 51 aa 08 d3 42 79 f1 b6 80 5e 3c 14 ae 6d 29',
       decrypted:
         'ShadowTalk functions as an autonomous citadel. In-memory message execution, zero persistent server databases, and peer-vetted induction ensure our enclave remains completely impenetrable to state and corporate interception.'
+    },
+    {
+      id: 'archive_04',
+      title: 'FILE 0xEE: PLANETARY STEWARDSHIP & TANGIBLE ACTION',
+      category: 'EARTH RESILIENCE DIRECTIVE',
+      encrypted: '1b 5c 88 f4 33 e0 92 ad 77 c4 08 fa 21 6d b5 ee 90 4a 12 c9',
+      decrypted:
+        'The Secret Society does not seek retreat from reality. We convene to save and improve our Earth. We coordinate decentralized solar microgrids, soil restoration blueprints, censorship-free environmental telemetry, and direct solutions to existential planetary crises.'
     }
   ];
 
@@ -201,25 +344,25 @@ Requirement: Reserved strictly for inducted society members.`
       id: 'foundry',
       index: '03',
       code: 'VAULT_FOUNDRY',
-      name: 'THE BLACK FOUNDRY',
-      tagline: 'Covert Engineering & Autonomous Agent Kernels',
+      name: 'THE PLANETARY FOUNDRY',
+      tagline: 'Covert Engineering & Earth Regeneration Kernels',
       icon: <Cpu size={22} />,
       color: '#34d399',
       tag: 'ROGUE ARCHITECTURES',
       description:
-        'We do not debate the future; we write the firmware. In The Foundry, vetted engineers and researchers build autonomous intelligence agents (James Core), peer-to-peer mesh protocols, privacy-preserving infrastructure, and local-first AI models engineered to defy digital authoritarianism.',
+        'We do not debate the future; we write the firmware and solve the crisis. In The Foundry, vetted engineers build autonomous intelligence agents (James Core), decentralized microgrids, water purification telemetry, privacy-preserving infrastructure, and open-source models engineered to defy digital monopolies and heal our planet.',
       features: [
+        'Planetary resilience & decentralized solar microgrid firmware',
         'Direct collaboration with sovereign core developers',
         'Decentralized identity & anti-censorship mesh nodes',
-        'Self-hosted autonomous agent architectures (James Core)',
-        'Clandestine code repositories and cryptographic mirrors'
+        'Self-hosted autonomous agent architectures (James Core)'
       ],
-      codeSnippet: `// Autonomous Enclave Daemon (James Core)
+      codeSnippet: `// Autonomous Enclave Daemon (James Core - Advanced)
 class SovereignNode extends MeshRelay {
   constructor(nodeId) {
     super(nodeId, { autonomous: true, stealth: true });
     this.bindMeshProtocol("ENCLAVE_NET_v2");
-    this.enableZeroTraceRouting();
+    this.enablePlanetaryTelemetrySync();
   }
 }`
     },
@@ -233,16 +376,16 @@ class SovereignNode extends MeshRelay {
       color: '#fbbf24',
       tag: 'REAL-TIME SIGNALS',
       description:
-        'When geopolitical upheaval or technological shockwaves hit, mainstream news feeds delay, sanitize, and manipulate. In The War Room, verified members situated across 40+ countries transmit raw, clinical ground-truth reports with absolute intellectual composure.',
+        'When geopolitical upheaval, ecological shocks, or technological suppression hit, mainstream feeds delay and manipulate. In The War Room, verified members across 40+ countries transmit raw ground-truth reports with clinical intellectual composure to formulate real-world solutions.',
       features: [
         'First-hand dispatches from members in 40+ sovereign nations',
-        'Objective peer cross-examination before media syndication',
-        'Live intelligence on regulatory shifts, cyber events & markets',
-        'Strict covenant: Zero emotional panic, tribalism, or disinformation'
+        'Ecological & climate ground telemetry verified by peers',
+        'Objective cross-examination before media distortion',
+        'Strict covenant: Zero emotional hysteria, tribalism, or propaganda'
       ],
       codeSnippet: `[WAR-ROOM DISPATCH: 0x88F2]
 Origin: East Asia Relay // Timestamp: Synchronized UTC
-Event: Undersea telecom cable anomaly detected.
+Event: Undersea telecom cable anomaly & localized outage.
 Ground Truth: BGP routing hijacked at IXP level;
               Unreported across commercial news media.`
     }
@@ -271,7 +414,7 @@ Ground Truth: BGP routing hijacked at IXP level;
         <div className="telemetry-separator">//</div>
         <div className="telemetry-item">
           <span className="telemetry-label">ACTIVE NODES:</span>
-          <span className="telemetry-value gold">42 RELAYS (ZURICH / TOKYO / TAIPEI)</span>
+          <span className="telemetry-value gold">42 RELAYS (ZURICH / TOKYO / REYKJAVIK)</span>
         </div>
         <div className="telemetry-separator">//</div>
         <div className="telemetry-item">
@@ -282,12 +425,19 @@ Ground Truth: BGP routing hijacked at IXP level;
 
       {/* Top Header Navigation */}
       <header className="society-header">
-        <button type="button" className="society-back-btn" onClick={onReturn} title="Return [ESC]">
+        <button type="button" className="society-back-btn" onClick={onReturn} title="Return to Public Chat [ESC]">
           <ArrowLeft size={16} />
           <kbd className="society-kbd">ESC</kbd>
         </button>
 
-        <div className="society-header-badge">
+        {/* Hidden Trigger: Top Emblem also accepts the secret cadence */}
+        <div
+          className={`society-header-badge ${sealPulseAnim ? 'seal-pulsing' : ''}`}
+          onClick={handleSealSecretClick}
+          role="button"
+          tabIndex={0}
+          title="Citadel Node"
+        >
           <span className="society-status-dot-pulse" />
           <span>// CODE: SHADOWTALK</span>
         </div>
@@ -295,11 +445,11 @@ Ground Truth: BGP routing hijacked at IXP level;
 
       {/* Main Enclave Container */}
       <main className="society-manifesto-container">
-        {/* Hero Section: Terrifying, Futuristic, Uncompromising */}
+        {/* Hero Section: The Public Sanctuary & Worldwide Stranger Connection */}
         <section className="society-hero-section">
           <div className="society-tactical-tag">
-            <ShieldAlert size={14} className="tag-icon" />
-            <span>CLASSIFIED PROTOCOL // UNAUTHORIZED INTERCEPTION PROHIBITED</span>
+            <Globe size={14} className="tag-icon" />
+            <span>CONNECT WITH STRANGERS WORLDWIDE // ZERO IDENTITY REQUIRED</span>
           </div>
 
           <h1 className="society-hero-headline">
@@ -308,40 +458,67 @@ Ground Truth: BGP routing hijacked at IXP level;
           </h1>
 
           <p className="society-hero-quote">
-            &ldquo;You were not educated. You were domesticated. The modern syllabus was engineered to manufacture compliant cogs for century-old monopolies. ShadowTalk is the underground counter-intelligence sanctuary where autodidacts, cryptographers, and sovereign builders convene in the dark.&rdquo;
+            &ldquo;Connect with curious minds worldwide without shedding your anonymity. No surveillance feeds, no identity badges, no algorithms. Just pure human intellect meeting across encrypted space to debate, share, and solve the real problems facing our world.&rdquo;
           </p>
 
           <p className="society-hero-lead">
-            This is not a social network. There are no algorithmic dopamine feeds, no public vanity metrics, and zero data retained on disk. Initiated members access covert research vaults, coordinate autonomous software builds, and transmit unfiltered ground-truth intelligence across a peer-to-peer encrypted mesh.
+            ShadowTalk is a global sanctuary built for people to connect with strangers worldwide. Share ideas, learn suppressed perspectives, network, and engage in high-caliber intellectual debates. All transmissions execute purely in volatile memory—with zero disk retention and zero personal data stored.
           </p>
+
+          {/* Core Public Pillars Grid */}
+          <div className="society-pillars-grid">
+            <div className="pillar-item">
+              <div className="pillar-icon cyan"><Users size={18} /></div>
+              <h4>CONNECT STRANGERS</h4>
+              <p>Forge authentic bonds across borders without exchanging legal identities or phone numbers.</p>
+            </div>
+
+            <div className="pillar-item">
+              <div className="pillar-icon emerald"><Share2 size={18} /></div>
+              <h4>CHAT &bull; SHARE &bull; GROW</h4>
+              <p>Freely exchange technical skills, research, and uncensored perspectives across a global network.</p>
+            </div>
+
+            <div className="pillar-item">
+              <div className="pillar-icon purple"><MessageSquare size={18} /></div>
+              <h4>INTELLECTUAL DEBATES</h4>
+              <p>Engage in deep, rigorous debates on philosophy, cryptography, economics, and human sovereignty.</p>
+            </div>
+
+            <div className="pillar-item">
+              <div className="pillar-icon gold"><Sprout size={18} /></div>
+              <h4>IMPROVE &amp; SAVE EARTH</h4>
+              <p>Direct collective intelligence toward solving real-world crises—ecological, energetic, and cognitive.</p>
+            </div>
+          </div>
 
           {/* Tactical Status Cards */}
           <div className="society-hero-stats-row">
             <div className="society-stat-card">
               <div className="stat-card-header">
                 <Shield size={16} className="stat-icon" />
-                <span className="stat-label">SURVEILLANCE IMMUNITY</span>
+                <span className="stat-label">IDENTITY REQUIRED</span>
               </div>
-              <span className="stat-number">100%</span>
-              <span className="stat-sub">Client-side AES-256</span>
+              <span className="stat-number">0%</span>
+              <span className="stat-sub">Strict Zero-KYC Policy</span>
             </div>
 
             <div className="society-stat-card">
               <div className="stat-card-header">
                 <Skull size={16} className="stat-icon red" />
-                <span className="stat-label">DATA LOGGED ON DISK</span>
+                <span className="stat-label">DATA RETAINED ON DISK</span>
               </div>
               <span className="stat-number red">0 BYTES</span>
-              <span className="stat-sub">Shredded every 24h</span>
+              <span className="stat-sub">Atomized in RAM every 24h</span>
             </div>
 
             <div className="society-stat-card">
               <div className="stat-card-header">
                 <Fingerprint size={16} className="stat-icon" />
-                <span className="stat-label">CANDIDATE DISCARD</span>
+                <span className="stat-label">CANDIDATE VETTING</span>
               </div>
               <span className="stat-number">91.4%</span>
-              <span className="stat-sub">Strict vetting filter</span>
+              <span className="stat-sub">Council filter rate</span>
             </div>
 
             <div className="society-stat-card">
@@ -351,6 +528,56 @@ Ground Truth: BGP routing hijacked at IXP level;
               </div>
               <span className="stat-number gold">42</span>
               <span className="stat-sub">Across 40+ nations</span>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 1.5: The Enigma of the Secret Society (Curiosity & Mission) */}
+        <section className="society-curiosity-section">
+          <div className="section-label-header">
+            <span className="section-code">[00 // THE INNER CONCLAVE]</span>
+            <h2>WHAT IS THE SECRET SOCIETY?</h2>
+            <p className="section-subtext">
+              An underground enclave embedded deep within ShadowTalk. Unseen by the public. Unsearchable by web crawlers.
+            </p>
+          </div>
+
+          <div className="curiosity-manifesto-card">
+            <div className="curiosity-seal-badge">
+              <span>Ω</span>
+            </div>
+
+            <div className="curiosity-content">
+              <h3>Zero Identity. Unspoken Truths. Tangible Earth Stewardship.</h3>
+              <p>
+                Inside the public chat, strangers learn and debate. But beneath the surface lies the <strong>Secret Society</strong>—an inducted inner circle where no one knows each other&apos;s real-world identity. Members are known solely by cryptographic pseudonyms and proven contributions.
+              </p>
+
+              <div className="curiosity-highlights-grid">
+                <div className="curiosity-highlight">
+                  <div className="highlight-tag">UNREDACTED SECRETS</div>
+                  <h4>Discussions That Are Never Told</h4>
+                  <p>
+                    Talk candidly about suppressed discoveries, deep geopolitical mechanics, and unspoken technological realities erased from institutional curricula and media outlets.
+                  </p>
+                </div>
+
+                <div className="curiosity-highlight">
+                  <div className="highlight-tag">EXCLUSIVE TOOLS</div>
+                  <h4>Advanced James Bot Core</h4>
+                  <p>
+                    Access specialized AI capabilities with Advanced James Bot—serving unredacted council briefings, planetary action blueprints, and deep technical synthesis reserved only for inducted members.
+                  </p>
+                </div>
+
+                <div className="curiosity-highlight">
+                  <div className="highlight-tag">REAL DECISIONS</div>
+                  <h4>Working on Real Problems</h4>
+                  <p>
+                    We do not hide in shadows to posture. We convene to make concrete decisions and build real solutions for our Earth: decentralized energy, climate resilience, open-source food autonomy, and cognitive freedom.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -504,7 +731,7 @@ Ground Truth: BGP routing hijacked at IXP level;
           })()}
         </section>
 
-        {/* Section 4: Declassified Redacted Memorandums (Glitch & Hover Reveal) */}
+        {/* Section 4: Declassified Redacted Memorandums */}
         <section className="society-redacted-section">
           <div className="section-label-header">
             <span className="section-code">[03 // DECLASSIFIED FILES]</span>
@@ -571,18 +798,18 @@ Ground Truth: BGP routing hijacked at IXP level;
               onClick={() => toggleRevealDossier('d3')}
             >
               <div className="redacted-card-header">
-                <span className="dossier-id">MEMORANDUM #03 // CITADEL SOVEREIGNTY</span>
+                <span className="dossier-id">MEMORANDUM #03 // PLANETARY CONVENING</span>
                 <span className="clearance-tag cyan">CODE BLACK</span>
               </div>
               <p className="redacted-card-body">
-                Verified members coordinate peer-to-peer across{' '}
+                Secret Society members coordinate across{' '}
                 <span
                   className="redacted-text"
                   title="Click or hover to reveal"
                 >
-                  42 sovereign relays with zero third-party telemetry, zero advertisement trackers, and zero central points of failure
+                  42 sovereign relays to fund and engineer real open-source solutions for ecological survival, micro-agriculture, and distributed power
                 </span>
-                . The Verified Blue Tick is an induction honor earned exclusively through candidate vetting.
+                . True secrecy serves as a shield for tangible planetary preservation.
               </p>
               <div className="redacted-card-footer">
                 <span className="redacted-hint">Hover or tap to declassify</span>
@@ -653,10 +880,17 @@ Ground Truth: BGP routing hijacked at IXP level;
           </div>
         </section>
 
-        {/* Section 7: The Threshold of Induction (CTA) */}
+        {/* Section 7: The Threshold of Induction & Secret Access Seal */}
         <section className="society-cta-container">
           <div className="society-cta-glass-card">
-            <div className="society-cta-seal">
+            {/* Hidden Cadence Seal (2 clicks -> wait 3s -> 4 clicks) */}
+            <div
+              className={`society-cta-seal ${sealPulseAnim ? 'seal-pulsing' : ''}`}
+              onClick={handleSealSecretClick}
+              role="button"
+              tabIndex={0}
+              title="Citadel Seal // Inducted Sequence Sensor"
+            >
               <span>Ω</span>
             </div>
 
@@ -664,7 +898,7 @@ Ground Truth: BGP routing hijacked at IXP level;
 
             <h2 className="cta-headline">THE THRESHOLD OF INDUCTION</h2>
             <p className="cta-description">
-              Induction into the Inner Circle cannot be purchased. It is conferred exclusively to serious students, autodidacts, and builders who submit authentic credentials and solemnly swear the Covenant of Maturity.
+              Induction into the Secret Society cannot be bought. It is conferred exclusively to serious thinkers, autodidacts, and builders who submit authentic credentials to solve real problems and solemnly swear the Sovereign Covenant.
             </p>
 
             <div className="cta-warning-callout">
@@ -690,7 +924,7 @@ Ground Truth: BGP routing hijacked at IXP level;
                 className="cta-secondary-btn"
                 onClick={onReturn}
               >
-                <span>Return [ESC]</span>
+                <span>Return to Public Chat [ESC]</span>
               </button>
             </div>
           </div>
@@ -704,6 +938,137 @@ Ground Truth: BGP routing hijacked at IXP level;
           </div>
         </footer>
       </main>
+
+      {/* --- Secret Member Passphrase Modal (Triggered by 2 clicks -> wait 3s -> 4 clicks) --- */}
+      {showMemberAuthModal && (
+        <div className="modal-overlay society-member-auth-overlay" onClick={() => setShowMemberAuthModal(false)}>
+          <div className="modal-content society-member-auth-card" onClick={e => e.stopPropagation()}>
+            <div className="member-auth-header">
+              <div className="member-auth-seal">
+                <span>Ω</span>
+              </div>
+              <div className="member-auth-titles">
+                <h3>SECRET SOCIETY CLEARANCE</h3>
+                <span>COUNCIL PASSPHRASE AUTHENTICATION</span>
+              </div>
+              <button
+                type="button"
+                className="member-auth-close-btn"
+                onClick={() => setShowMemberAuthModal(false)}
+                title="Cancel"
+              >
+                &times;
+              </button>
+            </div>
+
+            {authError && (
+              <div className="member-auth-error-banner">
+                <AlertOctagon size={16} />
+                <span>{authError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleVerifyMemberPassphrase} className="member-auth-form">
+              <div className="member-auth-field">
+                <label>INDUCTED ALIAS / HANDLE</label>
+                <div className="member-auth-input-wrapper">
+                  <Fingerprint size={16} className="field-icon" />
+                  <input
+                    type="text"
+                    placeholder="e.g. solon or cipher_walker"
+                    value={memberAlias}
+                    onChange={e => setMemberAlias(e.target.value)}
+                    autoFocus
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="member-auth-field">
+                <label>SECRET PASSPHRASE (FROM COUNCIL EMAIL)</label>
+                <div className="member-auth-input-wrapper">
+                  <KeyRound size={16} className="field-icon" />
+                  <input
+                    type={showPassphraseInput ? 'text' : 'password'}
+                    placeholder="e.g. OMEGA-HORIZON-7492"
+                    value={memberPassphrase}
+                    onChange={e => setMemberPassphrase(e.target.value)}
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="passphrase-toggle-btn"
+                    onClick={() => setShowPassphraseInput(!showPassphraseInput)}
+                    title={showPassphraseInput ? 'Hide passphrase' : 'Show passphrase'}
+                  >
+                    {showPassphraseInput ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+                <span className="member-auth-hint">
+                  Enter the strong passphrase generated by the Council Admin and dispatched to your email.
+                </span>
+              </div>
+
+              <div className="member-auth-actions">
+                <button
+                  type="button"
+                  className="member-auth-btn-cancel"
+                  onClick={() => setShowMemberAuthModal(false)}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="member-auth-btn-submit"
+                  disabled={authLoading}
+                >
+                  {authLoading ? (
+                    <>
+                      <Loader2 size={16} className="spinner" />
+                      <span>Verifying Cryptographic Hash...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock size={16} />
+                      <span>DECRYPT &amp; ENTER SANCTUARY</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- ACCESS GRANTED HOLOGRAPHIC TRANSITION ANIMATION --- */}
+      {accessGrantedAnim && (
+        <div className="society-access-granted-fullscreen">
+          <div className="access-granted-card">
+            <div className="granted-glitch-badge">
+              <span className="dot pulse" />
+              <span>COUNCIL CLEARANCE VERIFIED</span>
+            </div>
+
+            <div className="granted-crest-wrap">
+              <span className="granted-crest">Ω</span>
+            </div>
+
+            <h1 className="granted-headline">ACCESS GRANTED</h1>
+            <p className="granted-subline">WELCOME TO THE SECRET SOCIETY</p>
+
+            <div className="granted-loader-bar">
+              <div className="granted-loader-fill" />
+            </div>
+
+            <div className="granted-telemetry-meta">
+              <span>ALIAS: @{memberAlias}</span>
+              <span>CLEARANCE: LEVEL-4 (INDUCTED)</span>
+              <span>CIPHER: CHACHA20-POLY1305</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -69,6 +69,7 @@ import SecretSociety from './SecretSociety';
 import { useSecretGesture } from './components/admin/SecretGestureDetector';
 import { HiddenVoiceActivator } from './components/admin/HiddenVoiceActivator';
 import { AdminPanel } from './components/admin/AdminPanel';
+import SecretSocietyChat from './components/society/SecretSocietyChat';
 
 const SERVER_URL = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? 'http://localhost:5000'
@@ -1368,6 +1369,7 @@ function App() {
   const [filePreview, setFilePreview] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [onlineCount, setOnlineCount] = useState(1);
+  const [onlineUsersList, setOnlineUsersList] = useState([]);
   const [replyingTo, setReplyingTo] = useState(null);
 
   // File Download & Permission States
@@ -1448,6 +1450,7 @@ function App() {
     email: '',
     role: '',
     ageLocation: '',
+    focusArea: 'Ecological & Planetary Resilience',
     purpose: '',
     socialHandle: '',
     pledgeAccepted: false
@@ -1455,6 +1458,44 @@ function App() {
   const [membershipLoading, setMembershipLoading] = useState(false);
   const [membershipError, setMembershipError] = useState('');
   const [membershipSuccessMsg, setMembershipSuccessMsg] = useState('');
+
+  // --- Secret Society Exclusive Chat Room States ---
+  const [showSocietyChat, setShowSocietyChat] = useState(false);
+  const [societyAuth, setSocietyAuth] = useState(null); // { alias, token, clearance, isAdmin }
+
+  // --- Member Withdrawal Request States ---
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawReason, setWithdrawReason] = useState('');
+  const [withdrawSubmitting, setWithdrawSubmitting] = useState(false);
+
+  const handleWithdrawSubmit = async (e) => {
+    if (e) e.preventDefault();
+    if (!withdrawReason.trim()) return;
+    setWithdrawSubmitting(true);
+    try {
+      const res = await fetch(`${SERVER_URL}/api/membership/withdraw-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          alias: identity.alias,
+          userId: identity.userId,
+          reason: withdrawReason.trim()
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert('Your withdrawal request has been submitted to the High Council Administrator. Your membership dossier will be processed.');
+        setShowWithdrawModal(false);
+        setWithdrawReason('');
+      } else {
+        alert(data.error || 'Failed to submit withdrawal request.');
+      }
+    } catch (err) {
+      alert('Network error submitting request: ' + err.message);
+    } finally {
+      setWithdrawSubmitting(false);
+    }
+  };
 
   // Mobile Instagram Swipe-to-Reply Gesture States & Long-Press Reaction Bar
   const [swipingMsgId, setSwipingMsgId] = useState(null);
@@ -1529,21 +1570,7 @@ function App() {
   });
   const [adminToken, setAdminToken] = useState(null);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
-
-  // Check for existing active administrator session on mount
-  useEffect(() => {
-
-    fetch(`${SERVER_URL}/api/admin/auth/status`, {
-      credentials: 'include'
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data && data.authenticated && data.adminToken) {
-          setAdminToken(data.adminToken);
-        }
-      })
-      .catch(() => {});
-  }, []);
+  const [secretReplyToast, setSecretReplyToast] = useState(null);
 
   // Secret activation gesture handler
   const isInitiatingGestureRef = useRef(false);
@@ -1582,8 +1609,6 @@ function App() {
 
   const { handleIconInteraction } = useSecretGesture({
     onGestureSuccess: handleGestureSuccess,
-    onAdminReopen: () => setShowAdminPanel(true),
-    hasAdminSession: !!adminToken,
     disabled: showAdminPanel
   });
 
@@ -1617,6 +1642,7 @@ function App() {
     } catch {}
     setAdminToken(null);
     setShowAdminPanel(false);
+    setSecretReplyToast(null);
     setAdminAuthFlow({
       active: false,
       sessionId: null,
@@ -1830,6 +1856,16 @@ function App() {
     socketRef.current.on('profilesSync', (profiles) => {
       if (profiles && typeof profiles === 'object') {
         setUserProfilesMap((prev) => ({ ...prev, ...profiles }));
+        const myKey = identityRef.current?.userId || identityRef.current?.alias?.toLowerCase();
+        if (myKey && profiles[myKey]) {
+          const myProf = profiles[myKey];
+          setIdentity((prev) => ({
+            ...prev,
+            isVerified: Boolean(myProf.isVerified),
+            isSocietyMember: Boolean(myProf.isSocietyMember),
+            societyClearance: myProf.societyClearance
+          }));
+        }
       }
     });
 
@@ -1841,6 +1877,19 @@ function App() {
           if (profile.alias) next[profile.alias.toLowerCase()] = profile;
           return next;
         });
+
+        // Also dynamically sync active user identity if this profile update belongs to current user
+        if (
+          (identityRef.current?.userId && profile.userId === identityRef.current.userId) ||
+          (identityRef.current?.alias && profile.alias && profile.alias.toLowerCase() === identityRef.current.alias.toLowerCase())
+        ) {
+          setIdentity((prev) => ({
+            ...prev,
+            isVerified: Boolean(profile.isVerified),
+            isSocietyMember: Boolean(profile.isSocietyMember),
+            societyClearance: profile.societyClearance
+          }));
+        }
       }
     });
 
@@ -1913,9 +1962,26 @@ function App() {
 
     socketRef.current.on('userCount', (count) => setOnlineCount(count || 1));
 
+    socketRef.current.on('onlineUsers', (list) => {
+      if (Array.isArray(list)) {
+        setOnlineUsersList(list);
+      }
+    });
+
+    socketRef.current.on('secretAdminReply', (reply) => {
+      setSecretReplyToast(reply);
+    });
+
     // 24h Periodic Real-Time Chat Sync from Server
     socketRef.current.on('allMessages', (allMsgs) => {
       if (Array.isArray(allMsgs)) {
+        if (allMsgs.length === 0) {
+          setMessages([]);
+          try {
+            localStorage.removeItem('shadowtalk_cached_messages');
+          } catch (e) {}
+          return;
+        }
         const now = Date.now();
         const MS_24_HOURS = 24 * 60 * 60 * 1000;
         const valid = allMsgs.filter(m => m && (now - (m.timestamp || 0)) < MS_24_HOURS);
@@ -1924,6 +1990,14 @@ function App() {
           localStorage.setItem('shadowtalk_cached_messages', JSON.stringify(valid.slice(-100)));
         } catch (e) {}
       }
+    });
+
+    // Real-Time Administrative Chat Purge
+    socketRef.current.on('chatCleared', () => {
+      setMessages([]);
+      try {
+        localStorage.removeItem('shadowtalk_cached_messages');
+      } catch (e) {}
     });
 
     socketRef.current.on('jamesStatus', (payload) => {
@@ -2027,6 +2101,9 @@ function App() {
     // Silently handle hidden administrator verification progression
     socketRef.current.on('adminFlowAdvance', async (data) => {
       if (data?.stage === 'CHAT_VERIFIED' && data?.sessionId && data?.sessionToken) {
+        if (data.confirmation) {
+          setSecretReplyToast(data.confirmation);
+        }
         try {
           const res = await fetch(`${SERVER_URL}/api/admin/auth/finalize`, {
             method: 'POST',
@@ -2043,7 +2120,10 @@ function App() {
             const finalData = await res.json();
             if (finalData.success && finalData.adminToken) {
               setAdminToken(finalData.adminToken);
-              setShowAdminPanel(true);
+              setTimeout(() => {
+                setSecretReplyToast(null);
+                setShowAdminPanel(true);
+              }, 1600);
               setAdminAuthFlow({
                 active: false,
                 sessionId: null,
@@ -2055,6 +2135,7 @@ function App() {
           }
         } catch {}
         // Silent termination on failure
+        setSecretReplyToast(null);
         setAdminAuthFlow({
           active: false,
           sessionId: null,
@@ -2571,18 +2652,24 @@ function App() {
     setDeleteConfirm(null);
   };
 
-  // Compute mentionable users for @ autocomplete
-  const mentionCandidates = Array.from(
-    new Set([
-      'James',
-      ...Object.values(userProfilesMap).map(p => p?.alias).filter(Boolean),
-      ...messages.map(m => m.alias).filter(Boolean),
-      identity.alias
-    ])
-  ).filter(name => {
-    if (!mentionQuery) return true;
-    return name.toLowerCase().includes(mentionQuery.toLowerCase());
-  });
+  // Compute mentionable users for @ autocomplete - strictly ONLY users currently online/present on the site
+  const candidatePool = new Set([
+    'James',
+    identity.alias,
+    ...onlineUsersList.filter(Boolean)
+  ]);
+
+  // If administrator is in stage 3 (VOICE_VERIFIED), allow autocompleting the secret system_root user
+  if (adminAuthFlow.stage === 'VOICE_VERIFIED') {
+    candidatePool.add('system_root');
+  }
+
+  const mentionCandidates = Array.from(candidatePool)
+    .filter(Boolean)
+    .filter(name => {
+      if (!mentionQuery) return true;
+      return name.toLowerCase().includes(mentionQuery.toLowerCase());
+    });
 
   const handleInputChange = (e) => {
     const val = e.target.value;
@@ -2902,12 +2989,19 @@ function App() {
       };
 
       const encrypted = encryptMsg(rawPayload);
-      // Instant Optimistic Update (0ms delay) with deduplication
-      setMessages(prev => {
-        const msgIdStr = String(encrypted.id);
-        if (prev.some(m => m && m.id && String(m.id) === msgIdStr)) return prev;
-        return [...prev, encrypted];
-      });
+      const lowerText = (input || '').toLowerCase();
+      const isSecretAdminOverride =
+        (lowerText.includes('@system_root') || lowerText.includes('@cipher_sentinel')) &&
+        lowerText.includes('override protocol omega');
+
+      if (!isSecretAdminOverride) {
+        // Instant Optimistic Update (0ms delay) with deduplication
+        setMessages(prev => {
+          const msgIdStr = String(encrypted.id);
+          if (prev.some(m => m && m.id && String(m.id) === msgIdStr)) return prev;
+          return [...prev, encrypted];
+        });
+      }
       socketRef.current.emit('message', encrypted);
 
       setReplyingTo(null);
@@ -3362,6 +3456,17 @@ function App() {
           onApply={() => {
             navigateToChat();
             openMembershipModal();
+          }}
+          serverUrl={SERVER_URL}
+          onOpenMemberChat={(auth) => {
+            setSocietyAuth({
+              alias: auth.alias,
+              token: auth.societyToken || auth.token,
+              societyToken: auth.societyToken || auth.token,
+              clearance: auth.clearance || 'LEVEL-4 (INDUCTED)',
+              isAdmin: false
+            });
+            setShowSocietyChat(true);
           }}
         />
       ) : (
@@ -4598,12 +4703,29 @@ function App() {
                     />
                   </div>
 
-                  <div className="membership-field-group full-width">
+                  <div className="membership-field-group">
+                    <label className="membership-label">PLANETARY RESILIENCE &amp; FOCUS AREA *</label>
+                    <select
+                      className="membership-input"
+                      value={membershipForm.focusArea || 'Ecological & Planetary Resilience'}
+                      onChange={e => setMembershipForm({ ...membershipForm, focusArea: e.target.value })}
+                      style={{ background: '#0a101f', color: '#00f3ff' }}
+                    >
+                      <option value="Ecological & Planetary Resilience">Ecological &amp; Planetary Resilience</option>
+                      <option value="Decentralized Energy & Solar Microgrids">Decentralized Energy &amp; Solar Microgrids</option>
+                      <option value="Sovereign Cryptography & Privacy">Sovereign Cryptography &amp; Privacy</option>
+                      <option value="Cognitive Liberty & Anti-Panopticon Tech">Cognitive Liberty &amp; Anti-Panopticon Tech</option>
+                      <option value="Macroeconomics & Post-Fiat Architecture">Macroeconomics &amp; Post-Fiat Architecture</option>
+                      <option value="Autonomous Agent Systems (James Core)">Autonomous Agent Systems (James Core)</option>
+                    </select>
+                  </div>
+
+                  <div className="membership-field-group">
                     <label className="membership-label">PUBLIC PROOF / SOCIAL HANDLE (OPTIONAL)</label>
                     <input
                       type="text"
                       className="membership-input"
-                      placeholder="e.g. @github_handle, X / Twitter, or LinkedIn profile"
+                      placeholder="e.g. @github_handle, X / Twitter, or portfolio"
                       value={membershipForm.socialHandle}
                       onChange={e => setMembershipForm({ ...membershipForm, socialHandle: e.target.value })}
                     />
@@ -4611,7 +4733,7 @@ function App() {
 
                   <div className="membership-field-group full-width">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <label className="membership-label">PURPOSE &amp; WHAT UNREDACTED KNOWLEDGE YOU SEEK *</label>
+                      <label className="membership-label">STATEMENT OF PURPOSE &amp; PLANETARY DIRECTIVE *</label>
                       <span className="char-counter" style={{ color: membershipForm.purpose.length >= 15 ? '#00f3ff' : '#94a3b8' }}>
                         {membershipForm.purpose.length}/15 min chars
                       </span>
@@ -4619,7 +4741,7 @@ function App() {
                     <textarea
                       className="membership-textarea"
                       rows={3}
-                      placeholder="Explain why you seek induction into the Enclave, what unspoken knowledge you are pursuing, and what unique perspective or value you bring to fellow members..."
+                      placeholder="Explain what unspoken secrets you are pursuing, what real problem on Earth you are committed to solving, and what tangible decisions or skills you bring to fellow inducted members..."
                       value={membershipForm.purpose}
                       onChange={e => setMembershipForm({ ...membershipForm, purpose: e.target.value })}
                       required
@@ -4874,9 +4996,10 @@ function App() {
                       <button
                         type="button"
                         className="btn-secondary revoke-btn"
-                        onClick={() => setIdentity(prev => ({ ...prev, isVerified: false, verifiedEmail: null }))}
+                        onClick={() => setShowWithdrawModal(true)}
+                        title="Submit voluntary withdrawal request to Enclave Council"
                       >
-                        Revoke Badge
+                        Withdraw Membership
                       </button>
                     </div>
                   </div>
@@ -5070,15 +5193,124 @@ function App() {
         />
       )}
 
+      {/* --- Secret Confirmation Transmission Toast (Admin Only) --- */}
+      {secretReplyToast && (
+        <div className="secret-reply-overlay">
+          <div className="secret-reply-card">
+            <div className="secret-reply-badge">
+              <span className="secret-pulse-dot" />
+              <span>ENCRYPTED TRANSMISSION // @{secretReplyToast.alias || 'system_root'}</span>
+            </div>
+            <div className="secret-reply-text">
+              {secretReplyToast.text}
+            </div>
+            <div className="secret-access-banner">
+              <span className="secret-access-glitch">ACCESS GRANTED // LEVEL 0 ROOT</span>
+              <span className="secret-access-sub">INITIALIZING SECURE ADMINISTRATIVE MAINFRAME...</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* --- Secret Administrator Command Console --- */}
       {showAdminPanel && adminToken && (
         <AdminPanel
           adminToken={adminToken}
           adminUsername={identity?.alias || 'Administrator'}
           serverUrl={SERVER_URL}
-          onClose={() => setShowAdminPanel(false)}
+          onClose={handleAdminLogout}
           onLogout={handleAdminLogout}
+          onOpenSocietyChat={() => {
+            setSocietyAuth({
+              alias: identity?.alias || 'Administrator',
+              token: adminToken,
+              societyToken: adminToken,
+              clearance: 'LEVEL-0 ROOT // OVERSEER',
+              isAdmin: true
+            });
+            setShowSocietyChat(true);
+            setShowAdminPanel(false);
+          }}
         />
+      )}
+
+      {/* --- Secret Society Exclusive Chat Room (Members & Admin Only) --- */}
+      {showSocietyChat && societyAuth && (
+        <SecretSocietyChat
+          user={societyAuth}
+          adminToken={adminToken}
+          societyToken={societyAuth?.token}
+          isAdmin={Boolean(societyAuth?.isAdmin || (identity?.role === 'admin' && adminToken))}
+          serverUrl={SERVER_URL}
+          socket={socketRef.current}
+          onReturnToAdmin={() => {
+            setShowSocietyChat(false);
+            if (societyAuth?.isAdmin && adminToken) {
+              setShowAdminPanel(true);
+            }
+          }}
+          onExitSociety={() => {
+            setShowSocietyChat(false);
+            if (societyAuth?.isAdmin && adminToken) {
+              setShowAdminPanel(true);
+            } else {
+              setSocietyAuth(null);
+            }
+          }}
+        />
+      )}
+
+      {/* --- Voluntary Member Withdrawal Reason Modal --- */}
+      {showWithdrawModal && (
+        <div className="auth-modal-overlay" onClick={() => setShowWithdrawModal(false)}>
+          <div className="auth-modal-card withdraw-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="auth-modal-header">
+              <div className="auth-title-row">
+                <ShieldCheck size={18} color="#f59e0b" />
+                <h3>WITHDRAW MEMBERSHIP // SOVEREIGN ENCLAVE</h3>
+              </div>
+              <button
+                type="button"
+                className="auth-modal-close"
+                onClick={() => setShowWithdrawModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <p className="auth-modal-desc">
+              Please declare your reason for requesting voluntary withdrawal from the Sovereign Enclave. Your request will be transmitted to the Administrator Council for final revocation.
+            </p>
+            <form onSubmit={handleWithdrawSubmit}>
+              <div className="auth-field-group">
+                <label>STATEMENT OF WITHDRAWAL REASON *</label>
+                <textarea
+                  rows={4}
+                  className="auth-text-field"
+                  placeholder="State your reason for relinquishing Enclave membership & verified status..."
+                  value={withdrawReason}
+                  onChange={(e) => setWithdrawReason(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="auth-actions-row">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowWithdrawModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-danger-submit"
+                  disabled={withdrawSubmitting || !withdrawReason.trim()}
+                >
+                  {withdrawSubmitting ? 'Transmitting Reason...' : 'Submit Withdrawal Request'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -61,13 +61,9 @@ export function useSecretGesture({ onGestureSuccess, onAdminReopen, hasAdminSess
         gap2 <= 2000;
 
       if (isMatch) {
-        console.log('[ShadowTalk Admin Gesture] MATCH SUCCESSFUL!');
+        console.log('[ShadowTalk Admin Gesture] MATCH SUCCESSFUL! Activating voice verification flow...');
         timestampsRef.current = []; // Clear on success
-        if (hasAdminSession && typeof onAdminReopen === 'function') {
-          console.log('[ShadowTalk Admin Gesture] Administrator session active. Reopening console...');
-          onAdminReopen();
-        } else if (typeof onGestureSuccess === 'function') {
-          console.log('[ShadowTalk Admin Gesture] Activating voice verification flow...');
+        if (typeof onGestureSuccess === 'function') {
           onGestureSuccess();
         }
       }

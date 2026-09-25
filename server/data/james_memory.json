@@ -1,16 +1,24 @@
 {
-  "updatedAt": 1790261192907,
+  "updatedAt": 1790357144108,
   "summary": "",
   "topics": [],
   "welcomedUsers": [
-    "joseph",
+    "joseph_creator",
     "usr_78qzmjll4",
-    "kai_rivera24",
+    "darshanaa",
     "usr_2i4zg49q8",
     "aria_knight60",
     "usr_j4ltzh3hg",
     "diya",
-    "usr_bupie4fm0"
+    "usr_bupie4fm0",
+    "charlie",
+    "user_charles",
+    "kai_rivera24",
+    "joseph",
+    "d",
+    "da",
+    "dar",
+    "dars"
   ],
   "lastReturnGreetTime": {},
   "dailyNewsStats": {
@@ -24,20 +32,20 @@
     {
       "key": "uid:usr_78qzmjll4",
       "userId": "usr_78qzmjll4",
-      "alias": "joseph",
-      "count": 106,
+      "alias": "joseph_creator",
+      "count": 114,
       "notes": [],
       "topics": [],
-      "lastSeen": 1790261190902
+      "lastSeen": 1790357142094
     },
     {
       "key": "uid:usr_2i4zg49q8",
       "userId": "usr_2i4zg49q8",
-      "alias": "kai_rivera24",
-      "count": 6,
+      "alias": "darshanaa",
+      "count": 7,
       "notes": [],
       "topics": [],
-      "lastSeen": 1789928573959
+      "lastSeen": 1790349679589
     },
     {
       "key": "uid:usr_j4ltzh3hg",
@@ -56,6 +64,17 @@
       "notes": [],
       "topics": [],
       "lastSeen": 1789926139050
+    },
+    {
+      "key": "uid:user_charles",
+      "userId": "user_charles",
+      "alias": "Charlie",
+      "count": 2,
+      "notes": [
+        "Welcomed to ShadowTalk"
+      ],
+      "topics": [],
+      "lastSeen": 1790322486557
     }
   ]
 }

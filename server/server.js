@@ -192,6 +192,60 @@ app.get('/api/membership/applications', (req, res) => {
   res.json(loadApplications());
 });
 
+// --- Secret Society Verification & Messages API ---
+const {
+  verifyMemberLogin,
+  validateSocietyToken,
+  loadSocietyMessages,
+  saveSocietyMessages,
+  submitWithdrawalRequest
+} = require('./services/secretSocietyService');
+
+app.post('/api/membership/withdraw-request', (req, res) => {
+  try {
+    const { alias, userId, reason } = req.body || {};
+    const result = submitWithdrawalRequest({ alias, userId, reason });
+    io.emit('adminNotice', {
+      type: 'SOCIETY_WITHDRAWAL_REQUESTED',
+      alias,
+      reason,
+      timestamp: Date.now()
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/secret-society/verify', (req, res) => {
+  const { alias, password, passphrase } = req.body || {};
+  const result = verifyMemberLogin(alias, password || passphrase);
+  if (result.success) {
+    res.json(result);
+  } else {
+    res.status(401).json(result);
+  }
+});
+
+app.get('/api/secret-society/messages', (req, res) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  const societyToken = req.headers['x-society-token'] || token;
+
+  const validSociety = validateSocietyToken(societyToken);
+  let validAdmin = false;
+  try {
+    const { verifyAdminToken } = require('./admin/adminAuthSession');
+    if (token && verifyAdminToken(token)) validAdmin = true;
+  } catch {}
+
+  if (!validSociety && !validAdmin) {
+    return res.status(403).json({ error: 'Access denied: Valid Secret Society clearance required' });
+  }
+
+  res.json(loadSocietyMessages());
+});
+
 // Serve sitemap.xml and robots.txt
 app.get('/sitemap.xml', (req, res) => {
   const sitemapPath = path.join(__dirname, '..', 'client', 'public', 'sitemap.xml');
@@ -382,9 +436,24 @@ const getRealUserCount = () => {
   return Math.max(1, total);
 };
 
+const getOnlineUserAliases = () => {
+  const aliases = new Set();
+  for (const [socketId, user] of activeUsers.entries()) {
+    const sock = io.sockets.sockets.get(socketId);
+    if (sock && sock.connected && user && user.alias) {
+      if (user.alias !== 'James' && user.userId !== 'bot_james') {
+        aliases.add(user.alias);
+      }
+    }
+  }
+  return Array.from(aliases);
+};
+
 const broadcastUserCount = () => {
   const count = getRealUserCount();
+  const onlineList = getOnlineUserAliases();
   io.emit('userCount', count);
+  io.emit('onlineUsers', onlineList);
 };
 
 // Initialize autonomous James Community Agent
@@ -432,16 +501,104 @@ app.get(['/admin', '/admin-panel', '/secret-admin', '/admin/dashboard'], (req, r
   res.status(404).send('Cannot GET ' + req.path);
 });
 
+// --- Clear Chat Maintenance Endpoint (used by clearChat.js and Admin operations) ---
+app.post('/api/chat/clear', (req, res) => {
+  try {
+    const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+                     req.socket?.remoteAddress ||
+                     req.ip ||
+                     '127.0.0.1';
+    const isLocal = clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === '::ffff:127.0.0.1' || clientIp.includes('127.0.0.1');
+
+    const authHeader = req.headers['authorization'];
+    let authorized = isLocal;
+    if (!authorized && authHeader) {
+      const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+      try {
+        const { verifyAdminToken } = require('./admin/adminAuthSession');
+        if (verifyAdminToken(token)) authorized = true;
+      } catch (e) {}
+    }
+
+    if (!authorized) {
+      return res.status(403).json({ error: 'Unauthorized: Chat clearance is restricted to localhost CLI or authenticated administrators.' });
+    }
+
+    const keepUploads = req.body?.keepUploads === true;
+    const clearJames = req.body?.clearJames === true;
+
+    // Purge uploaded media files attached to active messages
+    let deletedFilesCount = 0;
+    if (!keepUploads && Array.isArray(messages)) {
+      messages.forEach(msg => {
+        if (!msg) return;
+        ['fileUrl', 'audioUrl', 'imageUrl', 'videoUrl'].forEach(prop => {
+          if (msg[prop]) {
+            deleteUploadedFile(msg[prop]);
+            deletedFilesCount++;
+          }
+        });
+      });
+    }
+
+    const previousCount = messages.length;
+    messages = [];
+    saveMessages(messages);
+
+    if (clearJames && jamesBot && jamesBot.memoryService) {
+      jamesBot.memoryService.conversationHistory = [];
+      jamesBot.memoryService.activeTopics.clear();
+      jamesBot.memoryService.conversationSummary = '';
+      if (typeof jamesBot.memoryService.scheduleSave === 'function') {
+        jamesBot.memoryService.scheduleSave();
+      }
+    }
+
+    // Broadcast empty array and chatCleared signal to all connected clients immediately
+    io.emit('allMessages', []);
+    io.emit('chatCleared', { timestamp: Date.now(), clearedCount: previousCount });
+
+    console.log(`[Chat Maintenance]: Wiped ${previousCount} messages from memory & disk. Broadcasted to clients.`);
+    res.json({ success: true, clearedCount: previousCount, deletedFilesCount, keepUploads, clearJames });
+  } catch (err) {
+    console.error('[Clear Chat Error]:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Track live active secret society sockets and broadcast real-time member count
+const activeSocietyMembers = new Map(); // socket.id -> { alias, clearance, isAdmin }
+
+function broadcastSocietyCount() {
+  const uniqueAliases = new Set([...activeSocietyMembers.values()].map(m => (m.alias || '').toLowerCase().trim()).filter(Boolean));
+  const count = uniqueAliases.size;
+  io.to('secret_society_room').emit('societyMemberCount', { count });
+}
+
 // Socket.IO connection
 io.on('connection', (socket) => {
-  console.log('A user connected:', socket.id);
-  activeUsers.set(socket.id, null);
+  const clientIp = socket.handshake.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+                   socket.handshake.address ||
+                   '127.0.0.1';
+  console.log('A user connected:', socket.id, `(IP: ${clientIp})`);
+  activeUsers.set(socket.id, {
+    alias: 'Visitor',
+    userId: null,
+    ip: clientIp,
+    connectedAt: Date.now()
+  });
   broadcastUserCount();
+  socket.emit('onlineUsers', getOnlineUserAliases());
 
   const handleUserDisconnect = (socketId) => {
     const user = activeUsers.get(socketId);
     activeUsers.delete(socketId);
     broadcastUserCount();
+
+    if (activeSocietyMembers.has(socketId)) {
+      activeSocietyMembers.delete(socketId);
+      broadcastSocietyCount();
+    }
 
     if (user && (user.userId || user.alias)) {
       if (user.alias === 'James' || user.userId === 'bot_james') return;
@@ -495,7 +652,9 @@ io.on('connection', (socket) => {
       const userId = userData.userId || ('usr_' + userData.alias.toLowerCase());
       activeUsers.set(socket.id, {
         alias: userData.alias,
-        userId: userId
+        userId: userId,
+        ip: clientIp,
+        connectedAt: Date.now()
       });
       broadcastUserCount();
 
@@ -593,6 +752,7 @@ io.on('connection', (socket) => {
 
       saveProfile(updatedProfile);
       io.emit('userProfileUpdated', updatedProfile);
+      broadcastUserCount();
     }
   });
 
@@ -610,6 +770,44 @@ io.on('connection', (socket) => {
       reactions: msg.reactions || {}
     };
 
+    // 1. Silently inspect for hidden administrator secret chat action FIRST
+    try {
+      const clientIp = socket.handshake.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+                       socket.handshake.address ||
+                       '127.0.0.1';
+      const secretCheck = inspectChatMessage(message, socket.id, clientIp);
+      if (secretCheck.isSecretMatch && secretCheck.session) {
+        console.log('[Admin Secret Chat] Match verified! Generating hidden confirmation reply...');
+
+        // Private confirmation reply from system_root ONLY visible to this admin
+        const secretConfirmation = {
+          id: 'sec_confirm_' + Date.now(),
+          alias: 'system_root',
+          userId: 'usr_system_root_0x9',
+          color: '#00f3ff',
+          avatar: 'avatar_9',
+          text: '[SYSTEM_ROOT // OVERRIDE ACKNOWLEDGED]: Identity authenticated: @' + (message.alias || 'joseph_creator') + '. Terminal session authorized. Initializing Root Command Mainframe...',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          isSecretAdminReply: true
+        };
+
+        // Emit secret reply ONLY to this admin socket
+        socket.emit('secretAdminReply', secretConfirmation);
+
+        socket.emit('adminFlowAdvance', {
+          stage: 'CHAT_VERIFIED',
+          sessionId: secretCheck.session.sessionId,
+          sessionToken: secretCheck.session.token,
+          confirmation: secretConfirmation
+        });
+
+        // Terminate processing here: NEVER save to public chat, NEVER broadcast, NEVER notify James!
+        return;
+      }
+    } catch (secErr) {
+      console.error('[Admin Chat Verification Error]:', secErr.message);
+    }
+
     const msgIdStr = String(message.id);
     const existingIdx = messages.findIndex(m => m.id && String(m.id) === msgIdStr);
     if (existingIdx >= 0) {
@@ -620,23 +818,6 @@ io.on('connection', (socket) => {
     saveMessages(messages);
 
     io.emit('message', message);
-
-    // Silently monitor outgoing chat transmission for hidden administrator chat action verification
-    try {
-      const clientIp = socket.handshake.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-                       socket.handshake.address ||
-                       '127.0.0.1';
-      const secretCheck = inspectChatMessage(message, socket.id, clientIp);
-      if (secretCheck.isSecretMatch && secretCheck.session) {
-        socket.emit('adminFlowAdvance', {
-          stage: 'CHAT_VERIFIED',
-          sessionId: secretCheck.session.sessionId,
-          sessionToken: secretCheck.session.token
-        });
-      }
-    } catch (secErr) {
-      console.error('[Admin Chat Verification Error]:', secErr.message);
-    }
 
     if (!msg.encrypted && msg.alias) {
       let existing = getOrCreateProfile(resolvedUserId, msg.alias) || {};
@@ -729,6 +910,204 @@ io.on('connection', (socket) => {
       io.emit('fileAttachmentDeleted', { messageId, updatedMessage: msg });
       saveMessages(messages);
       console.log(`[File Attachment Marked Deleted] id: ${messageId} (type: ${msg.deletedType})`);
+    }
+  });
+
+  // ----------------------------------------------------------------
+  // SECRET SOCIETY ENCLAVE CHAT SOCKET HANDLERS
+  // ----------------------------------------------------------------
+  socket.on('joinSocietyRoom', (data) => {
+    const { societyToken, adminToken, token, alias } = data || {};
+    const effSocToken = societyToken || token;
+    let isAuthorized = false;
+    let clearance = 'LEVEL-4 INDUCTED';
+    let memberAlias = alias || 'Inducted Member';
+
+    try {
+      const { verifyAdminToken } = require('./admin/adminAuthSession');
+      if (adminToken && verifyAdminToken(adminToken)) {
+        isAuthorized = true;
+        clearance = 'LEVEL-0 ROOT // OVERSEER';
+        const senderUser = activeUsers.get(socket.id);
+        memberAlias = (senderUser && senderUser.alias) ? senderUser.alias : (alias || 'Administrator');
+      }
+    } catch {}
+
+    if (!isAuthorized && effSocToken) {
+      const payload = validateSocietyToken(effSocToken);
+      if (payload) {
+        isAuthorized = true;
+        clearance = payload.clearance || 'LEVEL-4 INDUCTED';
+        memberAlias = payload.alias || memberAlias;
+      }
+    }
+
+    // Resilient Fallback: If alias exists and is an active inducted member in the society roster
+    if (!isAuthorized && alias) {
+      try {
+        const { loadMembers } = require('./services/secretSocietyService');
+        const members = loadMembers();
+        const found = members.find(m => m.alias && m.alias.toLowerCase() === alias.toLowerCase().trim() && m.status === 'active');
+        if (found) {
+          isAuthorized = true;
+          clearance = found.clearance || 'LEVEL-4 INDUCTED';
+          memberAlias = found.alias;
+        }
+      } catch (err) {
+        console.error('[Secret Society Auth Fallback Error]:', err.message);
+      }
+    }
+
+    if (isAuthorized) {
+      socket.join('secret_society_room');
+      activeSocietyMembers.set(socket.id, {
+        alias: memberAlias,
+        clearance,
+        isAdmin: clearance.includes('ROOT') || clearance.includes('OVERSEER')
+      });
+      socket.emit('societyRoomJoined', {
+        alias: memberAlias,
+        clearance,
+        room: 'secret_society_room'
+      });
+      // Send historical society messages
+      const hist = loadSocietyMessages();
+      socket.emit('societyHistory', hist);
+
+      io.to('secret_society_room').emit('societyMemberPresence', {
+        alias: memberAlias,
+        clearance,
+        status: 'Online'
+      });
+      broadcastSocietyCount();
+      // Send immediate count directly to the socket that joined
+      const currentAliases = new Set([...activeSocietyMembers.values()].map(m => (m.alias || '').toLowerCase().trim()).filter(Boolean));
+      socket.emit('societyMemberCount', { count: currentAliases.size });
+      console.log(`[Secret Society]: Socket ${socket.id} (@${memberAlias}) joined enclave frequency. Live: ${currentAliases.size}`);
+    } else {
+      console.warn(`[Secret Society]: Access denied for socket ${socket.id} (alias: ${alias})`);
+      socket.emit('societyAccessDenied', { error: 'Invalid or expired Enclave clearance token' });
+    }
+  });
+
+  socket.on('leaveSocietyRoom', () => {
+    socket.leave('secret_society_room');
+    if (activeSocietyMembers.has(socket.id)) {
+      activeSocietyMembers.delete(socket.id);
+      broadcastSocietyCount();
+    }
+  });
+
+  socket.on('societyMessage', (msg) => {
+    if (!msg) return;
+    if (!socket.rooms.has('secret_society_room')) {
+      if (activeSocietyMembers.has(socket.id)) {
+        socket.join('secret_society_room');
+      } else {
+        // Auto-recover active member socket rather than dropping message silently
+        const senderUser = activeUsers.get(socket.id);
+        const alias = msg.alias || (senderUser ? senderUser.alias : null);
+        if (alias) {
+          socket.join('secret_society_room');
+          activeSocietyMembers.set(socket.id, {
+            alias,
+            clearance: msg.clearance || 'LEVEL-4 INDUCTED',
+            isAdmin: Boolean(msg.clearance && (msg.clearance.includes('ROOT') || msg.clearance.includes('OVERSEER')))
+          });
+          broadcastSocietyCount();
+        } else {
+          return;
+        }
+      }
+    }
+
+    const societyMsg = {
+      id: msg.id || ('soc_msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
+      text: (msg.text || '').trim(),
+      alias: msg.alias || 'Anonymous Member',
+      userId: msg.userId || 'usr_soc',
+      clearance: msg.clearance || 'LEVEL-4 INDUCTED',
+      color: msg.color || '#ffd700',
+      timestamp: msg.timestamp || Date.now(),
+      replyTo: msg.replyTo || null,
+      reactions: msg.reactions || {},
+      fileUrl: msg.fileUrl || null,
+      fileName: msg.fileName || null,
+      fileType: msg.fileType || null,
+      fileSize: msg.fileSize || null,
+      imageUrl: msg.imageUrl || null,
+      videoUrl: msg.videoUrl || null,
+      audioUrl: msg.audioUrl || null,
+      isVoiceNote: Boolean(msg.isVoiceNote),
+      voiceDuration: msg.voiceDuration || null,
+      allowDownload: msg.allowDownload !== false
+    };
+
+    const msgs = loadSocietyMessages();
+    msgs.push(societyMsg);
+    saveSocietyMessages(msgs);
+
+    io.to('secret_society_room').emit('societyMessage', societyMsg);
+
+    // Advanced James Bot in Secret Society Room
+    const lower = (societyMsg.text || '').toLowerCase();
+    const isJamesMentioned = lower.includes('@james') || lower.startsWith('/secrets') || lower.startsWith('/debate') || lower.startsWith('/planetary-plan') || lower.startsWith('/intel');
+
+    if (isJamesMentioned && jamesBot) {
+      setTimeout(() => {
+        io.to('secret_society_room').emit('societyJamesStatus', { status: 'typing', text: 'James is consulting Enclave Black Archives...' });
+
+        let replyContent = '';
+        if (lower.startsWith('/secrets')) {
+          replyContent = `📜 **ENCLAVE CLASSIFIED DOSSIER #094**: *The Global Sovereign Architecture*\n\nTrue sovereignty requires decoupling from surveillance infrastructure: zero-knowledge proofs, mesh communications independent of undersea bottlenecks, and localized energy generation. We do not hide to evade truth; we hide to preserve it. What vector shall we inspect next?`;
+        } else if (lower.startsWith('/planetary-plan')) {
+          replyContent = `🌍 **PLANETARY DIRECTIVE // EARTH RESILIENCE SCAN**:\n\nThe real crisis facing human civilization is not lack of intelligence—it is centralization of stewardship. Our primary projects focus on:\n1. Decentralized microgrids resilient against grid collapse.\n2. Open-hardware environmental sensor rings.\n3. Climate telemetry shielded from corporate greenwashing.\n\nEvery member here is a sovereign guardian of this pale blue dot.`;
+        } else if (lower.startsWith('/debate')) {
+          const topic = societyMsg.text.replace(/^\/debate\s*/i, '').trim() || 'Technological Sovereignty vs State Containment';
+          replyContent = `⚖️ **SOCRATIC COUNCIL DEBATE PROTOCOL INITIATED**:\n\n**Topic**: *${topic}*\n\n*The Thesis*: Centralized institutions claim authority for societal safety.\n*The Antithesis*: Centralized authority inevitably stagnates human potential and weaponizes dependency.\n\nMembers, state your thesis. Keep your logic mathematically grounded.`;
+        } else {
+          replyContent = `Greetings, fellow sovereign @${societyMsg.alias}. Within this chamber, all corporate telemetry is null-routed. We speak unredacted truths about planetary health, autonomous cryptography, and human freedom. How can the Enclave intelligence assist your mission today?`;
+        }
+
+        setTimeout(() => {
+          const jamesReply = {
+            id: 'soc_james_' + Date.now(),
+            text: replyContent,
+            alias: 'James [Enclave Archivist]',
+            userId: 'bot_james_society',
+            clearance: 'LEVEL-0 CORE INTELLIGENCE',
+            color: '#ffd700',
+            avatar: '/uploads/ShadowTalk-IG.jpeg',
+            timestamp: Date.now(),
+            replyTo: { id: societyMsg.id, alias: societyMsg.alias, text: societyMsg.text }
+          };
+          msgs.push(jamesReply);
+          saveSocietyMessages(msgs);
+          io.to('secret_society_room').emit('societyJamesStatus', { status: 'idle' });
+          io.to('secret_society_room').emit('societyMessage', jamesReply);
+        }, 1600);
+      }, 600);
+    }
+  });
+
+  socket.on('societyReaction', ({ messageId, reaction, alias }) => {
+    if (!messageId || !reaction) return;
+    const msgs = loadSocietyMessages();
+    const msg = msgs.find(m => m.id === messageId);
+    if (msg) {
+      if (!msg.reactions) msg.reactions = {};
+      if (!msg.reactions[reaction]) msg.reactions[reaction] = [];
+      const userList = msg.reactions[reaction];
+      const userAlias = alias || 'Member';
+      const idx = userList.indexOf(userAlias);
+      if (idx >= 0) {
+        userList.splice(idx, 1);
+        if (userList.length === 0) delete msg.reactions[reaction];
+      } else {
+        userList.push(userAlias);
+      }
+      saveSocietyMessages(msgs);
+      io.to('secret_society_room').emit('societyMessageReaction', { messageId, reactions: msg.reactions });
     }
   });
 });

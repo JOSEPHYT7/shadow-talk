@@ -11,8 +11,8 @@ const ADMIN_CONFIG = {
   adminUsername: process.env.ADMIN_USERNAME || 'joseph_creator',
 
   // Predefined secret user account that appears as a sleeping/offline user
-  secretUserAlias: process.env.ADMIN_SECRET_USER || 'cipher_sentinel',
-  secretUserId: 'usr_cipher_sentinel_0x9',
+  secretUserAlias: process.env.ADMIN_SECRET_USER || 'system_root',
+  secretUserId: 'usr_system_root_0x9',
 
   // Secret verification message required when @mentioning the secret user
   secretChatMessage: process.env.ADMIN_SECRET_MESSAGE || 'override protocol omega',
