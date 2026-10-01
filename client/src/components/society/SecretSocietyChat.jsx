@@ -717,6 +717,10 @@ export default function SecretSocietyChat({
       setMessages((prev) => prev.filter((m) => m.id !== messageId));
     };
 
+    const handleChatCleared = () => {
+      setMessages([]);
+    };
+
     const handleSocietyPresenceNotice = (notice) => {
       if (!notice || !notice.text) return;
       setMessages((prev) => {
@@ -747,6 +751,7 @@ export default function SecretSocietyChat({
     socket.on('societyFileDownloadToggled', handleFileDownloadToggled);
     socket.on('societyFileAttachmentDeleted', handleFileAttachmentDeleted);
     socket.on('societyMessageDeleted', handleMessageDeleted);
+    socket.on('societyChatCleared', handleChatCleared);
     socket.on('profilesSync', handleProfilesSync);
     socket.on('userProfileUpdated', handleUserProfileUpdated);
     socket.on('connect', handleReconnect);
@@ -764,6 +769,7 @@ export default function SecretSocietyChat({
       socket.off('societyFileDownloadToggled', handleFileDownloadToggled);
       socket.off('societyFileAttachmentDeleted', handleFileAttachmentDeleted);
       socket.off('societyMessageDeleted', handleMessageDeleted);
+      socket.off('societyChatCleared', handleChatCleared);
       socket.off('profilesSync', handleProfilesSync);
       socket.off('userProfileUpdated', handleUserProfileUpdated);
       socket.off('connect', handleReconnect);

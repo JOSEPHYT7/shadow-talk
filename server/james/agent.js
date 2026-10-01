@@ -1066,6 +1066,10 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
     return false;
   }
 
+  async broadcastNewsToRoom(category = null) {
+    return this.broadcastPeriodicWorldNews(category || 'viral');
+  }
+
   startSpontaneousActivity() {
     const CHECK_INTERVAL = 15 * 60 * 1000; // Check every 15 minutes
     let counter = 0;

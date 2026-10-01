@@ -2083,6 +2083,11 @@ function App() {
       setMessages((prev) => prev.filter((m) => m.id !== messageId));
     });
 
+    // Real-time sync for room purge across all clients
+    socketRef.current.on('chatCleared', () => {
+      setMessages([]);
+    });
+
     // Real-time sync for file attachment deletion across all clients
     socketRef.current.on('fileAttachmentDeleted', ({ messageId, updatedMessage }) => {
       setMessages((prev) => prev.map((m) => (m.id === messageId ? updatedMessage : m)));
@@ -5246,6 +5251,7 @@ function App() {
       {/* --- Secret Administrator Command Console --- */}
       {showAdminPanel && adminToken && (
         <AdminPanel
+          socket={socketRef.current}
           adminToken={adminToken}
           adminUsername={identity?.alias || 'Administrator'}
           serverUrl={SERVER_URL}

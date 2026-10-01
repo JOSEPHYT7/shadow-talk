@@ -513,6 +513,10 @@ const jamesBot = new JamesBot(io, (msg) => {
   }
 });
 
+if (jamesBot && typeof jamesBot.broadcastNewsToRoom !== 'function') {
+  jamesBot.broadcastNewsToRoom = (cat) => jamesBot.broadcastPeriodicWorldNews(cat || 'viral');
+}
+
 // --- Hidden Administrator System Routes & Protection ---
 const createAdminRouter = require('./admin/adminRoutes');
 app.use('/api/admin', createAdminRouter({
@@ -572,6 +576,7 @@ app.post('/api/chat/clear', (req, res) => {
     }
 
     const previousCount = messages.length;
+    messages.length = 0;
     messages = [];
     saveMessages(messages);
 

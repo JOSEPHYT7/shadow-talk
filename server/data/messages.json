@@ -137,5 +137,18 @@
     "sources": [],
     "replyTo": null,
     "reactions": {}
+  },
+  {
+    "id": "msg_1790854303925_8he58ec",
+    "timestamp": 1790854303925,
+    "alias": "James",
+    "userId": "bot_james",
+    "color": "#00f3ff",
+    "avatar": "/uploads/ShadowTalk-IG.jpeg",
+    "isVerified": true,
+    "text": "Quick coffee break. If anyone needs another pair of eyes on architecture or code, let me know! ☕",
+    "sources": [],
+    "replyTo": null,
+    "reactions": {}
   }
 ]
