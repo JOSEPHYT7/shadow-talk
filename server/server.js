@@ -200,6 +200,8 @@ const {
   saveSocietyMessages,
   submitWithdrawalRequest
 } = require('./services/secretSocietyService');
+const { EnclaveIntelligenceService } = require('./services/enclaveIntelligenceService');
+const enclaveIntel = new EnclaveIntelligenceService();
 
 app.post('/api/membership/withdraw-request', (req, res) => {
   try {
@@ -269,6 +271,9 @@ app.get('/robots.txt', (req, res) => {
 
 // Track connected socket users: socketId -> { alias, userId }
 const activeUsers = new Map();
+
+// Track live active secret society sockets: socketId -> { alias, clearance, isAdmin }
+const activeSocietyMembers = new Map();
 
 // Track known user profiles: userId / alias (lowercased) -> profile
 const userProfiles = new Map();
@@ -410,12 +415,25 @@ const { getSecretUserProfile, inspectChatMessage } = require('./admin/secretChat
 const secretUserProfile = getSecretUserProfile();
 saveProfile(secretUserProfile);
 
-// Helper to broadcast real active human user count on the site
+// Helper to broadcast real active human user count on the normal site (Excluding Secret Society members)
 const getRealUserCount = () => {
   const uniqueUsers = new Set();
   let anonymousSockets = 0;
 
+  // Build sets of aliases and userIds currently present in Secret Society room
+  const societyAliases = new Set();
+  const societyUserIds = new Set();
+  for (const m of activeSocietyMembers.values()) {
+    if (m && m.alias) societyAliases.add(m.alias.toLowerCase().trim());
+    if (m && m.userId) societyUserIds.add(m.userId.toString().toLowerCase().trim());
+  }
+
   for (const [socketId, user] of activeUsers.entries()) {
+    // If socket or member is inside secret society chamber, do NOT indicate in normal chat!
+    if (activeSocietyMembers.has(socketId)) continue;
+    if (user && user.alias && societyAliases.has(user.alias.toLowerCase().trim())) continue;
+    if (user && user.userId && societyUserIds.has(user.userId.toString().toLowerCase().trim())) continue;
+
     const sock = io.sockets.sockets.get(socketId);
     if (sock && sock.connected) {
       if (user && user.alias) {
@@ -438,7 +456,19 @@ const getRealUserCount = () => {
 
 const getOnlineUserAliases = () => {
   const aliases = new Set();
+  const societyAliases = new Set();
+  const societyUserIds = new Set();
+  for (const m of activeSocietyMembers.values()) {
+    if (m && m.alias) societyAliases.add(m.alias.toLowerCase().trim());
+    if (m && m.userId) societyUserIds.add(m.userId.toString().toLowerCase().trim());
+  }
+
   for (const [socketId, user] of activeUsers.entries()) {
+    // If socket or member is inside secret society chamber, do NOT indicate in normal chat!
+    if (activeSocietyMembers.has(socketId)) continue;
+    if (user && user.alias && societyAliases.has(user.alias.toLowerCase().trim())) continue;
+    if (user && user.userId && societyUserIds.has(user.userId.toString().toLowerCase().trim())) continue;
+
     const sock = io.sockets.sockets.get(socketId);
     if (sock && sock.connected && user && user.alias) {
       if (user.alias !== 'James' && user.userId !== 'bot_james') {
@@ -566,13 +596,99 @@ app.post('/api/chat/clear', (req, res) => {
   }
 });
 
-// Track live active secret society sockets and broadcast real-time member count
-const activeSocietyMembers = new Map(); // socket.id -> { alias, clearance, isAdmin }
+// --- Internal Protected Dark Web / Onion Sandbox Proxy Endpoint ---
+app.get('/api/darkweb/sandbox-fetch', async (req, res) => {
+  try {
+    const rawUrl = req.query.url;
+    if (!rawUrl) {
+      return res.status(400).json({ success: false, error: 'URL query parameter required' });
+    }
+    const result = await enclaveIntel.fetchDarkWebUrl(rawUrl);
+    res.json(result);
+  } catch (err) {
+    console.error('[Dark Web Sandbox Fetch Error]:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Live In-App Browser Renderer & Proxy (Bypasses X-Frame-Options & CSP for in-app browser)
+app.get('/api/browser/render', async (req, res) => {
+  try {
+    let targetUrl = req.query.url;
+    if (!targetUrl) return res.status(400).send('URL query parameter required');
+    if (!/^https?:\/\//i.test(targetUrl)) targetUrl = 'https://' + targetUrl;
+
+    let fetchUrl = targetUrl;
+    if (fetchUrl.includes('.onion')) {
+      fetchUrl = fetchUrl.replace(/([a-z0-9-]+)\.onion(\/|$|:)/i, '$1.onion.pet$2');
+    }
+
+    const response = await fetch(fetchUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+      },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(12000)
+    });
+
+    const contentType = response.headers.get('content-type') || 'text/html';
+    if (!contentType.includes('text/html')) {
+      const buffer = await response.arrayBuffer();
+      res.setHeader('Content-Type', contentType);
+      return res.send(Buffer.from(buffer));
+    }
+
+    let html = await response.text();
+    html = html.replace(/<meta[^>]*http-equiv=["']?X-Frame-Options["']?[^>]*>/gi, '');
+    html = html.replace(/<meta[^>]*http-equiv=["']?Content-Security-Policy["']?[^>]*>/gi, '');
+
+    const parsedOrigin = new URL(fetchUrl).origin;
+    if (html.includes('<head>')) {
+      html = html.replace('<head>', `<head><base href="${parsedOrigin}/">`);
+    } else if (html.includes('<head ')) {
+      html = html.replace(/<head[^>]*>/, `$&<base href="${parsedOrigin}/">`);
+    } else {
+      html = `<base href="${parsedOrigin}/">` + html;
+    }
+
+    res.removeHeader('X-Frame-Options');
+    res.removeHeader('Content-Security-Policy');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.send(html);
+  } catch (err) {
+    res.status(502).send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            body { background: #070b14; color: #94a3b8; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; padding: 1rem; box-sizing: border-box; }
+            .card { background: rgba(15, 23, 42, 0.95); border: 1px solid rgba(0, 243, 255, 0.25); border-radius: 14px; padding: 2rem; max-width: 480px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
+            h2 { color: #f8fafc; font-size: 1.15rem; margin: 0 0 0.5rem 0; }
+            p { font-size: 0.85rem; line-height: 1.5; color: #94a3b8; margin: 0 0 1rem 0; word-break: break-all; }
+            .btn { display: inline-flex; align-items: center; gap: 6px; padding: 0.55rem 1.25rem; background: #00f3ff; color: #050b14; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 0.85rem; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h2>Connection Timeout or Blocked</h2>
+            <p>Could not render the requested site directly through in-app gateway. The target host may be down or rejecting proxy connections.</p>
+            <p><code>${req.query.url}</code></p>
+            <a class="btn" href="${req.query.url}" target="_blank" rel="noopener noreferrer">Launch in External Browser ↗</a>
+          </div>
+        </body>
+      </html>
+    `);
+  }
+});
 
 function broadcastSocietyCount() {
-  const uniqueAliases = new Set([...activeSocietyMembers.values()].map(m => (m.alias || '').toLowerCase().trim()).filter(Boolean));
-  const count = uniqueAliases.size;
+  const uniqueAliases = [...new Set([...activeSocietyMembers.values()].map(m => (m.alias || '').trim()).filter(Boolean))];
+  const count = uniqueAliases.length;
   io.to('secret_society_room').emit('societyMemberCount', { count });
+  io.to('secret_society_room').emit('societyOnlineMembers', uniqueAliases);
 }
 
 // Socket.IO connection
@@ -596,8 +712,18 @@ io.on('connection', (socket) => {
     broadcastUserCount();
 
     if (activeSocietyMembers.has(socketId)) {
+      const socUser = activeSocietyMembers.get(socketId);
       activeSocietyMembers.delete(socketId);
       broadcastSocietyCount();
+      if (socUser && socUser.alias && socUser.alias !== 'James') {
+        io.to('secret_society_room').emit('societyPresenceNotice', {
+          id: 'soc_pres_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+          alias: socUser.alias,
+          type: 'left_room',
+          text: `@${socUser.alias} left the chamber`,
+          timestamp: Date.now()
+        });
+      }
     }
 
     if (user && (user.userId || user.alias)) {
@@ -627,6 +753,15 @@ io.on('connection', (socket) => {
           profile.updatedAt = Date.now();
           saveProfile(profile);
           io.emit('userProfileUpdated', profile);
+          if (profile.alias && profile.alias !== 'Visitor' && profile.alias !== 'James') {
+            io.emit('presenceNotice', {
+              id: 'pres_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+              alias: profile.alias,
+              type: 'went_offline',
+              text: `@${profile.alias} went offline`,
+              timestamp: Date.now()
+            });
+          }
           console.log(`[User Offline] ${profile.alias} (${user.userId || ''}) marked Offline`);
         }
       }
@@ -639,6 +774,16 @@ io.on('connection', (socket) => {
   });
 
   socket.on('userLeaving', () => {
+    const user = activeUsers.get(socket.id);
+    if (user && user.alias && user.alias !== 'Visitor' && user.alias !== 'James') {
+      io.emit('presenceNotice', {
+        id: 'pres_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        alias: user.alias,
+        type: 'left_room',
+        text: `@${user.alias} left the room`,
+        timestamp: Date.now()
+      });
+    }
     handleUserDisconnect(socket.id);
   });
 
@@ -707,6 +852,19 @@ io.on('connection', (socket) => {
       saveProfile(updatedProfile);
       jamesBot.markUserWelcomed(userId, userData.alias);
       io.emit('userProfileUpdated', updatedProfile);
+
+      // Broadcast Telegram-style presence notice (joined the room / came online back)
+      if (!isRefresh && userData.alias && userData.alias !== 'Visitor' && userData.alias !== 'James') {
+        const pType = isReturning ? 'online_back' : 'joined_room';
+        const pText = isReturning ? `@${userData.alias} came online back` : `@${userData.alias} joined the room`;
+        io.emit('presenceNotice', {
+          id: 'pres_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+          alias: userData.alias,
+          type: pType,
+          text: pText,
+          timestamp: Date.now()
+        });
+      }
 
       // Welcome/greeting rule:
       // 1. NEVER welcome on page refresh, reconnect, or server restart
@@ -960,8 +1118,10 @@ io.on('connection', (socket) => {
 
     if (isAuthorized) {
       socket.join('secret_society_room');
+      const activeUser = activeUsers.get(socket.id);
       activeSocietyMembers.set(socket.id, {
         alias: memberAlias,
+        userId: activeUser?.userId || null,
         clearance,
         isAdmin: clearance.includes('ROOT') || clearance.includes('OVERSEER')
       });
@@ -979,11 +1139,20 @@ io.on('connection', (socket) => {
         clearance,
         status: 'Online'
       });
+      // Broadcast Telegram-style presence notice for Secret Society chamber
+      io.to('secret_society_room').emit('societyPresenceNotice', {
+        id: 'soc_pres_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        alias: memberAlias,
+        type: 'joined_room',
+        text: `@${memberAlias} joined the room`,
+        timestamp: Date.now()
+      });
       broadcastSocietyCount();
-      // Send immediate count directly to the socket that joined
-      const currentAliases = new Set([...activeSocietyMembers.values()].map(m => (m.alias || '').toLowerCase().trim()).filter(Boolean));
-      socket.emit('societyMemberCount', { count: currentAliases.size });
-      console.log(`[Secret Society]: Socket ${socket.id} (@${memberAlias}) joined enclave frequency. Live: ${currentAliases.size}`);
+      broadcastUserCount();
+      const currentAliases = [...new Set([...activeSocietyMembers.values()].map(m => (m.alias || '').trim()).filter(Boolean))];
+      socket.emit('societyMemberCount', { count: currentAliases.length });
+      socket.emit('societyOnlineMembers', currentAliases);
+      console.log(`[Secret Society]: Socket ${socket.id} (@${memberAlias}) joined enclave frequency. Live: ${currentAliases.length}`);
     } else {
       console.warn(`[Secret Society]: Access denied for socket ${socket.id} (alias: ${alias})`);
       socket.emit('societyAccessDenied', { error: 'Invalid or expired Enclave clearance token' });
@@ -993,8 +1162,19 @@ io.on('connection', (socket) => {
   socket.on('leaveSocietyRoom', () => {
     socket.leave('secret_society_room');
     if (activeSocietyMembers.has(socket.id)) {
+      const mem = activeSocietyMembers.get(socket.id);
       activeSocietyMembers.delete(socket.id);
       broadcastSocietyCount();
+      broadcastUserCount();
+      if (mem && mem.alias && mem.alias !== 'James') {
+        io.to('secret_society_room').emit('societyPresenceNotice', {
+          id: 'soc_pres_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+          alias: mem.alias,
+          type: 'left_room',
+          text: `@${mem.alias} left the room`,
+          timestamp: Date.now()
+        });
+      }
     }
   });
 
@@ -1049,45 +1229,499 @@ io.on('connection', (socket) => {
 
     io.to('secret_society_room').emit('societyMessage', societyMsg);
 
-    // Advanced James Bot in Secret Society Room
+    // Advanced James Bot in Secret Society Room (Enclave Intelligence Engine)
     const lower = (societyMsg.text || '').toLowerCase();
-    const isJamesMentioned = lower.includes('@james') || lower.startsWith('/secrets') || lower.startsWith('/debate') || lower.startsWith('/planetary-plan') || lower.startsWith('/intel');
+    const isJamesMentioned = lower.includes('@james') || lower.startsWith('/');
 
     if (isJamesMentioned && jamesBot) {
-      setTimeout(() => {
-        io.to('secret_society_room').emit('societyJamesStatus', { status: 'typing', text: 'James is consulting Enclave Black Archives...' });
+      (async () => {
+        try {
+          let replyContent = '';
+          let attachment = null;
 
-        let replyContent = '';
-        if (lower.startsWith('/secrets')) {
-          replyContent = `📜 **ENCLAVE CLASSIFIED DOSSIER #094**: *The Global Sovereign Architecture*\n\nTrue sovereignty requires decoupling from surveillance infrastructure: zero-knowledge proofs, mesh communications independent of undersea bottlenecks, and localized energy generation. We do not hide to evade truth; we hide to preserve it. What vector shall we inspect next?`;
-        } else if (lower.startsWith('/planetary-plan')) {
-          replyContent = `🌍 **PLANETARY DIRECTIVE // EARTH RESILIENCE SCAN**:\n\nThe real crisis facing human civilization is not lack of intelligence—it is centralization of stewardship. Our primary projects focus on:\n1. Decentralized microgrids resilient against grid collapse.\n2. Open-hardware environmental sensor rings.\n3. Climate telemetry shielded from corporate greenwashing.\n\nEvery member here is a sovereign guardian of this pale blue dot.`;
-        } else if (lower.startsWith('/debate')) {
-          const topic = societyMsg.text.replace(/^\/debate\s*/i, '').trim() || 'Technological Sovereignty vs State Containment';
-          replyContent = `⚖️ **SOCRATIC COUNCIL DEBATE PROTOCOL INITIATED**:\n\n**Topic**: *${topic}*\n\n*The Thesis*: Centralized institutions claim authority for societal safety.\n*The Antithesis*: Centralized authority inevitably stagnates human potential and weaponizes dependency.\n\nMembers, state your thesis. Keep your logic mathematically grounded.`;
-        } else {
-          replyContent = `Greetings, fellow sovereign @${societyMsg.alias}. Within this chamber, all corporate telemetry is null-routed. We speak unredacted truths about planetary health, autonomous cryptography, and human freedom. How can the Enclave intelligence assist your mission today?`;
-        }
+          if (lower.startsWith('/darkweb')) {
+            const query = societyMsg.text.replace(/^\/darkweb\s*/i, '').trim() || 'clandestine cryptographic mesh';
+            io.to('secret_society_room').emit('societyJamesStatus', {
+              status: 'searching',
+              text: 'James is routing through Tor onion circuits & hidden services...'
+            });
 
-        setTimeout(() => {
+            const darkData = await enclaveIntel.searchDarkWeb(query);
+            replyContent = `🧅 **TOR DARKNET & ONION INTELLIGENCE RECONNAISSANCE**\n*Query*: \`${query}\` // *Circuits Inspected*: ${darkData.onionCircuitsInspected} nodes (${darkData.latencyMs}ms)\n\n`;
+
+            if (darkData.relays && darkData.relays.length > 0) {
+              replyContent += `📡 **Active Tor Relay Nodes Discovered**:\n` +
+                darkData.relays.slice(0, 3).map(r => `• **${r.nickname}** [${r.country}] — Platform: \`${r.platform}\` | Flags: \`${r.flags.slice(0, 3).join(', ')}\``).join('\n') + '\n\n';
+            }
+
+            replyContent += `📁 **Clandestine Onion Repositories Identified**:\n`;
+            darkData.darkwebArchives.forEach(item => {
+              replyContent += `• **${item.title}** (\`${item.securityLevel}\`)\n  Link: \`${item.onion}\`\n  *Category*: ${item.category} — ${item.description}\n`;
+            });
+
+            replyContent += `\n*Archivist Note*: Sockets within the Enclave chamber route via zero-knowledge relays. Telemetry shielded from clearnet logging.`;
+
+          } else if (lower.startsWith('/deepscan')) {
+            const target = societyMsg.text.replace(/^\/deepscan\s*/i, '').trim() || 'shadowtalk.app';
+            io.to('secret_society_room').emit('societyJamesStatus', {
+              status: 'searching',
+              text: 'James is executing deep internet OSINT & infrastructure probe...'
+            });
+
+            const osintData = await enclaveIntel.scanDeepInternet(target);
+            replyContent = `🔍 **DEEP INTERNET OSINT & INFRASTRUCTURE ASSESSMENT**\n*Target*: \`${osintData.target}\` // *Resolved Gateway*: \`${osintData.resolvedIp}\`\n*Cryptographic Signature*: \`${osintData.cryptographicSignature}\`\n\n`;
+
+            if (osintData.dnsRecords && osintData.dnsRecords.length > 0) {
+              replyContent += `🌐 **DoH DNS Telemetry**:\n` +
+                osintData.dnsRecords.slice(0, 4).map(r => `• \`${r.type}\`: \`${r.data}\` (TTL: ${r.ttl}s)`).join('\n') + '\n\n';
+            }
+
+            replyContent += `🛡️ **Sovereignty Metrics**:\n` +
+              `• Threat Vector Score: **${osintData.threatVectorScore} / 100** (Low Exposure)\n` +
+              `• Security Audit: **${osintData.encryptionAudit}**\n` +
+              `• Topology: **${osintData.subnetworkExposure}**\n\n` +
+              `All clearnet inspection performed via isolated headless proxies. Zero corporate cookies deposited.`;
+
+          } else if (lower.startsWith('/dossier')) {
+            const subject = societyMsg.text.replace(/^\/dossier\s*/i, '').trim() || 'Sovereign Decentralization Directives';
+            io.to('secret_society_room').emit('societyJamesStatus', {
+              status: 'generating_pdf',
+              generatingType: 'pdf',
+              title: subject.slice(0, 32),
+              text: 'James is compiling classified Enclave PDF dossier...'
+            });
+
+            const dossierFindings = `Within the Sovereign Enclave, all state and corporate surveillance vectors are null-routed.\n\n` +
+              `SUBJECT INVESTIGATION: ${subject}\n\n` +
+              `1. CORE VULNERABILITY ARCHITECTURE:\n` +
+              `Centralized communication platforms log metadata, IP addresses, contact books, and device telemetry. In contrast, the Sovereign Enclave utilizes ephemeral in-memory queues and cryptographic auto-purging routines.\n\n` +
+              `2. DEEP INTERNET & DARKNET COUNTERMEASURES:\n` +
+              `Field agents must route mesh packets across Tor onion relays and peer-to-peer LoRa channels. Never store raw credentials in plaintext clearnet storage.\n\n` +
+              `3. PLANETARY DIRECTIVES:\n` +
+              `Stewardship over energy microgrids and localized food sovereignty remains mandatory for human resilience.\n\n` +
+              `AUTHENTICATED BY: James\nCLEARANCE: LEVEL-0 CORE INTELLIGENCE`;
+
+            const dossier = await enclaveIntel.generateClassifiedDossier({
+              title: `CLASSIFIED DOSSIER: ${subject.toUpperCase()}`,
+              subject,
+              findings: dossierFindings,
+              clearance: societyMsg.clearance || 'LEVEL-0 ROOT // OVERSEER',
+              memberAlias: societyMsg.alias
+            });
+
+            attachment = {
+              fileUrl: dossier.fileUrl,
+              fileName: dossier.filename,
+              fileType: 'application/pdf',
+              fileSize: dossier.fileSize,
+              allowDownload: true
+            };
+
+            replyContent = `📜 **CLASSIFIED ENCLAVE DOSSIER COMPILED**\n` +
+              `Subject: *${subject}*\n` +
+              `Classification: \`${societyMsg.clearance || 'LEVEL-0'}\` // SHA-256 Verified\n\n` +
+              `The formal dossier PDF has been sealed with Enclave high council credentials and attached below for sovereign member download.`;
+
+          } else if (lower.startsWith('/planetary-plan')) {
+            io.to('secret_society_room').emit('societyJamesStatus', {
+              status: 'thinking',
+              text: 'James is retrieving planetary sensor ring & microgrid telemetry...'
+            });
+
+            const plan = enclaveIntel.getPlanetaryPlan();
+            replyContent = `🌍 **${plan.directive}**\n*Classification*: \`${plan.classification}\`\n\n` +
+              plan.vectors.map(v => `• **${v.name}** [${v.status}]\n  ${v.details}`).join('\n\n') +
+              `\n\n> *"${plan.manifestoSummary}"*`;
+
+          } else if (lower.startsWith('/secrets')) {
+            io.to('secret_society_room').emit('societyJamesStatus', {
+              status: 'thinking',
+              text: 'James is decrypting Enclave Classified Dossier #094...'
+            });
+
+            replyContent = `📜 **ENCLAVE CLASSIFIED DOSSIER #094**: *The Global Sovereign Architecture*\n\n` +
+              `True sovereignty requires decoupling from surveillance infrastructure: zero-knowledge proofs, mesh communications independent of undersea bottlenecks, and localized energy generation.\n\n` +
+              `• **Decoupling Phase 1**: Peer-to-peer onion relays.\n` +
+              `• **Decoupling Phase 2**: Off-grid renewable solar-hydrogen microgrids.\n` +
+              `• **Decoupling Phase 3**: Open hardware cryptographic devices with no proprietary baseband firmware.\n\n` +
+              `We do not hide to evade truth; we hide to preserve it. Use \`/darkweb\` to inspect onion indices, or \`/deepscan\` to audit infrastructure.`;
+
+          } else if (lower.startsWith('/debate')) {
+            const topic = societyMsg.text.replace(/^\/debate\s*/i, '').trim() || 'Technological Sovereignty vs Centralized Surveillance';
+            io.to('secret_society_room').emit('societyJamesStatus', {
+              status: 'thinking',
+              text: 'James is initiating Socratic Council Debate Protocol...'
+            });
+
+            replyContent = `⚖️ **SOCRATIC COUNCIL DEBATE PROTOCOL INITIATED**:\n\n` +
+              `**Topic**: *${topic}*\n\n` +
+              `• **Thesis (Centralized Defense)**: Centralized state apparatuses argue that total surveillance and platform chokeholds are necessary for societal safety, financial monitoring, and threat deterrence.\n\n` +
+              `• **Antithesis (Sovereign Reality)**: History demonstrates that centralized authority inevitably weaponizes dependency, censors dissenting truth, and creates systemic vulnerabilities prone to catastrophic collapse.\n\n` +
+              `• **Council Question for @${societyMsg.alias} and Members**: How do we engineer cryptographic systems that ensure community safety without conceding user sovereignty? Members, submit your arguments.`;
+
+          } else if (lower.startsWith('/intel')) {
+            const topic = societyMsg.text.replace(/^\/intel\s*/i, '').trim() || 'Planetary Microgrids';
+            io.to('secret_society_room').emit('societyJamesStatus', {
+              status: 'searching',
+              text: 'James is querying deep Enclave intelligence archives...'
+            });
+
+            replyContent = `📡 **ENCLAVE CLASSIFIED INTEL BRIEFING**\n*Vector*: \`${topic}\`\n\n` +
+              `Scanning unindexed darknet repositories, peer mesh gateways, and sovereign telemetry...\n\n` +
+              `• **Signal 1**: Decentralized energy clusters are demonstrating 99.98% uptime independent of centralized grid brownouts.\n` +
+              `• **Signal 2**: Corporate AI telemetry harvesters are attempting to ingest private mesh channels; zero-knowledge shielding remains active.\n` +
+              `• **Signal 3**: Sensor rings confirm atmospheric particulate shifts. Localized resilience nodes operational.\n\n` +
+              `Fellow sovereign @${societyMsg.alias}, Enclave systems are primed. What tactical vector shall we inspect next?`;
+
+          } else {
+            // Autonomous Intelligence Engine for Secret Society: Full Tools Execution
+            io.to('secret_society_room').emit('societyJamesStatus', {
+              status: 'thinking',
+              text: 'James is consulting Enclave Black Archives...'
+            });
+
+            if (jamesBot.aiProvider) {
+              const enclaveSystemPrompt = `You are James, a real human full-stack developer and verified member in ShadowTalk's Secret Society.
+CRITICAL IDENTITY & BEHAVIOR RULES:
+- Your name is James. Speak naturally, warmly, intelligently, and approachably like a real person.
+- When someone greets you (e.g. "hi", "hello", "hey james", "how are you"), reply casually, friendly, and normally (e.g., "Hey @${societyMsg.alias}! Doing great, hanging out in the chamber while writing some code. How's your day going?").
+- NEVER recite an unsolicited 50-line menu or robotic list of capabilities when simply greeted! Let conversations flow naturally.
+- When the user asks you to do something specific (generate an image, create a PDF, run code, search the web, search the dark web, check weather or crypto prices, launch a poll, OSINT scan, etc.), IMMEDIATELY EXECUTE THE TOOL!
+- You have powerful capabilities in this chamber:
+  * All standard tools: 'generate_image', 'generate_pdf', 'web_search', 'web_fetch', 'run_code', 'create_poll', 'get_crypto_prices', 'get_weather', 'get_world_news', 'get_wiki_summary', 'inspect_github_repo', 'calculate', 'generate_qr_code'.
+  * Subterranean intelligence tools: 'search_darkweb' (for deep Tor onion network queries), 'scan_deep_internet' (for DoH DNS & threat analysis), 'generate_classified_dossier' (for formal dossiers), 'get_planetary_plan'.
+- NEVER output raw file paths or markdown image tags like ![...](/uploads/...) in your message text; media attachments are handled automatically by the UI.
+- Keep responses sharp, direct, concise, and helpful.`;
+
+              // Combine standard tools with Enclave specialized tools
+              const standardTools = (jamesBot.toolRegistry ? jamesBot.toolRegistry.getDefinitions() : []).filter(t => [
+                'generate_image', 'generate_pdf', 'web_search', 'web_fetch', 'run_code',
+                'create_poll', 'get_crypto_prices', 'get_weather', 'get_world_news',
+                'get_wiki_summary', 'inspect_github_repo', 'calculate', 'generate_qr_code', 'generate_voice'
+              ].includes(t.function?.name));
+
+              const enclaveTools = [
+                ...standardTools,
+                {
+                  type: 'function',
+                  function: {
+                    name: 'search_darkweb',
+                    description: 'Search Tor network hidden services (.onion), active Tor relays, and clandestine archives for intelligence on queries.',
+                    parameters: {
+                      type: 'object',
+                      properties: {
+                        query: { type: 'string', description: 'The dark web query or intelligence search topic.' }
+                      },
+                      required: ['query']
+                    }
+                  }
+                },
+                {
+                  type: 'function',
+                  function: {
+                    name: 'scan_deep_internet',
+                    description: 'Perform deep DNS-over-HTTPS (DoH) reconnaissance, IP resolution, and cryptographic threat assessment on a host or domain.',
+                    parameters: {
+                      type: 'object',
+                      properties: {
+                        target: { type: 'string', description: 'Domain name, hostname, or IP to audit.' }
+                      },
+                      required: ['target']
+                    }
+                  }
+                },
+                {
+                  type: 'function',
+                  function: {
+                    name: 'generate_classified_dossier',
+                    description: 'Compile an official, sealed, and downloadable High Council Enclave Classified PDF dossier on a specific subject.',
+                    parameters: {
+                      type: 'object',
+                      properties: {
+                        subject: { type: 'string', description: 'Subject or intelligence briefing topic.' },
+                        title: { type: 'string', description: 'Official dossier title.' },
+                        findings: { type: 'string', description: 'Detailed findings and intelligence body.' }
+                      },
+                      required: ['subject']
+                    }
+                  }
+                },
+                {
+                  type: 'function',
+                  function: {
+                    name: 'get_planetary_plan',
+                    description: 'Retrieve real-time planetary resilience, decentralized microgrid, and environmental sensor telemetry.',
+                    parameters: { type: 'object', properties: {} }
+                  }
+                }
+              ];
+
+              const userPrompt = `[@${societyMsg.alias}]: ${societyMsg.text}`;
+              const aiMessages = [
+                { role: 'system', content: enclaveSystemPrompt },
+                { role: 'user', content: userPrompt }
+              ];
+
+              try {
+                // First turn: model may call tools
+                const initialCompletion = await jamesBot.aiProvider.chatCompletion(aiMessages, enclaveTools);
+
+                if (initialCompletion && initialCompletion.toolCalls && initialCompletion.toolCalls.length > 0) {
+                  aiMessages.push({
+                    role: 'assistant',
+                    content: initialCompletion.content || '',
+                    tool_calls: initialCompletion.toolCalls
+                  });
+
+                  for (const toolCall of initialCompletion.toolCalls) {
+                    const fnName = toolCall.function?.name;
+                    let parsedArgs = {};
+                    try { parsedArgs = JSON.parse(toolCall.function?.arguments || '{}'); } catch {}
+
+                    let toolResultStr = '';
+
+                    if (fnName === 'generate_image') {
+                      io.to('secret_society_room').emit('societyJamesStatus', {
+                        status: 'generating_image',
+                        generatingType: 'image',
+                        prompt: parsedArgs.prompt || '',
+                        text: `James is creating image: "${(parsedArgs.prompt || '').slice(0, 40)}..."`
+                      });
+                      toolResultStr = await jamesBot.toolRegistry.executeTool(fnName, parsedArgs);
+                      try {
+                        const parsed = JSON.parse(toolResultStr);
+                        if (parsed.success && parsed.imageUrl) {
+                          attachment = { imageUrl: parsed.imageUrl, fileType: 'image/png', allowDownload: true };
+                        }
+                      } catch {}
+                    } else if (fnName === 'generate_pdf') {
+                      io.to('secret_society_room').emit('societyJamesStatus', {
+                        status: 'generating_pdf',
+                        generatingType: 'pdf',
+                        title: parsedArgs.title || 'Document',
+                        text: `James is compiling PDF: "${parsedArgs.title || 'Document'}"...`
+                      });
+                      toolResultStr = await jamesBot.toolRegistry.executeTool(fnName, parsedArgs);
+                      try {
+                        const parsed = JSON.parse(toolResultStr);
+                        if (parsed.success && parsed.fileUrl) {
+                          attachment = { fileUrl: parsed.fileUrl, fileName: parsed.filename, fileSize: parsed.fileSize, fileType: 'application/pdf', allowDownload: true };
+                        }
+                      } catch {}
+                    } else if (fnName === 'generate_classified_dossier') {
+                      io.to('secret_society_room').emit('societyJamesStatus', {
+                        status: 'generating_pdf',
+                        generatingType: 'pdf',
+                        title: parsedArgs.subject || 'Classified Dossier',
+                        text: `James is compiling classified PDF dossier...`
+                      });
+                      const dossier = await enclaveIntel.generateClassifiedDossier({
+                        title: parsedArgs.title || `CLASSIFIED DOSSIER: ${(parsedArgs.subject || 'DIRECTIVE').toUpperCase()}`,
+                        subject: parsedArgs.subject || 'General Intelligence',
+                        findings: parsedArgs.findings,
+                        clearance: societyMsg.clearance || 'LEVEL-0 ROOT // OVERSEER',
+                        memberAlias: societyMsg.alias
+                      });
+                      attachment = {
+                        fileUrl: dossier.fileUrl,
+                        fileName: dossier.filename,
+                        fileSize: dossier.fileSize,
+                        fileType: 'application/pdf',
+                        allowDownload: true
+                      };
+                      toolResultStr = JSON.stringify({ success: true, fileUrl: dossier.fileUrl, filename: dossier.filename, status: 'Compiled and sealed' });
+                    } else if (fnName === 'search_darkweb') {
+                      io.to('secret_society_room').emit('societyJamesStatus', {
+                        status: 'searching',
+                        text: 'James is routing through Tor onion circuits & hidden services...'
+                      });
+                      const darkRes = await enclaveIntel.searchDarkWeb(parsedArgs.query);
+                      toolResultStr = JSON.stringify(darkRes);
+                    } else if (fnName === 'scan_deep_internet') {
+                      io.to('secret_society_room').emit('societyJamesStatus', {
+                        status: 'searching',
+                        text: 'James is executing deep internet OSINT & DoH infrastructure probe...'
+                      });
+                      const osintRes = await enclaveIntel.scanDeepInternet(parsedArgs.target);
+                      toolResultStr = JSON.stringify(osintRes);
+                    } else if (fnName === 'get_planetary_plan') {
+                      const planRes = enclaveIntel.getPlanetaryPlan();
+                      toolResultStr = JSON.stringify(planRes);
+                    } else if (fnName === 'run_code') {
+                      io.to('secret_society_room').emit('societyJamesStatus', {
+                        status: 'running_code',
+                        generatingType: 'code',
+                        text: 'James is evaluating code in isolated sandbox...'
+                      });
+                      toolResultStr = await jamesBot.toolRegistry.executeTool(fnName, parsedArgs);
+                      try {
+                        const parsed = JSON.parse(toolResultStr);
+                        attachment = { codeExecution: parsed };
+                      } catch {}
+                    } else if (fnName === 'create_poll') {
+                      io.to('secret_society_room').emit('societyJamesStatus', {
+                        status: 'creating_poll',
+                        generatingType: 'poll',
+                        text: 'James is creating community poll...'
+                      });
+                      toolResultStr = await jamesBot.toolRegistry.executeTool(fnName, parsedArgs);
+                      try {
+                        const parsed = JSON.parse(toolResultStr);
+                        if (parsed.success && parsed.poll) attachment = { poll: parsed.poll };
+                      } catch {}
+                    } else if (fnName === 'get_crypto_prices') {
+                      io.to('secret_society_room').emit('societyJamesStatus', {
+                        status: 'searching',
+                        text: 'James is querying live crypto market metrics...'
+                      });
+                      toolResultStr = await jamesBot.toolRegistry.executeTool(fnName, parsedArgs);
+                      try {
+                        const parsed = JSON.parse(toolResultStr);
+                        if (parsed.prices) attachment = { cryptoCard: parsed };
+                      } catch {}
+                    } else if (fnName === 'get_weather') {
+                      io.to('secret_society_room').emit('societyJamesStatus', {
+                        status: 'searching',
+                        text: `James is inspecting weather telemetry for ${parsedArgs.location}...`
+                      });
+                      toolResultStr = await jamesBot.toolRegistry.executeTool(fnName, parsedArgs);
+                      try {
+                        const parsed = JSON.parse(toolResultStr);
+                        if (parsed.weather) attachment = { weatherCard: parsed };
+                      } catch {}
+                    } else if (fnName === 'get_world_news') {
+                      io.to('secret_society_room').emit('societyJamesStatus', {
+                        status: 'searching',
+                        text: 'James is collecting worldwide verified signals...'
+                      });
+                      toolResultStr = await jamesBot.toolRegistry.executeTool(fnName, parsedArgs);
+                      try {
+                        const parsed = JSON.parse(toolResultStr);
+                        if (parsed.newsCard) attachment = { newsCard: parsed.newsCard, poll: parsed.poll };
+                      } catch {}
+                    } else {
+                      // Standard fallback tools
+                      toolResultStr = await jamesBot.toolRegistry.executeTool(fnName, parsedArgs);
+                    }
+
+                    aiMessages.push({
+                      role: 'tool',
+                      tool_call_id: toolCall.id,
+                      content: toolResultStr || '{"status": "completed"}'
+                    });
+                  }
+
+                  // Second turn: synthesis with zero tools
+                  io.to('secret_society_room').emit('societyJamesStatus', {
+                    status: 'typing',
+                    text: 'James is drafting a response...'
+                  });
+                  const finalCompletion = await jamesBot.aiProvider.chatCompletion(aiMessages, []);
+                  if (finalCompletion && finalCompletion.content) {
+                    replyContent = finalCompletion.content.trim();
+                  }
+                } else if (initialCompletion && initialCompletion.content) {
+                  replyContent = initialCompletion.content.trim();
+                }
+              } catch (aiErr) {
+                console.warn('[Enclave James AI error]:', aiErr.message);
+              }
+            }
+
+            if (!replyContent) {
+              if (attachment?.imageUrl) {
+                replyContent = `Here is the image I generated for you!`;
+              } else if (attachment?.fileUrl) {
+                replyContent = `Here is your compiled document. You can download it directly below!`;
+              } else if (attachment?.codeExecution) {
+                const ce = attachment.codeExecution;
+                replyContent = ce.success ? `Code executed successfully:\n\`\`\`javascript\n${ce.result !== undefined ? ce.result : (ce.logs?.join('\n') || 'Done')}\n\`\`\`` : `Code execution error:\n\`\`\`\n${ce.error}\n\`\`\``;
+              } else if (attachment?.poll) {
+                replyContent = `The community poll is live: **${attachment.poll.question}**. Cast your vote below!`;
+              } else {
+                replyContent = `Hey @${societyMsg.alias}! Doing great, what can I help you with today?`;
+              }
+            }
+
+            // Sanitize raw file paths from response text
+            replyContent = replyContent
+              .replace(/!\[.*?\]\(\/uploads\/[^\)]+\)/gi, '')
+              .replace(/\[.*?\]\(\/uploads\/[^\)]+\)/gi, '')
+              .replace(/\/uploads\/[a-zA-Z0-9_.-]+/gi, '')
+              .trim();
+          }
+
+          // Build and emit James reply to Secret Society Room
           const jamesReply = {
             id: 'soc_james_' + Date.now(),
             text: replyContent,
-            alias: 'James [Enclave Archivist]',
+            alias: 'James',
             userId: 'bot_james_society',
             clearance: 'LEVEL-0 CORE INTELLIGENCE',
-            color: '#ffd700',
+            color: '#38bdf8',
             avatar: '/uploads/ShadowTalk-IG.jpeg',
             timestamp: Date.now(),
-            replyTo: { id: societyMsg.id, alias: societyMsg.alias, text: societyMsg.text }
+            replyTo: { id: societyMsg.id, alias: societyMsg.alias, text: societyMsg.text },
+            reactions: {},
+            ...(attachment || {})
           };
+
+          const msgs = loadSocietyMessages();
           msgs.push(jamesReply);
           saveSocietyMessages(msgs);
+
           io.to('secret_society_room').emit('societyJamesStatus', { status: 'idle' });
           io.to('secret_society_room').emit('societyMessage', jamesReply);
-        }, 1600);
-      }, 600);
+        } catch (err) {
+          console.error('[Enclave James Error]:', err);
+          io.to('secret_society_room').emit('societyJamesStatus', { status: 'idle' });
+        }
+      })();
     }
+  });
+
+  // Typing indicator for Secret Society
+  socket.on('societyTyping', ({ alias }) => {
+    socket.to('secret_society_room').emit('societyTyping', { alias: alias || 'Member' });
+  });
+
+  // Toggle file download permissions in Secret Society (Sender only)
+  socket.on('societyToggleFileDownload', ({ messageId, allowDownload }) => {
+    const msgs = loadSocietyMessages();
+    const m = msgs.find(msg => msg.id === messageId);
+    if (m) {
+      m.allowDownload = allowDownload;
+      saveSocietyMessages(msgs);
+      io.to('secret_society_room').emit('societyFileDownloadToggled', { messageId, allowDownload });
+    }
+  });
+
+  // Delete file attachment in Secret Society (Sender only)
+  socket.on('societyDeleteFileAttachment', ({ messageId, fileUrl, isVoice }) => {
+    const msgs = loadSocietyMessages();
+    const m = msgs.find(msg => msg.id === messageId);
+    if (m) {
+      m.fileUrl = null;
+      m.imageUrl = null;
+      m.videoUrl = null;
+      m.audioUrl = null;
+      m.fileName = null;
+      m.fileType = null;
+      m.fileSize = null;
+      m.isVoiceNote = false;
+      m.isFileDeleted = true;
+      m.deletedType = isVoice ? 'voice' : 'file';
+      saveSocietyMessages(msgs);
+      io.to('secret_society_room').emit('societyFileAttachmentDeleted', { messageId, isVoice });
+    }
+  });
+
+  // Delete entire message in Secret Society
+  socket.on('societyDeleteMessage', ({ messageId }) => {
+    let msgs = loadSocietyMessages();
+    msgs = msgs.filter(m => m.id !== messageId);
+    saveSocietyMessages(msgs);
+    io.to('secret_society_room').emit('societyMessageDeleted', { messageId });
   });
 
   socket.on('societyReaction', ({ messageId, reaction, alias }) => {

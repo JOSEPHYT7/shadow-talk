@@ -8443,7 +8443,7 @@
   margin: 0 0 0.85rem 0;
 }
 
-.curiosity-content > p {
+.curiosity-content>p {
   font-size: 0.98rem;
   line-height: 1.7;
   color: #cbd5e1;
@@ -8805,8 +8805,13 @@
 }
 
 @keyframes grantedProgress {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(0%); }
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(0%);
+  }
 }
 
 .granted-telemetry-meta {
@@ -9289,22 +9294,27 @@
   background: radial-gradient(circle at top right, rgba(245, 158, 11, 0.22) 0%, rgba(15, 23, 42, 0.85) 70%);
   border-color: rgba(245, 158, 11, 0.35);
 }
+
 .visual-weather-card.theme-night {
   background: radial-gradient(circle at top right, rgba(99, 102, 241, 0.22) 0%, rgba(10, 15, 30, 0.88) 70%);
   border-color: rgba(99, 102, 241, 0.35);
 }
+
 .visual-weather-card.theme-rainy {
   background: radial-gradient(circle at top right, rgba(6, 182, 212, 0.22) 0%, rgba(15, 23, 42, 0.85) 70%);
   border-color: rgba(6, 182, 212, 0.35);
 }
+
 .visual-weather-card.theme-stormy {
   background: radial-gradient(circle at top right, rgba(168, 85, 247, 0.25) 0%, rgba(15, 23, 42, 0.88) 70%);
   border-color: rgba(168, 85, 247, 0.35);
 }
+
 .visual-weather-card.theme-snowy {
   background: radial-gradient(circle at top right, rgba(224, 242, 254, 0.22) 0%, rgba(15, 23, 42, 0.85) 70%);
   border-color: rgba(224, 242, 254, 0.35);
 }
+
 .visual-weather-card.theme-cloudy {
   background: radial-gradient(circle at top right, rgba(100, 116, 139, 0.2) 0%, rgba(15, 23, 42, 0.85) 70%);
   border-color: rgba(100, 116, 139, 0.3);
@@ -9414,13 +9424,40 @@
   box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
-.weather-svg-sun { color: #f59e0b; filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.6)); }
-.weather-svg-moon { color: #818cf8; filter: drop-shadow(0 0 10px rgba(129, 140, 248, 0.5)); }
-.weather-svg-sun-cloud { color: #38bdf8; filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.5)); }
-.weather-svg-rain { color: #06b6d4; filter: drop-shadow(0 0 10px rgba(6, 182, 212, 0.5)); }
-.weather-svg-storm { color: #c084fc; filter: drop-shadow(0 0 10px rgba(192, 132, 252, 0.6)); }
-.weather-svg-snow { color: #e0f2fe; filter: drop-shadow(0 0 10px rgba(224, 242, 254, 0.6)); }
-.weather-svg-cloud { color: #94a3b8; filter: drop-shadow(0 0 8px rgba(148, 163, 184, 0.4)); }
+.weather-svg-sun {
+  color: #f59e0b;
+  filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.6));
+}
+
+.weather-svg-moon {
+  color: #818cf8;
+  filter: drop-shadow(0 0 10px rgba(129, 140, 248, 0.5));
+}
+
+.weather-svg-sun-cloud {
+  color: #38bdf8;
+  filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.5));
+}
+
+.weather-svg-rain {
+  color: #06b6d4;
+  filter: drop-shadow(0 0 10px rgba(6, 182, 212, 0.5));
+}
+
+.weather-svg-storm {
+  color: #c084fc;
+  filter: drop-shadow(0 0 10px rgba(192, 132, 252, 0.6));
+}
+
+.weather-svg-snow {
+  color: #e0f2fe;
+  filter: drop-shadow(0 0 10px rgba(224, 242, 254, 0.6));
+}
+
+.weather-svg-cloud {
+  color: #94a3b8;
+  filter: drop-shadow(0 0 8px rgba(148, 163, 184, 0.4));
+}
 
 /* Atmospheric Metrics Grid */
 .weather-metrics-grid {
@@ -9610,8 +9647,17 @@
 }
 
 @keyframes newsPulse {
-  0%, 100% { opacity: 0.6; transform: scale(0.95); }
-  50% { opacity: 1; transform: scale(1.1); }
+
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: scale(0.95);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
 }
 
 .news-verified-source {
@@ -10217,8 +10263,17 @@
 }
 
 @keyframes pulseDot {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.4; transform: scale(0.8); }
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.4;
+    transform: scale(0.8);
+  }
 }
 
 .secret-reply-text {
@@ -10253,4 +10308,85 @@
   font-size: 0.74rem;
   color: rgba(255, 255, 255, 0.5);
   letter-spacing: 0.06em;
+}
+
+/* ==========================================================================
+   --- Telegram-Style Channel Presence Notices (Joined / Left / Online / Offline) ---
+   ========================================================================== */
+.telegram-presence-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin: 0.65rem 0;
+  user-select: none;
+  animation: presenceFadeSlide 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes presenceFadeSlide {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.telegram-presence-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  margin: 0.65rem 0;
+  pointer-events: none;
+  animation: presenceFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.telegram-presence-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.28rem 0.85rem;
+  border-radius: 9999px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #94a3b8;
+  font-size: 0.78rem;
+  font-weight: 500;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  letter-spacing: 0.15px;
+}
+
+.telegram-presence-pill.joined_room,
+.telegram-presence-pill.online_back {
+  border-color: rgba(16, 185, 129, 0.25);
+  color: #cbd5e1;
+}
+
+.telegram-presence-pill.went_offline,
+.telegram-presence-pill.left_room {
+  border-color: rgba(148, 163, 184, 0.16);
+  color: #94a3b8;
+}
+
+.presence-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.telegram-presence-pill.joined_room .presence-dot,
+.telegram-presence-pill.online_back .presence-dot {
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+}
+
+.telegram-presence-pill.went_offline .presence-dot,
+.telegram-presence-pill.left_room .presence-dot {
+  background: #94a3b8;
+  opacity: 0.6;
 }

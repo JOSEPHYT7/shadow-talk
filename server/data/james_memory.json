@@ -1,5 +1,5 @@
 {
-  "updatedAt": 1790357144108,
+  "updatedAt": 1790848239303,
   "summary": "",
   "topics": [],
   "welcomedUsers": [
@@ -7,18 +7,21 @@
     "usr_78qzmjll4",
     "darshanaa",
     "usr_2i4zg49q8",
-    "aria_knight60",
+    "amara_cruz",
     "usr_j4ltzh3hg",
     "diya",
     "usr_bupie4fm0",
     "charlie",
     "user_charles",
+    "aria_knight60",
     "kai_rivera24",
     "joseph",
     "d",
     "da",
     "dar",
-    "dars"
+    "dars",
+    "leo.sterling",
+    "usr_lys0nj6kt"
   ],
   "lastReturnGreetTime": {},
   "dailyNewsStats": {
@@ -42,19 +45,19 @@
       "key": "uid:usr_2i4zg49q8",
       "userId": "usr_2i4zg49q8",
       "alias": "darshanaa",
-      "count": 7,
+      "count": 8,
       "notes": [],
       "topics": [],
-      "lastSeen": 1790349679589
+      "lastSeen": 1790765295703
     },
     {
       "key": "uid:usr_j4ltzh3hg",
       "userId": "usr_j4ltzh3hg",
-      "alias": "aria_knight60",
-      "count": 1,
+      "alias": "amara_cruz",
+      "count": 6,
       "notes": [],
       "topics": [],
-      "lastSeen": 1789916342119
+      "lastSeen": 1790848237302
     },
     {
       "key": "uid:usr_bupie4fm0",
@@ -75,6 +78,15 @@
       ],
       "topics": [],
       "lastSeen": 1790322486557
+    },
+    {
+      "key": "uid:usr_lys0nj6kt",
+      "userId": "usr_lys0nj6kt",
+      "alias": "leo.sterling",
+      "count": 2,
+      "notes": [],
+      "topics": [],
+      "lastSeen": 1790848037887
     }
   ]
 }

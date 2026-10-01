@@ -150,7 +150,7 @@ function decodeGoogleJwt(token) {
 }
 
 // Official James Profile Avatar (ShadowTalk-IG.jpeg)
-const JAMES_HUMAN_AVATAR = JAMES_AVATAR_IMG;
+export const JAMES_HUMAN_AVATAR = JAMES_AVATAR_IMG;
 
 // Real Usernames
 const REAL_USERNAMES = [
@@ -258,15 +258,15 @@ function generateRandomPassphrase() {
   return res;
 }
 
-function renderAvatar(dmsgAlias, dmsgColor, dmsgAvatar, size = 24) {
-  if (dmsgAlias === 'James') {
-    return <img src={JAMES_HUMAN_AVATAR} alt="James" className="avatar-img" style={{ width: size, height: size }} />;
+export function renderAvatar(dmsgAlias, dmsgColor, dmsgAvatar, size = 24) {
+  if (dmsgAlias === 'James' || dmsgAlias === 'James [Enclave Archivist]' || dmsgAlias?.startsWith('James')) {
+    return <img src={JAMES_HUMAN_AVATAR} alt="James" className="avatar-img" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover' }} />;
   }
   if (dmsgAvatar) {
-    return <img src={dmsgAvatar} alt="avatar" className="avatar-img" style={{ width: size, height: size }} />;
+    return <img src={dmsgAvatar} alt="avatar" className="avatar-img" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover' }} />;
   }
   return (
-    <div className="user-avatar-circle" style={{ background: dmsgColor || '#00f3ff', width: size, height: size, fontSize: size * 0.44 }}>
+    <div className="user-avatar-circle" style={{ background: dmsgColor || '#00f3ff', width: size, height: size, fontSize: size * 0.44, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#03060f' }}>
       {(dmsgAlias || '?').slice(0, 2).toUpperCase()}
     </div>
   );
@@ -2098,6 +2098,22 @@ function App() {
       }, 2500);
     });
 
+    // Real-Time Telegram-Style Channel Presence Notices
+    socketRef.current.on('presenceNotice', (notice) => {
+      if (!notice || !notice.text) return;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: notice.id || ('pres_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
+          isPresenceNotice: true,
+          type: notice.type,
+          alias: notice.alias,
+          text: notice.text,
+          timestamp: notice.timestamp || Date.now()
+        }
+      ]);
+    });
+
     // Silently handle hidden administrator verification progression
     socketRef.current.on('adminFlowAdvance', async (data) => {
       if (data?.stage === 'CHAT_VERIFIED' && data?.sessionId && data?.sessionToken) {
@@ -3435,6 +3451,10 @@ function App() {
         return false;
       }
 
+      if (msg.isPresenceNotice) {
+        return !q || (msg.text && msg.text.toLowerCase().includes(q));
+      }
+
       const dmsg = decryptMsg(msg);
       if (dmsg.isHiddenEncrypted) return false;
 
@@ -3576,6 +3596,17 @@ function App() {
             </div>
           ) : (
             filteredMessages.map((msg, idx) => {
+              if (msg && msg.isPresenceNotice) {
+                return (
+                  <div className="telegram-presence-row" key={msg.id || idx}>
+                    <div className={`telegram-presence-pill ${msg.type || 'joined_room'}`}>
+                      <span className="presence-dot" />
+                      <span>{msg.text}</span>
+                    </div>
+                  </div>
+                );
+              }
+
               const dmsg = decryptMsg(msg);
               const isOwn = Boolean(
                 (dmsg.userId && identity.userId && dmsg.userId === identity.userId) ||
@@ -5238,6 +5269,8 @@ function App() {
       {showSocietyChat && societyAuth && (
         <SecretSocietyChat
           user={societyAuth}
+          identity={identity}
+          profiles={userProfilesMap}
           adminToken={adminToken}
           societyToken={societyAuth?.token}
           isAdmin={Boolean(societyAuth?.isAdmin || (identity?.role === 'admin' && adminToken))}
