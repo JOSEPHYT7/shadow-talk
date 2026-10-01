@@ -1,5 +1,5 @@
 {
-  "updatedAt": 1790857128335,
+  "updatedAt": 1790858443107,
   "summary": "",
   "topics": [],
   "welcomedUsers": [
@@ -26,10 +26,10 @@
   "lastReturnGreetTime": {},
   "dailyNewsStats": {
     "date": "2026-10-01",
-    "count": 0,
-    "targetToday": 9,
-    "lastSentTime": 0,
-    "lastCategory": null
+    "count": 3,
+    "targetToday": 10,
+    "lastSentTime": 1790858441101,
+    "lastCategory": "science"
   },
   "users": [
     {

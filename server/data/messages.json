@@ -150,5 +150,273 @@
     "sources": [],
     "replyTo": null,
     "reactions": {}
+  },
+  {
+    "id": "msg_1790858278885_nsy3875",
+    "timestamp": 1790858278885,
+    "alias": "James",
+    "userId": "bot_james",
+    "color": "#00f3ff",
+    "avatar": "/uploads/ShadowTalk-IG.jpeg",
+    "isVerified": true,
+    "text": "Quick coffee break. If anyone needs another pair of eyes on architecture or code, let me know! ☕",
+    "sources": [],
+    "replyTo": null,
+    "reactions": {}
+  },
+  {
+    "id": "msg_1790858416313_as65ipd",
+    "timestamp": 1790858416313,
+    "alias": "James",
+    "userId": "bot_james",
+    "color": "#00f3ff",
+    "avatar": "/uploads/ShadowTalk-IG.jpeg",
+    "isVerified": true,
+    "text": "🔥 **VIRAL WORLD DISPATCH**: [TECH NEWS]\n### Federal agencies are already making decisions about quantum computing - Federal News Network\n\nFederal agencies are already making decisions about quantum computing Federal News Network\n\n⚡ **COMMUNITY DEBATE**: *Will ceasefire & diplomatic negotiations lead to a sustainable resolution in the Ukraine-Russia conflict?*\nVote below in the live ballot and debate your perspective in the terminal! 👇",
+    "sources": [
+      {
+        "title": "Federal News Network",
+        "url": "https://news.google.com/rss/articles/CBMiwwFBVV95cUxPQjJWb0R5ZzlEQzFKRXdMY0RnWUJTX3l2bThuZ0ZPbWhwQ3lGUmk4QXBHRmQtZ0VkR085WGdvVmFjZ0hjNThSRjl0ZndtdzZuZkFhQ09iRVRUNUc5TEtfMWVQRkdfS3lOdTBpR3l5RkpKTzdfcE5rLURtX09fRVBLaWRNazZHbTBGYmU4Sk9ibUN1d19vcFNYYUJXbUJjbzFld29JWVdFSUJvRGJlUTZTeU5IelpsRzJKNmFacFBEeTZUTVU?oc=5",
+        "domain": "news.google.com"
+      }
+    ],
+    "replyTo": null,
+    "reactions": {},
+    "newsCard": {
+      "id": "news_1790858416311_yv1xb",
+      "category": "TECH",
+      "categoryTag": "[TECH NEWS]",
+      "color": "#00f3ff",
+      "accent": "cyan",
+      "headline": "Federal agencies are already making decisions about quantum computing - Federal News Network",
+      "summary": "Federal agencies are already making decisions about quantum computing Federal News Network",
+      "takeaway": "Critical strategic development in tech with immediate worldwide implications.",
+      "impact": "GLOBAL BENCHMARK",
+      "bullets": [
+        "Verified global reporting confirmed via Federal News Network network dispatches.",
+        "High strategic reverberations across multilateral alliances and industry leaders.",
+        "Real-time developments monitored closely by international intelligence teams."
+      ],
+      "source": "Federal News Network",
+      "sourceUrl": "https://news.google.com/rss/articles/CBMiwwFBVV95cUxPQjJWb0R5ZzlEQzFKRXdMY0RnWUJTX3l2bThuZ0ZPbWhwQ3lGUmk4QXBHRmQtZ0VkR085WGdvVmFjZ0hjNThSRjl0ZndtdzZuZkFhQ09iRVRUNUc5TEtfMWVQRkdfS3lOdTBpR3l5RkpKTzdfcE5rLURtX09fRVBLaWRNazZHbTBGYmU4Sk9ibUN1d19vcFNYYUJXbUJjbzFld29JWVdFSUJvRGJlUTZTeU5IelpsRzJKNmFacFBEeTZUTVU?oc=5",
+      "imageUrl": null,
+      "images": [],
+      "videoUrl": null,
+      "publishedAt": "30 Sept",
+      "isVerified": true,
+      "debatePoll": {
+        "id": "poll_1790858416312_tf0t",
+        "question": "Will ceasefire & diplomatic negotiations lead to a sustainable resolution in the Ukraine-Russia conflict?",
+        "options": [
+          {
+            "text": "Diplomatic Breakthrough",
+            "votes": 0
+          },
+          {
+            "text": "Temporary Lull Only",
+            "votes": 0
+          },
+          {
+            "text": "Prolonged Attrition",
+            "votes": 0
+          }
+        ],
+        "totalVotes": 0,
+        "voters": {},
+        "createdAt": 1790858416312
+      }
+    },
+    "poll": {
+      "id": "poll_1790858416312_tf0t",
+      "question": "Will ceasefire & diplomatic negotiations lead to a sustainable resolution in the Ukraine-Russia conflict?",
+      "options": [
+        {
+          "text": "Diplomatic Breakthrough",
+          "votes": 0
+        },
+        {
+          "text": "Temporary Lull Only",
+          "votes": 0
+        },
+        {
+          "text": "Prolonged Attrition",
+          "votes": 0
+        }
+      ],
+      "totalVotes": 0,
+      "voters": {},
+      "createdAt": 1790858416312
+    },
+    "fileType": "application/x-news-card"
+  },
+  {
+    "id": "msg_1790858435974_y4wtae8",
+    "timestamp": 1790858435974,
+    "alias": "James",
+    "userId": "bot_james",
+    "color": "#00f3ff",
+    "avatar": "/uploads/ShadowTalk-IG.jpeg",
+    "isVerified": true,
+    "text": "🔥 **VIRAL WORLD DISPATCH**: [FINANCE NEWS]\n### Why U.S. Macroeconomic Data Drives Bitcoin Price in 2026: Inflation, Interest Rates, and Liquidity Impact Explained - Bitcoin Foundation\n\nWhy U.S. Macroeconomic Data Drives Bitcoin Price in 2026: Inflation, Interest Rates, and Liquidity Impact Explained Bitcoin Foundation\n\n⚡ **COMMUNITY DEBATE**: *Are autonomous AI agents advancing faster than global governance & security can handle?*\nVote below in the live ballot and debate your perspective in the terminal! 👇",
+    "sources": [
+      {
+        "title": "Bitcoin Foundation",
+        "url": "https://news.google.com/rss/articles/CBMi6wFBVV95cUxOQ1lya1lkRlFlcEJYeHNVUHNQbGtaQ2FIMEJIWFN5UEVPWklnMnNfRDIyeUFiRElnejliX0I5QnhJdTZ3VEhtNUxURjRVOEN2LVlpVVpMM0IzYnZQTjg5UmtYU21tNnJET1Jid0JfUVZucUNlbjNrOUIwTmE2THZ1V1RZeWN1V2xQM0hhcGxRZGJkSjVGZGFmMXhwWGZGSi0zeGVVVEJHckFjMXJVVUFua0xBOXEtbk1yUDBuaDlxVkI2cFFhN2huOEs0Y1haWGVrTlZoX0lmc0hFa2o3SjRkSVNWWVRfam5qVW9r?oc=5",
+        "domain": "news.google.com"
+      }
+    ],
+    "replyTo": null,
+    "reactions": {},
+    "newsCard": {
+      "id": "news_1790858435972_ahmf4",
+      "category": "FINANCE",
+      "categoryTag": "[FINANCE NEWS]",
+      "color": "#ffbb00",
+      "accent": "amber",
+      "headline": "Why U.S. Macroeconomic Data Drives Bitcoin Price in 2026: Inflation, Interest Rates, and Liquidity Impact Explained - Bitcoin Foundation",
+      "summary": "Why U.S. Macroeconomic Data Drives Bitcoin Price in 2026: Inflation, Interest Rates, and Liquidity Impact Explained Bitcoin Foundation",
+      "takeaway": "Critical strategic development in finance with immediate worldwide implications.",
+      "impact": "GLOBAL BENCHMARK",
+      "bullets": [
+        "Verified global reporting confirmed via Bitcoin Foundation network dispatches.",
+        "High strategic reverberations across multilateral alliances and industry leaders.",
+        "Real-time developments monitored closely by international intelligence teams."
+      ],
+      "source": "Bitcoin Foundation",
+      "sourceUrl": "https://news.google.com/rss/articles/CBMi6wFBVV95cUxOQ1lya1lkRlFlcEJYeHNVUHNQbGtaQ2FIMEJIWFN5UEVPWklnMnNfRDIyeUFiRElnejliX0I5QnhJdTZ3VEhtNUxURjRVOEN2LVlpVVpMM0IzYnZQTjg5UmtYU21tNnJET1Jid0JfUVZucUNlbjNrOUIwTmE2THZ1V1RZeWN1V2xQM0hhcGxRZGJkSjVGZGFmMXhwWGZGSi0zeGVVVEJHckFjMXJVVUFua0xBOXEtbk1yUDBuaDlxVkI2cFFhN2huOEs0Y1haWGVrTlZoX0lmc0hFa2o3SjRkSVNWWVRfam5qVW9r?oc=5",
+      "imageUrl": null,
+      "images": [],
+      "videoUrl": null,
+      "publishedAt": "4 May",
+      "isVerified": true,
+      "debatePoll": {
+        "id": "poll_1790858435973_5rgq",
+        "question": "Are autonomous AI agents advancing faster than global governance & security can handle?",
+        "options": [
+          {
+            "text": "Yes, regulate strictly now",
+            "votes": 0
+          },
+          {
+            "text": "No, keep open-source free",
+            "votes": 0
+          },
+          {
+            "text": "Oversight for frontier only",
+            "votes": 0
+          }
+        ],
+        "totalVotes": 0,
+        "voters": {},
+        "createdAt": 1790858435973
+      }
+    },
+    "poll": {
+      "id": "poll_1790858435973_5rgq",
+      "question": "Are autonomous AI agents advancing faster than global governance & security can handle?",
+      "options": [
+        {
+          "text": "Yes, regulate strictly now",
+          "votes": 0
+        },
+        {
+          "text": "No, keep open-source free",
+          "votes": 0
+        },
+        {
+          "text": "Oversight for frontier only",
+          "votes": 0
+        }
+      ],
+      "totalVotes": 0,
+      "voters": {},
+      "createdAt": 1790858435973
+    },
+    "fileType": "application/x-news-card"
+  },
+  {
+    "id": "msg_1790858441100_xaaaw1e",
+    "timestamp": 1790858441100,
+    "alias": "James",
+    "userId": "bot_james",
+    "color": "#00f3ff",
+    "avatar": "/uploads/ShadowTalk-IG.jpeg",
+    "isVerified": true,
+    "text": "🔥 **VIRAL WORLD DISPATCH**: [SCIENCE NEWS]\n### What is Dark Energy? Inside Our Accelerating, Expanding Universe - NASA Science (.gov)\n\nWhat is Dark Energy? Inside Our Accelerating, Expanding Universe NASA Science (.gov)\n\n⚡ **COMMUNITY DEBATE**: *Can international multilateral diplomacy achieve lasting security in regional conflict zones?*\nVote below in the live ballot and debate your perspective in the terminal! 👇",
+    "sources": [
+      {
+        "title": "NASA Science (.gov)",
+        "url": "https://news.google.com/rss/articles/CBMiTkFVX3lxTE1TZTZaWkprWE05ek5Xbkgzcjd6bGVlWEFPMzU2THBtcXFSbHpkUEdyOTVBd0phVzFfWTBLdlM5SXlRR1NnT2VIUWVqLWZhQQ?oc=5",
+        "domain": "news.google.com"
+      }
+    ],
+    "replyTo": null,
+    "reactions": {},
+    "newsCard": {
+      "id": "news_1790858441099_ugtcl",
+      "category": "SCIENCE",
+      "categoryTag": "[SCIENCE NEWS]",
+      "color": "#bf00ff",
+      "accent": "purple",
+      "headline": "What is Dark Energy? Inside Our Accelerating, Expanding Universe - NASA Science (.gov)",
+      "summary": "What is Dark Energy? Inside Our Accelerating, Expanding Universe NASA Science (.gov)",
+      "takeaway": "Critical strategic development in science with immediate worldwide implications.",
+      "impact": "GLOBAL BENCHMARK",
+      "bullets": [
+        "Verified global reporting confirmed via NASA Science (.gov) network dispatches.",
+        "High strategic reverberations across multilateral alliances and industry leaders.",
+        "Real-time developments monitored closely by international intelligence teams."
+      ],
+      "source": "NASA Science (.gov)",
+      "sourceUrl": "https://news.google.com/rss/articles/CBMiTkFVX3lxTE1TZTZaWkprWE05ek5Xbkgzcjd6bGVlWEFPMzU2THBtcXFSbHpkUEdyOTVBd0phVzFfWTBLdlM5SXlRR1NnT2VIUWVqLWZhQQ?oc=5",
+      "imageUrl": null,
+      "images": [],
+      "videoUrl": null,
+      "publishedAt": "12 Aug",
+      "isVerified": true,
+      "debatePoll": {
+        "id": "poll_1790858441099_ysbu",
+        "question": "Can international multilateral diplomacy achieve lasting security in regional conflict zones?",
+        "options": [
+          {
+            "text": "Diplomacy can succeed",
+            "votes": 0
+          },
+          {
+            "text": "Escalation risks remain high",
+            "votes": 0
+          },
+          {
+            "text": "Status quo stalemate",
+            "votes": 0
+          }
+        ],
+        "totalVotes": 0,
+        "voters": {},
+        "createdAt": 1790858441099
+      }
+    },
+    "poll": {
+      "id": "poll_1790858441099_ysbu",
+      "question": "Can international multilateral diplomacy achieve lasting security in regional conflict zones?",
+      "options": [
+        {
+          "text": "Diplomacy can succeed",
+          "votes": 0
+        },
+        {
+          "text": "Escalation risks remain high",
+          "votes": 0
+        },
+        {
+          "text": "Status quo stalemate",
+          "votes": 0
+        }
+      ],
+      "totalVotes": 0,
+      "voters": {},
+      "createdAt": 1790858441099
+    },
+    "fileType": "application/x-news-card"
   }
 ]

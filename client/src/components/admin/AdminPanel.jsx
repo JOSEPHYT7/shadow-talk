@@ -148,7 +148,7 @@ export function AdminPanel({
       });
       if (res.ok) {
         const data = await res.json();
-        setUsers(data);
+        setUsers(Array.isArray(data) ? data : []);
       }
     } catch {}
   };
@@ -165,12 +165,15 @@ export function AdminPanel({
         })
       ]);
 
-      const pubData = pubRes.ok ? await pubRes.json() : [];
-      const socData = socRes.ok ? await socRes.json() : [];
+      const pubRaw = pubRes.ok ? await pubRes.json() : [];
+      const socRaw = socRes.ok ? await socRes.json() : [];
+
+      const pubList = Array.isArray(pubRaw) ? pubRaw : (Array.isArray(pubRaw?.messages) ? pubRaw.messages : []);
+      const socList = Array.isArray(socRaw) ? socRaw : (Array.isArray(socRaw?.messages) ? socRaw.messages : []);
 
       const combined = [
-        ...pubData.map(m => ({ ...m, room: 'public', roomName: 'Public Room' })),
-        ...socData.map(m => ({ ...m, room: 'society', roomName: 'Secret Society', isSociety: true }))
+        ...pubList.map(m => ({ ...m, room: 'public', roomName: 'Public Room' })),
+        ...socList.map(m => ({ ...m, room: 'society', roomName: 'Secret Society', isSociety: true }))
       ];
 
       // Sort newest first
@@ -189,7 +192,7 @@ export function AdminPanel({
       });
       if (res.ok) {
         const data = await res.json();
-        setAuditLogs(data);
+        setAuditLogs(Array.isArray(data) ? data : []);
       }
     } catch {}
   };
@@ -830,6 +833,34 @@ export function AdminPanel({
     return (
       (w.alias && w.alias.toLowerCase().includes(q)) ||
       (w.reason && w.reason.toLowerCase().includes(q))
+    );
+  });
+
+  const publicMsgCount = messages.filter(m => !m.room?.includes('society') && !m.isSociety).length;
+  const societyMsgCount = messages.filter(m => m.room?.includes('society') || m.isSociety).length;
+
+  const filteredAuditLogs = (Array.isArray(auditLogs) ? auditLogs : []).filter((log) => {
+    if (auditSeverityFilter === 'critical') {
+      const isDanger = log.event?.includes('FAILED') || log.event?.includes('LOCKOUT') || log.event?.includes('UNAUTHORIZED') || log.event?.includes('PURGED');
+      if (!isDanger) return false;
+    } else if (auditSeverityFilter === 'warn') {
+      const isWarn = log.event?.includes('MODERATED') || log.event?.includes('REJECTED') || log.event?.includes('REVOKED');
+      if (!isWarn) return false;
+    } else if (auditSeverityFilter === 'info') {
+      const isSuccess = log.event?.includes('AUTHORIZED') || log.event?.includes('INDUCTED') || log.event?.includes('APPROVED');
+      if (!isSuccess) return false;
+    }
+
+    if (!auditSearch) return true;
+    const q = auditSearch.toLowerCase();
+    const detailsStr = typeof log.details === 'object' ? JSON.stringify(log.details).toLowerCase() : '';
+    return (
+      (log.event && log.event.toLowerCase().includes(q)) ||
+      (log.maskedIp && log.maskedIp.toLowerCase().includes(q)) ||
+      (log.details?.admin && log.details.admin.toLowerCase().includes(q)) ||
+      (log.details?.username && log.details.username.toLowerCase().includes(q)) ||
+      (log.details?.alias && log.details.alias.toLowerCase().includes(q)) ||
+      detailsStr.includes(q)
     );
   });
 
@@ -1539,15 +1570,15 @@ export function AdminPanel({
               </div>
 
               <div className="admin-table-container">
-                <table className="admin-table">
+                <table className="admin-data-table users-table">
                   <thead>
                     <tr>
-                      <th>USER / CITIZEN</th>
-                      <th>USER ID</th>
-                      <th>STATUS</th>
-                      <th>CLEARANCE</th>
-                      <th>VERIFIED BADGE</th>
-                      <th>ACTIONS</th>
+                      <th style={{ width: '220px' }}>USER / CITIZEN</th>
+                      <th style={{ width: '150px' }}>USER ID</th>
+                      <th style={{ width: '130px' }}>PRESENCE</th>
+                      <th style={{ width: '150px' }}>CLEARANCE</th>
+                      <th style={{ width: '130px' }}>VERIFIED BADGE</th>
+                      <th style={{ width: '200px', textAlign: 'center' }}>ACTIONS</th>
                     </tr>
                   </thead>
                   <tbody>

@@ -1677,5 +1677,57 @@
     "imageUrl": "/uploads/james_art_1790851892684_r4pjq.png",
     "fileType": "image/png",
     "allowDownload": true
+  },
+  {
+    "id": "soc_bcast_1790858861668",
+    "timestamp": 1790858861665,
+    "alias": "ROOT_AUTHORITY",
+    "userId": "admin_root",
+    "color": "#ff0055",
+    "isVerified": true,
+    "text": "🚨 **ADMINISTRATIVE DIRECTIVE**: GENERAL PLATFORM ANNOUNCEMENT\n\nWelcome to ShadowTalk! Check out the Secret Society Enclave and participate in live world news debate polls.",
+    "adminBroadcast": {
+      "title": "GENERAL PLATFORM ANNOUNCEMENT",
+      "content": "Welcome to ShadowTalk! Check out the Secret Society Enclave and participate in live world news debate polls.",
+      "level": "info",
+      "targetRooms": "all",
+      "imageUrl": null,
+      "actionUrl": "https://shadowtalk.net/security",
+      "actionLabel": "Security Protocol",
+      "playKlaxon": true,
+      "issuedBy": "joseph_creator",
+      "issuedAt": 1790858861665
+    },
+    "room": "society",
+    "isSociety": true,
+    "clearance": "LEVEL-0 ROOT // OVERSEER"
+  },
+  {
+    "id": "soc_bcast_1790858930753",
+    "timestamp": 1790858930752,
+    "alias": "ROOT_AUTHORITY",
+    "userId": "admin_root",
+    "color": "#ff0055",
+    "isVerified": true,
+    "text": "🚨 **ADMINISTRATIVE DIRECTIVE**: SCHEDULED INFRASTRUCTURE MAINTENANCE\n\nCore server telemetry maintenance scheduled in 10 minutes. WebSocket sessions may momentarily reconnect.",
+    "imageUrl": "/uploads/1790858926260-751225289.jpg",
+    "fileUrl": "/uploads/1790858926260-751225289.jpg",
+    "fileName": "emergency_broadcast_attachment.jpg",
+    "fileType": "image/jpeg",
+    "adminBroadcast": {
+      "title": "SCHEDULED INFRASTRUCTURE MAINTENANCE",
+      "content": "Core server telemetry maintenance scheduled in 10 minutes. WebSocket sessions may momentarily reconnect.",
+      "level": "alert",
+      "targetRooms": "society",
+      "imageUrl": "/uploads/1790858926260-751225289.jpg",
+      "actionUrl": "https://shadowtalk.net/status",
+      "actionLabel": "Status Dashboard",
+      "playKlaxon": true,
+      "issuedBy": "joseph_creator",
+      "issuedAt": 1790858930752
+    },
+    "room": "society",
+    "isSociety": true,
+    "clearance": "LEVEL-0 ROOT // OVERSEER"
   }
 ]
