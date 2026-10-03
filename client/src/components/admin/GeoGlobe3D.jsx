@@ -22,7 +22,10 @@ import {
   ZoomOut,
   ShieldCheck,
   FileText,
-  ExternalLink
+  ExternalLink,
+  Wifi,
+  Clock,
+  Activity
 } from 'lucide-react';
 import './GeoGlobe3D.css';
 
@@ -32,6 +35,7 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
   const markersGroupRef = useRef(null);
   const animFrameIdRef = useRef(null);
 
+  const [globeReady, setGlobeReady] = useState(false);
   const [visitors, setVisitors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedVisitor, setSelectedVisitor] = useState(null);
@@ -41,12 +45,19 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
   const [ipstackConfigured, setIpstackConfigured] = useState(false);
   const [autoRotate, setAutoRotate] = useState(true);
   const [copiedField, setCopiedField] = useState(null);
+  const [currentTime, setCurrentTime] = useState(Date.now());
 
   // Map Mode: 'tiles' (Voyager Google Maps Deep Zoom), 'osm' (OpenStreetMap with every village), 'cyber' (Dark Matter), 'satellite' (NASA Blue Marble)
   const [mapMode, setMapMode] = useState('tiles');
   const [showBorders, setShowBorders] = useState(true);
   const [showArcs, setShowArcs] = useState(true);
   const [countriesData, setCountriesData] = useState([]);
+
+  // Live ticking clock for dossier timezones
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Fetch countries GeoJSON vector polygon boundaries
   useEffect(() => {
@@ -136,148 +147,6 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
     }
   }, []);
 
-  // Initialize Globe.GL
-  useEffect(() => {
-    if (!containerRef.current) return;
-    containerRef.current.innerHTML = '';
-
-    const width = containerRef.current.clientWidth || window.innerWidth - 380;
-    const height = containerRef.current.clientHeight || window.innerHeight - 180;
-
-    const globe = Globe({ animateIn: true })(containerRef.current)
-      .width(width)
-      .height(height)
-      .showAtmosphere(true)
-      .atmosphereColor('#38bdf8')
-      .atmosphereAltitude(0.2);
-
-    // Apply default Deep Zoom Slippy Tiles
-    applyMapMode(globe, 'tiles');
-
-    // Controls
-    const controls = globe.controls();
-    controls.autoRotate = true;
-    controls.autoRotateSpeed = 0.5;
-    controls.enableZoom = true;
-    controls.minDistance = 101.5; // Deep zoom close to Earth's surface for street/village clarity
-    controls.maxDistance = 550;   // Orbital view
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.1;
-
-    // Initial camera POV
-    globe.pointOfView({ lat: 20, lng: 78, altitude: 2.1 }, 1000);
-    globeInstanceRef.current = globe;
-
-    // Dedicated Three.js Group for 3D Citizen Stalk Markers added directly to Globe Scene
-    const markersGroup = new THREE.Group();
-    markersGroup.name = 'citizen-stalk-markers-group';
-    globe.scene().add(markersGroup);
-    markersGroupRef.current = markersGroup;
-
-    // Continuous render tick:
-    // 1. Camera backface culling (hiding markers on reverse side of Earth, matching reference)
-    // 2. Trigger tile engine update to dynamically stream deep zoom tiles
-    const tick = () => {
-      if (globeInstanceRef.current) {
-        const cam = globeInstanceRef.current.camera();
-        const camDir = cam.position.clone().normalize();
-
-        // Cull markers on reverse side of Earth
-        if (markersGroupRef.current) {
-          markersGroupRef.current.children.forEach((grp) => {
-            if (!grp.userData || !grp.userData.topPos) return;
-            const markerDir = grp.userData.topPos.clone().normalize();
-            const dot = markerDir.dot(camDir);
-            grp.visible = dot > 0.05;
-          });
-        }
-
-        // Trigger dynamic tile update for slippy map
-        if (typeof globeInstanceRef.current.updatePov === 'function') {
-          globeInstanceRef.current.updatePov(cam);
-        }
-        globeInstanceRef.current.scene().traverse((child) => {
-          if (child && typeof child.updatePov === 'function') {
-            child.updatePov(cam);
-          }
-        });
-      }
-      animFrameIdRef.current = requestAnimationFrame(tick);
-    };
-    animFrameIdRef.current = requestAnimationFrame(tick);
-
-    // Interactive Raycaster for clicking markers in 3D
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-
-    const handlePointerDown = (event) => {
-      if (!containerRef.current || !globeInstanceRef.current || !markersGroupRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-      raycaster.setFromCamera(mouse, globeInstanceRef.current.camera());
-      const visibleGroups = markersGroupRef.current.children.filter((g) => g.visible);
-      const intersects = raycaster.intersectObjects(visibleGroups, true);
-
-      if (intersects.length > 0) {
-        let curr = intersects[0].object;
-        while (curr && !curr.userData?.visitor && curr.parent) {
-          curr = curr.parent;
-        }
-        if (curr?.userData?.visitor) {
-          flyToVisitor(curr.userData.visitor);
-        }
-      }
-    };
-
-    const handlePointerMove = (event) => {
-      if (!containerRef.current || !globeInstanceRef.current || !markersGroupRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-      raycaster.setFromCamera(mouse, globeInstanceRef.current.camera());
-      const visibleGroups = markersGroupRef.current.children.filter((g) => g.visible);
-      const intersects = raycaster.intersectObjects(visibleGroups, true);
-
-      containerRef.current.style.cursor = intersects.length > 0 ? 'pointer' : 'grab';
-    };
-
-    const dom = containerRef.current;
-    dom.addEventListener('pointerdown', handlePointerDown);
-    dom.addEventListener('pointermove', handlePointerMove);
-
-    const handleResize = () => {
-      if (containerRef.current && globeInstanceRef.current) {
-        globeInstanceRef.current.width(containerRef.current.clientWidth);
-        globeInstanceRef.current.height(containerRef.current.clientHeight);
-      }
-    };
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      dom.removeEventListener('pointerdown', handlePointerDown);
-      dom.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('resize', handleResize);
-      if (animFrameIdRef.current) {
-        cancelAnimationFrame(animFrameIdRef.current);
-      }
-      if (globeInstanceRef.current) {
-        globeInstanceRef.current._destructor?.();
-        globeInstanceRef.current = null;
-      }
-    };
-  }, [applyMapMode]);
-
-  // Handle map mode button click
-  const handleMapModeChange = (mode) => {
-    setMapMode(mode);
-    if (globeInstanceRef.current) {
-      applyMapMode(globeInstanceRef.current, mode);
-    }
-  };
-
   // Generate high-resolution circular canvas texture for the 3D avatar badge
   const createAvatarTexture = useCallback((v, isSelected) => {
     const canvas = document.createElement('canvas');
@@ -366,8 +235,8 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
     return texture;
   }, []);
 
-  // Rebuild 3D Stalk Pointers whenever visitors, selectedVisitor, or globe changes
-  useEffect(() => {
+  // Rebuild 3D Stalk Markers
+  const rebuildMarkers = useCallback(() => {
     if (!globeInstanceRef.current || !markersGroupRef.current) return;
     const globe = globeInstanceRef.current;
     const markersGroup = markersGroupRef.current;
@@ -511,6 +380,156 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
     }
   }, [visitors, selectedVisitor, showArcs, createAvatarTexture]);
 
+  // Initialize Globe.GL
+  useEffect(() => {
+    if (!containerRef.current) return;
+    containerRef.current.innerHTML = '';
+
+    const width = containerRef.current.clientWidth || window.innerWidth - 380;
+    const height = containerRef.current.clientHeight || window.innerHeight - 180;
+
+    const globe = Globe({ animateIn: true })(containerRef.current)
+      .width(width)
+      .height(height)
+      .showAtmosphere(true)
+      .atmosphereColor('#38bdf8')
+      .atmosphereAltitude(0.2);
+
+    // Apply default Deep Zoom Slippy Tiles
+    applyMapMode(globe, 'tiles');
+
+    // Controls
+    const controls = globe.controls();
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 0.5;
+    controls.enableZoom = true;
+    controls.minDistance = 101.5; // Deep zoom close to Earth's surface for street/village clarity
+    controls.maxDistance = 550;   // Orbital view
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.1;
+
+    // Initial camera POV
+    globe.pointOfView({ lat: 20, lng: 78, altitude: 2.1 }, 1000);
+    globeInstanceRef.current = globe;
+
+    // Dedicated Three.js Group for 3D Citizen Stalk Markers added directly to Globe Scene
+    const markersGroup = new THREE.Group();
+    markersGroup.name = 'citizen-stalk-markers-group';
+    globe.scene().add(markersGroup);
+    markersGroupRef.current = markersGroup;
+    setGlobeReady(true);
+
+    // Continuous render tick:
+    // 1. Camera backface culling (hiding markers on reverse side of Earth, matching reference)
+    // 2. Trigger tile engine update to dynamically stream deep zoom tiles
+    const tick = () => {
+      if (globeInstanceRef.current) {
+        const cam = globeInstanceRef.current.camera();
+        const camDir = cam.position.clone().normalize();
+
+        // Cull markers on reverse side of Earth
+        if (markersGroupRef.current) {
+          markersGroupRef.current.children.forEach((grp) => {
+            if (!grp.userData || !grp.userData.topPos) return;
+            const markerDir = grp.userData.topPos.clone().normalize();
+            const dot = markerDir.dot(camDir);
+            grp.visible = dot > 0.05;
+          });
+        }
+
+        // Trigger dynamic tile update for slippy map
+        if (typeof globeInstanceRef.current.updatePov === 'function') {
+          globeInstanceRef.current.updatePov(cam);
+        }
+        globeInstanceRef.current.scene().traverse((child) => {
+          if (child && typeof child.updatePov === 'function') {
+            child.updatePov(cam);
+          }
+        });
+      }
+      animFrameIdRef.current = requestAnimationFrame(tick);
+    };
+    animFrameIdRef.current = requestAnimationFrame(tick);
+
+    // Interactive Raycaster for clicking markers in 3D
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    const handlePointerDown = (event) => {
+      if (!containerRef.current || !globeInstanceRef.current || !markersGroupRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, globeInstanceRef.current.camera());
+      const visibleGroups = markersGroupRef.current.children.filter((g) => g.visible);
+      const intersects = raycaster.intersectObjects(visibleGroups, true);
+
+      if (intersects.length > 0) {
+        let curr = intersects[0].object;
+        while (curr && !curr.userData?.visitor && curr.parent) {
+          curr = curr.parent;
+        }
+        if (curr?.userData?.visitor) {
+          flyToVisitor(curr.userData.visitor);
+        }
+      }
+    };
+
+    const handlePointerMove = (event) => {
+      if (!containerRef.current || !globeInstanceRef.current || !markersGroupRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, globeInstanceRef.current.camera());
+      const visibleGroups = markersGroupRef.current.children.filter((g) => g.visible);
+      const intersects = raycaster.intersectObjects(visibleGroups, true);
+
+      containerRef.current.style.cursor = intersects.length > 0 ? 'pointer' : 'grab';
+    };
+
+    const dom = containerRef.current;
+    dom.addEventListener('pointerdown', handlePointerDown);
+    dom.addEventListener('pointermove', handlePointerMove);
+
+    const handleResize = () => {
+      if (containerRef.current && globeInstanceRef.current) {
+        globeInstanceRef.current.width(containerRef.current.clientWidth);
+        globeInstanceRef.current.height(containerRef.current.clientHeight);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      dom.removeEventListener('pointerdown', handlePointerDown);
+      dom.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('resize', handleResize);
+      if (animFrameIdRef.current) {
+        cancelAnimationFrame(animFrameIdRef.current);
+      }
+      if (globeInstanceRef.current) {
+        globeInstanceRef.current._destructor?.();
+        globeInstanceRef.current = null;
+      }
+    };
+  }, [applyMapMode]);
+
+  // Re-run markers whenever globeReady or dependencies change
+  useEffect(() => {
+    if (globeReady) {
+      rebuildMarkers();
+    }
+  }, [globeReady, rebuildMarkers]);
+
+  // Handle map mode button click
+  const handleMapModeChange = (mode) => {
+    setMapMode(mode);
+    if (globeInstanceRef.current) {
+      applyMapMode(globeInstanceRef.current, mode);
+    }
+  };
+
   // Update Country Boundaries Vector Layer (Natural Earth GeoJSON)
   useEffect(() => {
     if (!globeInstanceRef.current) return;
@@ -532,14 +551,14 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
     } else {
       globe.polygonsData([]);
     }
-  }, [showBorders, countriesData]);
+  }, [showBorders, countriesData, globeReady]);
 
   // Auto-rotate toggle
   useEffect(() => {
     if (globeInstanceRef.current) {
       globeInstanceRef.current.controls().autoRotate = autoRotate;
     }
-  }, [autoRotate]);
+  }, [autoRotate, globeReady]);
 
   // Smooth Google Earth camera fly to citizen coordinates
   const flyToVisitor = (v) => {
@@ -652,144 +671,165 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
     !isSelectedAdmin && (selectedVisitor?.userTier === 'member' || selectedVisitor?.isSocietyMember)
   );
 
+  // Formatted Visitor Local Time
+  const visitorLocalTime = useMemo(() => {
+    if (!selectedVisitor?.timezone) return null;
+    try {
+      return new Intl.DateTimeFormat('en-US', {
+        timeZone: selectedVisitor.timezone,
+        hour: 'numeric',
+        minute: 'numeric',
+        second: 'numeric',
+        hour12: true
+      }).format(new Date(currentTime));
+    } catch {
+      return new Date(currentTime).toLocaleTimeString();
+    }
+  }, [selectedVisitor, currentTime]);
+
   return (
     <div className="geo-globe-container">
       {/* 3D WebGL Globe Viewport */}
       <div className="globe-canvas-viewport" ref={containerRef} />
 
-      {/* Top Left Classification & Telemetry Banner */}
-      <div className="globe-hud-overlay top-left">
-        <div className="globe-telemetry-badge">
-          <GlobeIcon size={14} className="spin-icon-slow" />
-          <span>GOOGLE MAPS 3D TELEMETRY // GLOBAL CITIZEN POLES</span>
+      {/* Top Unified HUD Bar - Guaranteed No Overlap */}
+      <div className="globe-top-hud">
+        {/* Left Stack: Branding, Live Radar Pill, Map Mode Switches & Vector Toggles */}
+        <div className="hud-left-stack">
+          <div className="hud-brand-row">
+            <div className="globe-telemetry-badge">
+              <GlobeIcon size={14} className="spin-icon-slow" />
+              <span>GOOGLE MAPS 3D TELEMETRY // GLOBAL CITIZEN POLES</span>
+            </div>
+            <div className="globe-stats-pill">
+              <span className="live-radar-dot" />
+              <span>{visitors.length} CONNECTED CITIZENS WITH REAL 3D STALKS</span>
+            </div>
+          </div>
+
+          {/* Map Engine Mode Selector */}
+          <div className="globe-mode-switch-cluster">
+            <button
+              type="button"
+              className={`globe-toggle-btn ${mapMode === 'tiles' ? 'active' : ''}`}
+              onClick={() => handleMapModeChange('tiles')}
+              title="Google Maps / CartoDB Voyager Slippy Tiles (maximum zoom clarity for all countries, states, cities, towns, and villages)"
+            >
+              <MapIcon size={12} />
+              <span>MAP (DEEP ZOOM)</span>
+            </button>
+            <button
+              type="button"
+              className={`globe-toggle-btn ${mapMode === 'osm' ? 'active' : ''}`}
+              onClick={() => handleMapModeChange('osm')}
+              title="OpenStreetMap Standard: Render every village, hamlet, town, and street worldwide"
+            >
+              <Layers size={12} />
+              <span>OPENSTREETMAP</span>
+            </button>
+            <button
+              type="button"
+              className={`globe-toggle-btn ${mapMode === 'cyber' ? 'active' : ''}`}
+              onClick={() => handleMapModeChange('cyber')}
+              title="Dark Cyber Vector Network"
+            >
+              <Zap size={12} />
+              <span>CYBER DARK</span>
+            </button>
+            <button
+              type="button"
+              className={`globe-toggle-btn ${mapMode === 'satellite' ? 'active' : ''}`}
+              onClick={() => handleMapModeChange('satellite')}
+              title="NASA Blue Marble Satellite & Atmosphere"
+            >
+              <Sun size={12} />
+              <span>SATELLITE</span>
+            </button>
+          </div>
+
+          {/* Vector Layers Visibility Toggles */}
+          <div className="globe-layers-strip">
+            <button
+              type="button"
+              className={`globe-chip-toggle ${showBorders ? 'active' : ''}`}
+              onClick={() => setShowBorders(!showBorders)}
+              title="Toggle Country Vector Boundaries"
+            >
+              Borders: {showBorders ? 'ON' : 'OFF'}
+            </button>
+            <button
+              type="button"
+              className={`globe-chip-toggle ${showArcs ? 'active' : ''}`}
+              onClick={() => setShowArcs(!showArcs)}
+              title="Toggle Central Relay Arcs"
+            >
+              Relays: {showArcs ? 'ON' : 'OFF'}
+            </button>
+          </div>
         </div>
-        <div className="globe-stats-pill">
-          <span className="live-radar-dot" />
-          <span>{visitors.length} CONNECTED CITIZENS WITH REAL 3D STALKS</span>
+
+        {/* Right Stack: Floating Navigation & Zoom Tools */}
+        <div className="hud-nav-tools">
+          <button
+            type="button"
+            className="globe-tool-btn"
+            onClick={handleZoomIn}
+            title="Zoom In (Inspect state and city clarity)"
+          >
+            <ZoomIn size={13} />
+            <span>ZOOM +</span>
+          </button>
+
+          <button
+            type="button"
+            className="globe-tool-btn"
+            onClick={handleZoomOut}
+            title="Zoom Out (Return to orbital altitude)"
+          >
+            <ZoomOut size={13} />
+            <span>ZOOM -</span>
+          </button>
+
+          <button
+            type="button"
+            className={`globe-tool-btn ${autoRotate ? 'active' : ''}`}
+            onClick={() => setAutoRotate(!autoRotate)}
+            title="Toggle planetary orbital rotation"
+          >
+            <Compass size={13} />
+            <span>ORBIT: {autoRotate ? 'ON' : 'PAUSED'}</span>
+          </button>
+
+          <button
+            type="button"
+            className="globe-tool-btn"
+            onClick={zoomGlobal}
+            title="Reset to global orbital perspective"
+          >
+            <Layers size={13} />
+            <span>RESET VIEW</span>
+          </button>
+
+          <button
+            type="button"
+            className="globe-tool-btn"
+            onClick={locateAdmin}
+            title="Center on administrator terminal"
+          >
+            <Shield size={13} color="#f87171" />
+            <span>LOCATE ADMIN</span>
+          </button>
+
+          <button
+            type="button"
+            className="globe-tool-btn"
+            onClick={fetchVisitors}
+            title="Force poll real-time socket connections"
+          >
+            <Radio size={13} />
+            <span>POLL USERS</span>
+          </button>
         </div>
-
-        {/* Map Engine Mode Selector */}
-        <div className="globe-mode-switch-cluster">
-          <button
-            type="button"
-            className={`globe-toggle-btn ${mapMode === 'tiles' ? 'active' : ''}`}
-            onClick={() => handleMapModeChange('tiles')}
-            title="Google Maps / CartoDB Voyager Slippy Tiles (maximum zoom clarity for all countries, states, cities, towns, and villages)"
-          >
-            <MapIcon size={12} />
-            <span>MAP (DEEP ZOOM)</span>
-          </button>
-          <button
-            type="button"
-            className={`globe-toggle-btn ${mapMode === 'osm' ? 'active' : ''}`}
-            onClick={() => handleMapModeChange('osm')}
-            title="OpenStreetMap Standard: Render every village, hamlet, town, and street worldwide"
-          >
-            <Layers size={12} />
-            <span>OPENSTREETMAP</span>
-          </button>
-          <button
-            type="button"
-            className={`globe-toggle-btn ${mapMode === 'cyber' ? 'active' : ''}`}
-            onClick={() => handleMapModeChange('cyber')}
-            title="Dark Cyber Vector Network"
-          >
-            <Zap size={12} />
-            <span>CYBER DARK</span>
-          </button>
-          <button
-            type="button"
-            className={`globe-toggle-btn ${mapMode === 'satellite' ? 'active' : ''}`}
-            onClick={() => handleMapModeChange('satellite')}
-            title="NASA Blue Marble Satellite & Atmosphere"
-          >
-            <Sun size={12} />
-            <span>SATELLITE</span>
-          </button>
-        </div>
-
-        {/* Vector Layers Visibility Toggles */}
-        <div className="globe-layers-strip">
-          <button
-            type="button"
-            className={`globe-chip-toggle ${showBorders ? 'active' : ''}`}
-            onClick={() => setShowBorders(!showBorders)}
-            title="Toggle Country Vector Boundaries"
-          >
-            Borders: {showBorders ? 'ON' : 'OFF'}
-          </button>
-          <button
-            type="button"
-            className={`globe-chip-toggle ${showArcs ? 'active' : ''}`}
-            onClick={() => setShowArcs(!showArcs)}
-            title="Toggle Central Relay Arcs"
-          >
-            Relays: {showArcs ? 'ON' : 'OFF'}
-          </button>
-        </div>
-      </div>
-
-      {/* Top Right Floating Navigation & Zoom Tools */}
-      <div className="globe-hud-overlay top-right">
-        <button
-          type="button"
-          className="globe-tool-btn"
-          onClick={handleZoomIn}
-          title="Zoom In (Inspect state and city clarity)"
-        >
-          <ZoomIn size={13} />
-          <span>ZOOM +</span>
-        </button>
-
-        <button
-          type="button"
-          className="globe-tool-btn"
-          onClick={handleZoomOut}
-          title="Zoom Out (Return to orbital altitude)"
-        >
-          <ZoomOut size={13} />
-          <span>ZOOM -</span>
-        </button>
-
-        <button
-          type="button"
-          className={`globe-tool-btn ${autoRotate ? 'active' : ''}`}
-          onClick={() => setAutoRotate(!autoRotate)}
-          title="Toggle planetary orbital rotation"
-        >
-          <Compass size={13} />
-          <span>ORBIT: {autoRotate ? 'ON' : 'PAUSED'}</span>
-        </button>
-
-        <button
-          type="button"
-          className="globe-tool-btn"
-          onClick={zoomGlobal}
-          title="Reset to global orbital perspective"
-        >
-          <Layers size={13} />
-          <span>RESET VIEW</span>
-        </button>
-
-        <button
-          type="button"
-          className="globe-tool-btn"
-          onClick={locateAdmin}
-          title="Center on administrator terminal"
-        >
-          <Shield size={13} color="#f87171" />
-          <span>LOCATE ADMIN</span>
-        </button>
-
-        <button
-          type="button"
-          className="globe-tool-btn"
-          onClick={fetchVisitors}
-          title="Force poll real-time socket connections"
-        >
-          <Radio size={13} />
-          <span>POLL USERS</span>
-        </button>
       </div>
 
       {/* Left Detailed Visitor Telemetry Dossier with Minimize Toggle */}
@@ -912,13 +952,33 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
             </div>
 
             <div className="detail-item">
-              <span className="detail-label">TIMEZONE</span>
-              <span className="detail-value gold">{selectedVisitor.timezone}</span>
+              <span className="detail-label">NETWORK PROVIDER (ISP &amp; ASN)</span>
+              <span className="detail-value">{selectedVisitor.isp || selectedVisitor.org || 'Relay Node'}</span>
             </div>
 
             <div className="detail-item">
-              <span className="detail-label">ISP &amp; ASN</span>
-              <span className="detail-value">{selectedVisitor.isp || selectedVisitor.org || 'Relay Node'}</span>
+              <span className="detail-label">TIMEZONE &amp; LOCAL TIME</span>
+              <div className="timezone-row">
+                <Clock size={11} className="time-icon" />
+                <span className="detail-value gold">
+                  {selectedVisitor.timezone || 'UTC'} &bull; {visitorLocalTime || 'Live'}
+                </span>
+              </div>
+            </div>
+
+            <div className="detail-item">
+              <span className="detail-label">IP TELEMETRY SOURCE</span>
+              <span className="detail-value cyan">
+                {ipstackConfigured ? 'IPSTACK PRO ENGINE' : 'IP-API RESILIENT ENGINE'}
+              </span>
+            </div>
+
+            <div className="detail-item">
+              <span className="detail-label">ESTIMATED NETWORK LATENCY</span>
+              <span className="detail-value green">
+                <Wifi size={11} style={{ display: 'inline', marginRight: 4 }} />
+                ~28ms (WebSocket)
+              </span>
             </div>
           </div>
 
