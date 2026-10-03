@@ -68,9 +68,36 @@ export function AdminPanel({
   onLogout,
   onOpenSocietyChat
 }) {
-  const [activeTab, setActiveTab] = useState('telemetry'); // 'telemetry' | 'geo' | 'society' | 'users' | 'messages' | 'broadcast' | 'security'
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      return sessionStorage.getItem('shadowtalk_admin_tab') || 'telemetry';
+    } catch {
+      return 'telemetry';
+    }
+  }); // 'telemetry' | 'geo' | 'society' | 'users' | 'messages' | 'broadcast' | 'security'
   const [loading, setLoading] = useState(false);
   const [actionStatus, setActionStatus] = useState(null);
+  const [isHardRefreshing, setIsHardRefreshing] = useState(false);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('shadowtalk_admin_tab', activeTab);
+    } catch {}
+  }, [activeTab]);
+
+  const handleHardRefresh = () => {
+    setIsHardRefreshing(true);
+    try {
+      sessionStorage.setItem('shadowtalk_admin_panel_open', 'true');
+      sessionStorage.setItem('shadowtalk_admin_tab', activeTab);
+      if (adminToken) {
+        sessionStorage.setItem('shadowtalk_admin_token', adminToken);
+      }
+    } catch {}
+    setTimeout(() => {
+      window.location.reload();
+    }, 150);
+  };
 
   // Telemetry state & Real-Time Telemetry features
   const [telemetry, setTelemetry] = useState(null);
@@ -1041,6 +1068,15 @@ export function AdminPanel({
           )}
 
           <div className="admin-header-controls">
+            <button
+              type="button"
+              className="admin-btn-refresh"
+              onClick={handleHardRefresh}
+              title="Force reload all telemetry & fresh bundles (stays on Admin Panel)"
+            >
+              <RefreshCw size={13} className={isHardRefreshing ? 'spin-icon' : ''} />
+              <span>Hard Refresh</span>
+            </button>
             {onOpenSocietyChat && (
               <button
                 type="button"

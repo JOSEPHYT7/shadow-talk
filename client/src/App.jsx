@@ -1568,9 +1568,49 @@ function App() {
     sessionToken: null,
     stage: null
   });
-  const [adminToken, setAdminToken] = useState(null);
-  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [adminToken, setAdminToken] = useState(() => {
+    try {
+      return sessionStorage.getItem('shadowtalk_admin_token') || null;
+    } catch {
+      return null;
+    }
+  });
+  const [showAdminPanel, setShowAdminPanel] = useState(() => {
+    try {
+      return (
+        sessionStorage.getItem('shadowtalk_admin_panel_open') === 'true' &&
+        Boolean(sessionStorage.getItem('shadowtalk_admin_token'))
+      );
+    } catch {
+      return false;
+    }
+  });
   const [secretReplyToast, setSecretReplyToast] = useState(null);
+
+  // Validate persisted admin token on mount so refresh never logs out
+  useEffect(() => {
+    try {
+      const savedToken = sessionStorage.getItem('shadowtalk_admin_token');
+      const wasOpen = sessionStorage.getItem('shadowtalk_admin_panel_open') === 'true';
+      if (savedToken) {
+        fetch(`${SERVER_URL}/api/admin/dashboard/overview`, {
+          headers: { Authorization: `Bearer ${savedToken}` }
+        })
+          .then((res) => {
+            if (!res.ok) {
+              sessionStorage.removeItem('shadowtalk_admin_token');
+              sessionStorage.removeItem('shadowtalk_admin_panel_open');
+              setAdminToken(null);
+              setShowAdminPanel(false);
+            } else {
+              setAdminToken(savedToken);
+              if (wasOpen) setShowAdminPanel(true);
+            }
+          })
+          .catch(() => {});
+      }
+    } catch {}
+  }, []);
 
   // Secret activation gesture handler
   const isInitiatingGestureRef = useRef(false);
@@ -1639,6 +1679,10 @@ function App() {
           credentials: 'include'
         });
       }
+    } catch {}
+    try {
+      sessionStorage.removeItem('shadowtalk_admin_token');
+      sessionStorage.removeItem('shadowtalk_admin_panel_open');
     } catch {}
     setAdminToken(null);
     setShowAdminPanel(false);
@@ -2129,6 +2173,10 @@ function App() {
             const finalData = await res.json();
             if (finalData.success && finalData.adminToken) {
               setAdminToken(finalData.adminToken);
+              try {
+                sessionStorage.setItem('shadowtalk_admin_token', finalData.adminToken);
+                sessionStorage.setItem('shadowtalk_admin_panel_open', 'true');
+              } catch {}
               setTimeout(() => {
                 setSecretReplyToast(null);
                 setShowAdminPanel(true);

@@ -258,87 +258,166 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
       (v) => typeof v.latitude === 'number' && typeof v.longitude === 'number' && !isNaN(v.latitude) && !isNaN(v.longitude)
     );
 
-    // Build 3D Stalks matching reference GIF:
-    // - Conical base pointing at Earth surface
-    // - Slender 3D cylinder stem extending radially into space
-    // - High-res circular avatar badge at the top
-    validVisitors.forEach((d) => {
-      const surfCoords = globe.getCoords(d.latitude, d.longitude, 0.001);
-      const topCoords = globe.getCoords(d.latitude, d.longitude, 0.18);
-
-      const surfacePosition = new THREE.Vector3(surfCoords.x, surfCoords.y, surfCoords.z);
-      const topPosition = new THREE.Vector3(topCoords.x, topCoords.y, topCoords.z);
-
-      const lineHeight = surfacePosition.distanceTo(topPosition);
-      const lineCenter = surfacePosition.clone().lerp(topPosition, 0.5);
-      const direction = topPosition.clone().sub(surfacePosition).normalize();
-      const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
-
-      const isAdmin = Boolean(d.isCurrentAdmin || d.role === 'admin' || d.isAdmin);
-      const isMember = Boolean(!isAdmin && (d.userTier === 'member' || d.isSocietyMember));
-      const color = isAdmin ? 0xef4444 : isMember ? 0xffd700 : 0x00f3ff;
-      const isSelected = selectedVisitor?.id === d.id;
-
-      const group = new THREE.Group();
-
-      // 1. Cone Pin Point at the surface (inverted so tip touches surface, matching reference)
-      const coneGeom = new THREE.ConeGeometry(1.2, 3.6, 16);
-      coneGeom.rotateX(Math.PI); // Tip points towards ground
-      const coneMat = new THREE.MeshBasicMaterial({ color: isSelected ? 0xf97316 : color });
-      const coneMesh = new THREE.Mesh(coneGeom, coneMat);
-      coneMesh.position.copy(surfacePosition.clone().add(direction.clone().multiplyScalar(1.8)));
-      coneMesh.quaternion.copy(quaternion);
-      group.add(coneMesh);
-
-      // 2. Cylinder Pin Stem from surface to elevated top
-      const stemGeom = new THREE.CylinderGeometry(0.22, 0.22, lineHeight, 16);
-      const stemMat = new THREE.MeshBasicMaterial({
-        color: isSelected ? 0xffffff : 0x94a3b8,
-        transparent: true,
-        opacity: isSelected ? 0.95 : 0.75
-      });
-      const stemMesh = new THREE.Mesh(stemGeom, stemMat);
-      stemMesh.position.copy(lineCenter);
-      stemMesh.quaternion.copy(quaternion);
-      group.add(stemMesh);
-
-      // 3. Circular Avatar Badge at topPosition (3D GPU Sprite facing camera)
-      const avatarTex = createAvatarTexture(d, isSelected);
-      const spriteMat = new THREE.SpriteMaterial({
-        map: avatarTex,
-        transparent: true,
-        depthTest: false,
-        depthWrite: false
-      });
-      const sprite = new THREE.Sprite(spriteMat);
-      sprite.position.copy(topPosition);
-      const badgeScale = isSelected ? 18 : 14;
-      sprite.scale.set(badgeScale, badgeScale, 1);
-      group.add(sprite);
-
-      group.userData = {
-        visitor: d,
-        sprite,
-        stem: stemMesh,
-        cone: coneMesh,
-        topPos: topPosition,
-        surfacePos: surfacePosition
-      };
-
-      markersGroup.add(group);
+    // Group valid visitors into spatial clusters (within 0.25 deg)
+    const clusters = [];
+    validVisitors.forEach((v) => {
+      const match = clusters.find(
+        (c) => Math.hypot(c.lat - v.latitude, c.lng - v.longitude) < 0.25
+      );
+      if (match) {
+        match.visitors.push(v);
+      } else {
+        clusters.push({
+          lat: v.latitude,
+          lng: v.longitude,
+          visitors: [v]
+        });
+      }
     });
 
-    // 2. Pulsing Radar Sensor Rings on ground coordinates
-    globe
-      .ringsData(validVisitors)
-      .ringLat((d) => d.latitude)
-      .ringLng((d) => d.longitude)
-      .ringColor((d) => {
+    // Build 3D Stalks matching reference GIF & Spiderfy Fan-out for Coincident/Same-City Users:
+    // - If single user: slender radial 3D cylinder stem + ground cone pin + avatar badge
+    // - If multiple users at same location: branch outward in a radial fan/spiderfy cluster
+    //   so ALL avatars are distinctly visible, unobstructed, and independently selectable!
+    clusters.forEach((cluster) => {
+      const count = cluster.visitors.length;
+      const surfCoords = globe.getCoords(cluster.lat, cluster.lng, 0.001);
+      const surfacePosition = new THREE.Vector3(surfCoords.x, surfCoords.y, surfCoords.z);
+      const normal = surfacePosition.clone().normalize();
+
+      // Tangent coordinate system on Earth's surface for spreading coincident markers
+      const up = Math.abs(normal.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+      const tangentX = new THREE.Vector3().crossVectors(normal, up).normalize();
+      const tangentY = new THREE.Vector3().crossVectors(normal, tangentX).normalize();
+
+      const hasAdmin = cluster.visitors.some((v) => v.isCurrentAdmin || v.role === 'admin' || v.isAdmin);
+      const hasMember = cluster.visitors.some((v) => v.userTier === 'member' || v.isSocietyMember);
+      const clusterColor = hasAdmin ? 0xef4444 : hasMember ? 0xffd700 : 0x00f3ff;
+
+      // Base altitude in space
+      const centralTop = surfacePosition.clone().add(normal.clone().multiplyScalar(18));
+
+      // Ground beacon ring if cluster has multiple citizens
+      if (count > 1) {
+        const anchorGeom = new THREE.RingGeometry(0.8, 2.5, 32);
+        const anchorMat = new THREE.MeshBasicMaterial({
+          color: clusterColor,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.85
+        });
+        const anchorMesh = new THREE.Mesh(anchorGeom, anchorMat);
+        anchorMesh.position.copy(surfacePosition.clone().add(normal.clone().multiplyScalar(0.08)));
+        anchorMesh.lookAt(surfacePosition.clone().add(normal));
+        markersGroup.add(anchorMesh);
+      }
+
+      cluster.visitors.forEach((d, idx) => {
+        let topPosition;
+        let groundOrigin = surfacePosition.clone();
+
+        if (count === 1) {
+          topPosition = centralTop.clone();
+        } else {
+          // Spread radius in tangent plane: comfortable distance so badges (width ~14-18) never overlap
+          const spreadRadius = 15 + (count - 2) * 2.0;
+          // Offset angle starting at PI/4 so fan branches out dynamically
+          const angle = (2 * Math.PI * idx) / count + Math.PI / 4;
+
+          const offsetVec = tangentX.clone().multiplyScalar(Math.cos(angle) * spreadRadius)
+            .add(tangentY.clone().multiplyScalar(Math.sin(angle) * spreadRadius));
+
+          // Elevate slightly so outer stalks arch gracefully
+          topPosition = centralTop.clone().add(offsetVec).add(normal.clone().multiplyScalar(1.5));
+
+          // Slight base displacement for separate stalks at ground if count > 1
+          const baseSpread = 0.55;
+          const baseOffset = tangentX.clone().multiplyScalar(Math.cos(angle) * baseSpread)
+            .add(tangentY.clone().multiplyScalar(Math.sin(angle) * baseSpread));
+          groundOrigin.add(baseOffset);
+        }
+
+        const lineHeight = groundOrigin.distanceTo(topPosition);
+        const lineCenter = groundOrigin.clone().lerp(topPosition, 0.5);
+        const direction = topPosition.clone().sub(groundOrigin).normalize();
+        const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+
         const isAdmin = Boolean(d.isCurrentAdmin || d.role === 'admin' || d.isAdmin);
         const isMember = Boolean(!isAdmin && (d.userTier === 'member' || d.isSocietyMember));
-        return isAdmin ? '#ef4444' : isMember ? '#ffd700' : '#00f3ff';
-      })
-      .ringMaxRadius(4.5)
+        const color = isAdmin ? 0xef4444 : isMember ? 0xffd700 : 0x00f3ff;
+        const isSelected = selectedVisitor?.id === d.id;
+
+        const group = new THREE.Group();
+
+        // 1. Cone Pin Point at the surface (inverted so tip touches surface, matching reference)
+        const coneGeom = new THREE.ConeGeometry(1.2, 3.6, 16);
+        coneGeom.rotateX(Math.PI); // Tip points towards ground
+        const coneMat = new THREE.MeshBasicMaterial({ color: isSelected ? 0xf97316 : color });
+        const coneMesh = new THREE.Mesh(coneGeom, coneMat);
+        coneMesh.position.copy(groundOrigin.clone().add(direction.clone().multiplyScalar(1.8)));
+        coneMesh.quaternion.copy(quaternion);
+        coneMesh.userData = { visitor: d };
+        group.add(coneMesh);
+
+        // 2. Cylinder Pin Stem from surface to elevated top
+        const stemGeom = new THREE.CylinderGeometry(0.24, 0.24, lineHeight, 16);
+        const stemMat = new THREE.MeshBasicMaterial({
+          color: isSelected ? 0xffffff : (isAdmin ? 0xfca5a5 : isMember ? 0xfef08a : 0x94a3b8),
+          transparent: true,
+          opacity: isSelected ? 0.95 : 0.8
+        });
+        const stemMesh = new THREE.Mesh(stemGeom, stemMat);
+        stemMesh.position.copy(lineCenter);
+        stemMesh.quaternion.copy(quaternion);
+        stemMesh.userData = { visitor: d };
+        group.add(stemMesh);
+
+        // 3. Circular Avatar Badge at topPosition (3D GPU Sprite facing camera)
+        const avatarTex = createAvatarTexture(d, isSelected);
+        const spriteMat = new THREE.SpriteMaterial({
+          map: avatarTex,
+          transparent: true,
+          depthTest: false,
+          depthWrite: false
+        });
+        const sprite = new THREE.Sprite(spriteMat);
+        sprite.position.copy(topPosition);
+        const badgeScale = isSelected ? 18 : 14;
+        sprite.scale.set(badgeScale, badgeScale, 1);
+        sprite.userData = { visitor: d };
+        group.add(sprite);
+
+        group.userData = {
+          visitor: d,
+          sprite,
+          stem: stemMesh,
+          cone: coneMesh,
+          topPos: topPosition,
+          surfacePos: groundOrigin
+        };
+
+        markersGroup.add(group);
+      });
+    });
+
+    // 2. Pulsing Radar Sensor Rings on ground coordinates (unique locations)
+    const uniqueRingLocations = clusters.map((c) => {
+      const hasAdmin = c.visitors.some((v) => v.isCurrentAdmin || v.role === 'admin' || v.isAdmin);
+      const hasMember = c.visitors.some((v) => v.userTier === 'member' || v.isSocietyMember);
+      return {
+        latitude: c.lat,
+        longitude: c.lng,
+        color: hasAdmin ? '#ef4444' : hasMember ? '#ffd700' : '#00f3ff',
+        maxRadius: c.visitors.length > 1 ? 5.5 : 4.5
+      };
+    });
+
+    globe
+      .ringsData(uniqueRingLocations)
+      .ringLat((d) => d.latitude)
+      .ringLng((d) => d.longitude)
+      .ringColor((d) => d.color)
+      .ringMaxRadius((d) => d.maxRadius)
       .ringPropagationSpeed(1.5)
       .ringRepeatPeriod(1200);
 
