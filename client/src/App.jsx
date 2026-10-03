@@ -1570,17 +1570,24 @@ function App() {
   });
   const [adminToken, setAdminToken] = useState(() => {
     try {
-      return sessionStorage.getItem('shadowtalk_admin_token') || null;
+      return (
+        sessionStorage.getItem('shadowtalk_admin_token') ||
+        localStorage.getItem('shadowtalk_admin_token') ||
+        null
+      );
     } catch {
       return null;
     }
   });
   const [showAdminPanel, setShowAdminPanel] = useState(() => {
     try {
-      return (
-        sessionStorage.getItem('shadowtalk_admin_panel_open') === 'true' &&
-        Boolean(sessionStorage.getItem('shadowtalk_admin_token'))
-      );
+      const token =
+        sessionStorage.getItem('shadowtalk_admin_token') ||
+        localStorage.getItem('shadowtalk_admin_token');
+      const open =
+        sessionStorage.getItem('shadowtalk_admin_panel_open') === 'true' ||
+        localStorage.getItem('shadowtalk_admin_panel_open') === 'true';
+      return Boolean(open && token);
     } catch {
       return false;
     }
@@ -1590,24 +1597,47 @@ function App() {
   // Validate persisted admin token on mount so refresh never logs out
   useEffect(() => {
     try {
-      const savedToken = sessionStorage.getItem('shadowtalk_admin_token');
-      const wasOpen = sessionStorage.getItem('shadowtalk_admin_panel_open') === 'true';
+      const savedToken =
+        sessionStorage.getItem('shadowtalk_admin_token') ||
+        localStorage.getItem('shadowtalk_admin_token');
+      const wasOpen =
+        sessionStorage.getItem('shadowtalk_admin_panel_open') === 'true' ||
+        localStorage.getItem('shadowtalk_admin_panel_open') === 'true';
+
       if (savedToken) {
-        fetch(`${SERVER_URL}/api/admin/dashboard/overview`, {
+        fetch(`${SERVER_URL}/api/admin/auth/status`, {
           headers: { Authorization: `Bearer ${savedToken}` }
         })
           .then((res) => {
-            if (!res.ok) {
+            if (res.status === 401 || res.status === 403) {
               sessionStorage.removeItem('shadowtalk_admin_token');
               sessionStorage.removeItem('shadowtalk_admin_panel_open');
+              localStorage.removeItem('shadowtalk_admin_token');
+              localStorage.removeItem('shadowtalk_admin_panel_open');
               setAdminToken(null);
               setShowAdminPanel(false);
-            } else {
+              return null;
+            }
+            return res.json();
+          })
+          .then((data) => {
+            if (!data) return;
+            if (data.authenticated) {
               setAdminToken(savedToken);
               if (wasOpen) setShowAdminPanel(true);
+            } else if (data.authenticated === false && !data.stage) {
+              sessionStorage.removeItem('shadowtalk_admin_token');
+              sessionStorage.removeItem('shadowtalk_admin_panel_open');
+              localStorage.removeItem('shadowtalk_admin_token');
+              localStorage.removeItem('shadowtalk_admin_panel_open');
+              setAdminToken(null);
+              setShowAdminPanel(false);
             }
           })
-          .catch(() => {});
+          .catch((err) => {
+            // Keep session active on network blips during page reload
+            console.warn('Admin token check network issue, keeping session:', err);
+          });
       }
     } catch {}
   }, []);
@@ -1683,6 +1713,8 @@ function App() {
     try {
       sessionStorage.removeItem('shadowtalk_admin_token');
       sessionStorage.removeItem('shadowtalk_admin_panel_open');
+      localStorage.removeItem('shadowtalk_admin_token');
+      localStorage.removeItem('shadowtalk_admin_panel_open');
     } catch {}
     setAdminToken(null);
     setShowAdminPanel(false);
@@ -2176,6 +2208,8 @@ function App() {
               try {
                 sessionStorage.setItem('shadowtalk_admin_token', finalData.adminToken);
                 sessionStorage.setItem('shadowtalk_admin_panel_open', 'true');
+                localStorage.setItem('shadowtalk_admin_token', finalData.adminToken);
+                localStorage.setItem('shadowtalk_admin_panel_open', 'true');
               } catch {}
               setTimeout(() => {
                 setSecretReplyToast(null);

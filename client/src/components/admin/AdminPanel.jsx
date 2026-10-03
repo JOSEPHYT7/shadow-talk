@@ -82,16 +82,26 @@ export function AdminPanel({
   useEffect(() => {
     try {
       sessionStorage.setItem('shadowtalk_admin_tab', activeTab);
+      localStorage.setItem('shadowtalk_admin_tab', activeTab);
+      if (adminToken) {
+        sessionStorage.setItem('shadowtalk_admin_token', adminToken);
+        sessionStorage.setItem('shadowtalk_admin_panel_open', 'true');
+        localStorage.setItem('shadowtalk_admin_token', adminToken);
+        localStorage.setItem('shadowtalk_admin_panel_open', 'true');
+      }
     } catch {}
-  }, [activeTab]);
+  }, [activeTab, adminToken]);
 
   const handleHardRefresh = () => {
     setIsHardRefreshing(true);
     try {
       sessionStorage.setItem('shadowtalk_admin_panel_open', 'true');
       sessionStorage.setItem('shadowtalk_admin_tab', activeTab);
+      localStorage.setItem('shadowtalk_admin_panel_open', 'true');
+      localStorage.setItem('shadowtalk_admin_tab', activeTab);
       if (adminToken) {
         sessionStorage.setItem('shadowtalk_admin_token', adminToken);
+        localStorage.setItem('shadowtalk_admin_token', adminToken);
       }
     } catch {}
     setTimeout(() => {

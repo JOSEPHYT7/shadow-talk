@@ -5,6 +5,26 @@
  */
 
 const crypto = require('crypto');
+const path = require('path');
+const fs = require('fs');
+
+function getPersistentSecret() {
+  if (process.env.ADMIN_SESSION_SECRET) {
+    return process.env.ADMIN_SESSION_SECRET;
+  }
+  const secretPath = path.join(__dirname, '../data/.session_secret');
+  try {
+    if (fs.existsSync(secretPath)) {
+      const saved = fs.readFileSync(secretPath, 'utf8').trim();
+      if (saved && saved.length >= 32) return saved;
+    }
+    const newSecret = crypto.randomBytes(32).toString('hex');
+    fs.writeFileSync(secretPath, newSecret, 'utf8');
+    return newSecret;
+  } catch {
+    return 'shadowtalk_sec_core_admin_secret_key_8f29d47a_9b61_48e7_bc32_fa5e01d29381';
+  }
+}
 
 const ADMIN_CONFIG = {
   // Predefined administrator username
@@ -23,8 +43,8 @@ const ADMIN_CONFIG = {
   // Voice activation trigger phrase
   voiceActivationPhrase: 'hey creator',
 
-  // HMAC secret for signing temporary session tokens and admin session tokens
-  sessionSecret: process.env.ADMIN_SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
+  // HMAC secret for signing temporary session tokens and admin session tokens (persisted across restarts)
+  sessionSecret: getPersistentSecret(),
 
   // Time-to-live for a temporary authentication flow session (5 minutes max)
   sessionTtlMs: 5 * 60 * 1000,

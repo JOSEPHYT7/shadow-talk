@@ -224,6 +224,17 @@ module.exports = function createAdminRouter(serverContext) {
   // ----------------------------------------------------------------
 
   /**
+   * Admin Session Check & Dashboard Overview
+   */
+  router.get('/dashboard/overview', requireAdminAuth, (req, res) => {
+    res.json({
+      status: 'OPERATIONAL',
+      authenticated: true,
+      serverTime: Date.now()
+    });
+  });
+
+  /**
    * Live Server Telemetry & System Status
    */
   router.get('/dashboard/telemetry', requireAdminAuth, (req, res) => {

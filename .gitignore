@@ -27,3 +27,7 @@ pnpm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Admin runtime session data
+server/data/.session_secret
+server/data/admin_sessions.json

@@ -207,17 +207,54 @@ function invalidateSession(sessionId) {
   }
 }
 
+const fs = require('fs');
+const path = require('path');
+
+const ADMIN_SESSIONS_FILE = path.join(__dirname, '../data/admin_sessions.json');
+
+function loadPersistedAdminSessions() {
+  try {
+    if (fs.existsSync(ADMIN_SESSIONS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(ADMIN_SESSIONS_FILE, 'utf8'));
+      const now = Date.now();
+      if (Array.isArray(data)) {
+        for (const s of data) {
+          if (s && s.token && s.expiresAt > now) {
+            activeAdminSessions.set(s.token, s);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[AdminAuthSession] Error loading persisted sessions:', err.message);
+  }
+}
+
+function persistAdminSessions() {
+  try {
+    const list = Array.from(activeAdminSessions.values()).filter(s => s && s.expiresAt > Date.now());
+    fs.writeFileSync(ADMIN_SESSIONS_FILE, JSON.stringify(list, null, 2), 'utf8');
+  } catch (err) {
+    console.warn('[AdminAuthSession] Error saving admin sessions:', err.message);
+  }
+}
+
+// Initial load on module startup
+loadPersistedAdminSessions();
+
 // Create verified long-lived Administrator session
 function createAdminSession(username, ip) {
   const now = Date.now();
   const rawToken = crypto.randomBytes(32).toString('hex');
   const expiresAt = now + ADMIN_CONFIG.adminSessionDurationMs;
+  const userB64 = Buffer.from(username || 'Administrator', 'utf8').toString('base64url');
 
   const signature = crypto.createHmac('sha256', ADMIN_CONFIG.sessionSecret)
     .update(`${username}:${rawToken}:${expiresAt}`)
     .digest('hex');
 
-  const adminToken = `${rawToken}.${expiresAt}.${signature}`;
+  // Self-identifying 4-part token with backward-compatible HMAC
+  const adminToken = `${rawToken}.${expiresAt}.${userB64}.${signature}`;
 
   const adminSession = {
     username,
@@ -229,6 +266,7 @@ function createAdminSession(username, ip) {
   };
 
   activeAdminSessions.set(adminToken, adminSession);
+  persistAdminSessions();
   clearFailedAttempts(ip);
 
   logAuditEvent('ADMIN_SESSION_AUTHORIZED', { username }, ip);
@@ -239,21 +277,37 @@ function verifyAdminToken(token) {
   if (!token || typeof token !== 'string') return null;
 
   const parts = token.split('.');
-  if (parts.length !== 3) return null;
+  let rawToken, expiresAtStr, userB64, signature, usernameFromToken = null;
 
-  const [rawToken, expiresAtStr, signature] = parts;
-  const expiresAt = parseInt(expiresAtStr, 10);
-
-  if (isNaN(expiresAt) || Date.now() > expiresAt) {
-    activeAdminSessions.delete(token);
+  if (parts.length === 4) {
+    [rawToken, expiresAtStr, userB64, signature] = parts;
+    try {
+      usernameFromToken = Buffer.from(userB64, 'base64url').toString('utf8');
+    } catch {}
+  } else if (parts.length === 3) {
+    [rawToken, expiresAtStr, signature] = parts;
+  } else {
     return null;
   }
 
-  const session = activeAdminSessions.get(token);
-  if (!session) return null;
+  const expiresAt = parseInt(expiresAtStr, 10);
+  if (isNaN(expiresAt) || Date.now() > expiresAt) {
+    activeAdminSessions.delete(token);
+    persistAdminSessions();
+    return null;
+  }
+
+  // Check in-memory or persisted map
+  let session = activeAdminSessions.get(token);
+  if (!session) {
+    loadPersistedAdminSessions();
+    session = activeAdminSessions.get(token);
+  }
+
+  const candidateUsername = session?.username || usernameFromToken || 'Administrator';
 
   const expectedSig = crypto.createHmac('sha256', ADMIN_CONFIG.sessionSecret)
-    .update(`${session.username}:${rawToken}:${expiresAt}`)
+    .update(`${candidateUsername}:${rawToken}:${expiresAt}`)
     .digest('hex');
 
   try {
@@ -266,6 +320,19 @@ function verifyAdminToken(token) {
     return null;
   }
 
+  if (!session) {
+    session = {
+      username: candidateUsername,
+      token,
+      createdAt: expiresAt - ADMIN_CONFIG.adminSessionDurationMs,
+      expiresAt,
+      ip: '127.0.0.1',
+      maskedIp: maskIp('127.0.0.1')
+    };
+    activeAdminSessions.set(token, session);
+    persistAdminSessions();
+  }
+
   return session;
 }
 
@@ -273,6 +340,7 @@ function revokeAdminSession(token) {
   if (token && activeAdminSessions.has(token)) {
     const s = activeAdminSessions.get(token);
     activeAdminSessions.delete(token);
+    persistAdminSessions();
     logAuditEvent('ADMIN_SESSION_REVOKED', { username: s?.username }, s?.ip);
     return true;
   }
