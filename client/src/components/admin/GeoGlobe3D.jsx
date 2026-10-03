@@ -479,10 +479,12 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
       globe
         .pathsData(STATE_BOUNDARIES)
         .pathPoints((d) => d.coords)
+        .pathPointLat((p) => p[1])
+        .pathPointLng((p) => p[0])
+        .pathPointAlt(0.005)
         .pathColor(() => 'rgba(148, 163, 184, 0.75)') // Crisp slate state border line
         .pathDashLength(0.02)
         .pathDashGap(0.01)
-        .pathAltitude(0.007)
         .pathLabel((d) => `
           <div class="globe-state-tooltip">
             <strong>${d.name}</strong>
