@@ -7,56 +7,29 @@ import {
   Search,
   Crosshair,
   Shield,
-  Activity,
   Layers,
   MapPin,
-  RefreshCw,
-  ExternalLink,
   Users,
-  Wifi,
   Copy,
   Check,
-  Clock,
-  Navigation,
   Compass,
   Zap,
-  Eye,
-  CheckCircle2,
-  AlertOctagon,
-  AlertTriangle,
-  UserCheck,
-  FileText,
-  ShieldCheck,
-  ZoomIn,
-  ZoomOut,
   Minus,
   Maximize2,
   Map as MapIcon,
   Sun,
-  EyeOff
+  ZoomIn,
+  ZoomOut,
+  ShieldCheck,
+  FileText,
+  ExternalLink
 } from 'lucide-react';
-import { WORLD_CITIES } from './geoCitiesData';
-import { STATE_BOUNDARIES } from './geoStatesData';
 import './GeoGlobe3D.css';
-
-/**
- * Convert latitude/longitude to 3D cartesian coordinates (NASA spherical standard)
- */
-export function latLngToVector3(lat, lng, radius) {
-  const phi = (90 - lat) * (Math.PI / 180);
-  const theta = (lng + 180) * (Math.PI / 180);
-
-  const x = -(radius * Math.sin(phi) * Math.cos(theta));
-  const z = radius * Math.sin(phi) * Math.sin(theta);
-  const y = radius * Math.cos(phi);
-
-  return new THREE.Vector3(x, y, z);
-}
 
 export default function GeoGlobe3D({ adminToken, serverUrl }) {
   const containerRef = useRef(null);
   const globeInstanceRef = useRef(null);
-  const stalkGroupsRef = useRef([]);
+  const markersGroupRef = useRef(null);
   const animFrameIdRef = useRef(null);
 
   const [visitors, setVisitors] = useState([]);
@@ -69,11 +42,9 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
   const [autoRotate, setAutoRotate] = useState(true);
   const [copiedField, setCopiedField] = useState(null);
 
-  // Map Mode: 'tiles' (Google Maps style high-clarity slippy tiles), 'satellite' (NASA Blue Marble), 'cyber' (Dark Vector)
+  // Map Mode: 'tiles' (Voyager Google Maps Deep Zoom), 'osm' (OpenStreetMap with every village), 'cyber' (Dark Matter), 'satellite' (NASA Blue Marble)
   const [mapMode, setMapMode] = useState('tiles');
   const [showBorders, setShowBorders] = useState(true);
-  const [showStates, setShowStates] = useState(true);
-  const [showCities, setShowCities] = useState(true);
   const [showArcs, setShowArcs] = useState(true);
   const [countriesData, setCountriesData] = useState([]);
 
@@ -120,7 +91,52 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
     return () => clearInterval(interval);
   }, []);
 
-  // Initialize Globe.GL with high-resolution engine, vector boundaries, and OrbitControls
+  // Apply map mode tile engine or satellite textures
+  const applyMapMode = useCallback((globe, mode) => {
+    if (!globe) return;
+    if (mode === 'tiles') {
+      // CartoDB Voyager: Google Maps-style deep zoom streaming all countries, states, cities, towns, and villages worldwide
+      globe
+        .globeTileEngineUrl((x, y, l) => `https://basemaps.cartocdn.com/rastertiles/voyager/${l}/${x}/${y}.png`)
+        .globeTileEngineMaxLevel(18)
+        .globeImageUrl(null)
+        .bumpImageUrl(null)
+        .backgroundImageUrl('https://unpkg.com/three-globe@2.45.0/example/img/night-sky.png')
+        .atmosphereColor('#38bdf8');
+    } else if (mode === 'osm') {
+      // Standard OpenStreetMap tiles containing every single village, town, and hamlet in every country on Earth
+      globe
+        .globeTileEngineUrl((x, y, l) => `https://tile.openstreetmap.org/${l}/${x}/${y}.png`)
+        .globeTileEngineMaxLevel(18)
+        .globeImageUrl(null)
+        .bumpImageUrl(null)
+        .backgroundImageUrl('https://unpkg.com/three-globe@2.45.0/example/img/night-sky.png')
+        .atmosphereColor('#38bdf8');
+    } else if (mode === 'cyber') {
+      // Dark Matter Cyber Network
+      globe
+        .globeTileEngineUrl((x, y, l) => `https://basemaps.cartocdn.com/dark_all/${l}/${x}/${y}.png`)
+        .globeTileEngineMaxLevel(18)
+        .globeImageUrl(null)
+        .bumpImageUrl(null)
+        .backgroundImageUrl('https://unpkg.com/three-globe@2.45.0/example/img/night-sky.png')
+        .atmosphereColor('#00f3ff');
+    } else if (mode === 'satellite') {
+      // High-resolution NASA Blue Marble
+      globe
+        .globeTileEngineUrl(null)
+        .globeImageUrl('https://unpkg.com/three-globe@2.45.0/example/img/earth-blue-marble.jpg')
+        .bumpImageUrl('https://unpkg.com/three-globe@2.45.0/example/img/earth-topology.png')
+        .backgroundImageUrl('https://unpkg.com/three-globe@2.45.0/example/img/night-sky.png')
+        .atmosphereColor('#38bdf8');
+    }
+
+    if (typeof globe.updatePov === 'function') {
+      globe.updatePov(globe.camera());
+    }
+  }, []);
+
+  // Initialize Globe.GL
   useEffect(() => {
     if (!containerRef.current) return;
     containerRef.current.innerHTML = '';
@@ -133,44 +149,104 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
       .height(height)
       .showAtmosphere(true)
       .atmosphereColor('#38bdf8')
-      .atmosphereAltitude(0.22);
+      .atmosphereAltitude(0.2);
 
-    // Apply initial base map
+    // Apply default Deep Zoom Slippy Tiles
     applyMapMode(globe, 'tiles');
 
-    // Configure OrbitControls for Google Maps-style deep zoom down to street/state level
+    // Controls
     const controls = globe.controls();
     controls.autoRotate = true;
     controls.autoRotateSpeed = 0.5;
     controls.enableZoom = true;
-    controls.minDistance = 101.5; // Deep zoom close to Earth's surface
-    controls.maxDistance = 550;   // High orbital perspective
+    controls.minDistance = 101.5; // Deep zoom close to Earth's surface for street/village clarity
+    controls.maxDistance = 550;   // Orbital view
     controls.enableDamping = true;
     controls.dampingFactor = 0.1;
 
-    // Initial camera orientation
+    // Initial camera POV
     globe.pointOfView({ lat: 20, lng: 78, altitude: 2.1 }, 1000);
     globeInstanceRef.current = globe;
 
-    // Continuous render tick for camera backface culling (hiding markers on reverse side of Earth)
-    const tickCulling = () => {
+    // Dedicated Three.js Group for 3D Citizen Stalk Markers added directly to Globe Scene
+    const markersGroup = new THREE.Group();
+    markersGroup.name = 'citizen-stalk-markers-group';
+    globe.scene().add(markersGroup);
+    markersGroupRef.current = markersGroup;
+
+    // Continuous render tick:
+    // 1. Camera backface culling (hiding markers on reverse side of Earth, matching reference)
+    // 2. Trigger tile engine update to dynamically stream deep zoom tiles
+    const tick = () => {
       if (globeInstanceRef.current) {
         const cam = globeInstanceRef.current.camera();
         const camDir = cam.position.clone().normalize();
 
-        stalkGroupsRef.current.forEach((grp) => {
-          if (!grp) return;
-          const worldPos = new THREE.Vector3();
-          grp.getWorldPosition(worldPos);
-          const dir = worldPos.clone().normalize();
-          const dot = dir.dot(camDir);
-          // Strict threshold: hide if facing away from camera
-          grp.visible = dot > 0.08;
+        // Cull markers on reverse side of Earth
+        if (markersGroupRef.current) {
+          markersGroupRef.current.children.forEach((grp) => {
+            if (!grp.userData || !grp.userData.topPos) return;
+            const markerDir = grp.userData.topPos.clone().normalize();
+            const dot = markerDir.dot(camDir);
+            grp.visible = dot > 0.05;
+          });
+        }
+
+        // Trigger dynamic tile update for slippy map
+        if (typeof globeInstanceRef.current.updatePov === 'function') {
+          globeInstanceRef.current.updatePov(cam);
+        }
+        globeInstanceRef.current.scene().traverse((child) => {
+          if (child && typeof child.updatePov === 'function') {
+            child.updatePov(cam);
+          }
         });
       }
-      animFrameIdRef.current = requestAnimationFrame(tickCulling);
+      animFrameIdRef.current = requestAnimationFrame(tick);
     };
-    animFrameIdRef.current = requestAnimationFrame(tickCulling);
+    animFrameIdRef.current = requestAnimationFrame(tick);
+
+    // Interactive Raycaster for clicking markers in 3D
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    const handlePointerDown = (event) => {
+      if (!containerRef.current || !globeInstanceRef.current || !markersGroupRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, globeInstanceRef.current.camera());
+      const visibleGroups = markersGroupRef.current.children.filter((g) => g.visible);
+      const intersects = raycaster.intersectObjects(visibleGroups, true);
+
+      if (intersects.length > 0) {
+        let curr = intersects[0].object;
+        while (curr && !curr.userData?.visitor && curr.parent) {
+          curr = curr.parent;
+        }
+        if (curr?.userData?.visitor) {
+          flyToVisitor(curr.userData.visitor);
+        }
+      }
+    };
+
+    const handlePointerMove = (event) => {
+      if (!containerRef.current || !globeInstanceRef.current || !markersGroupRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, globeInstanceRef.current.camera());
+      const visibleGroups = markersGroupRef.current.children.filter((g) => g.visible);
+      const intersects = raycaster.intersectObjects(visibleGroups, true);
+
+      containerRef.current.style.cursor = intersects.length > 0 ? 'pointer' : 'grab';
+    };
+
+    const dom = containerRef.current;
+    dom.addEventListener('pointerdown', handlePointerDown);
+    dom.addEventListener('pointermove', handlePointerMove);
 
     const handleResize = () => {
       if (containerRef.current && globeInstanceRef.current) {
@@ -181,6 +257,8 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
     window.addEventListener('resize', handleResize);
 
     return () => {
+      dom.removeEventListener('pointerdown', handlePointerDown);
+      dom.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('resize', handleResize);
       if (animFrameIdRef.current) {
         cancelAnimationFrame(animFrameIdRef.current);
@@ -190,39 +268,9 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
         globeInstanceRef.current = null;
       }
     };
-  }, []);
+  }, [applyMapMode]);
 
-  // Apply Map Mode (Google Maps Slippy Tiles, NASA Satellite, or Cyber Vector)
-  const applyMapMode = (globe, mode) => {
-    if (!globe) return;
-    if (mode === 'tiles') {
-      // Dynamic Google Maps / CartoDB Voyager Slippy Tile Engine for infinite zoom clarity
-      globe
-        .globeTileEngineUrl((x, y, l) => `https://basemaps.cartocdn.com/rastertiles/voyager/${l}/${x}/${y}.png`)
-        .globeImageUrl(null)
-        .bumpImageUrl(null)
-        .backgroundImageUrl('https://unpkg.com/three-globe@2.45.0/example/img/night-sky.png')
-        .atmosphereColor('#4da6ff');
-    } else if (mode === 'satellite') {
-      // NASA Blue Marble High-Res Satellite Texture with elevation topology
-      globe
-        .globeTileEngineUrl(null)
-        .globeImageUrl('https://unpkg.com/three-globe@2.45.0/example/img/earth-blue-marble.jpg')
-        .bumpImageUrl('https://unpkg.com/three-globe@2.45.0/example/img/earth-topology.png')
-        .backgroundImageUrl('https://unpkg.com/three-globe@2.45.0/example/img/night-sky.png')
-        .atmosphereColor('#38bdf8');
-    } else if (mode === 'cyber') {
-      // Neon Cyber Grid Mode
-      globe
-        .globeTileEngineUrl(null)
-        .globeImageUrl('https://unpkg.com/three-globe@2.45.0/example/img/earth-dark.jpg')
-        .bumpImageUrl('https://unpkg.com/three-globe@2.45.0/example/img/earth-topology.png')
-        .backgroundImageUrl('https://unpkg.com/three-globe@2.45.0/example/img/night-sky.png')
-        .atmosphereColor('#00f3ff');
-    }
-  };
-
-  // Switch map mode
+  // Handle map mode button click
   const handleMapModeChange = (mode) => {
     setMapMode(mode);
     if (globeInstanceRef.current) {
@@ -239,19 +287,19 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
 
     const isAdmin = Boolean(v.isCurrentAdmin || v.role === 'admin' || v.isAdmin);
     const isMember = Boolean(!isAdmin && (v.userTier === 'member' || v.isSocietyMember));
-    const ringColor = isAdmin ? '#ef4444' : isMember ? '#ffd700' : '#00f3ff';
+    const strokeColor = isSelected ? '#f97316' : isAdmin ? '#ef4444' : isMember ? '#ffd700' : '#00f3ff';
 
-    // 1. Outer Glow Circle
-    ctx.shadowColor = ringColor;
+    // 1. Outer Circular Glow and Disc
+    ctx.shadowColor = strokeColor;
     ctx.shadowBlur = isSelected ? 24 : 14;
     ctx.beginPath();
     ctx.arc(128, 128, 108, 0, Math.PI * 2);
-    ctx.fillStyle = '#0a0f1d';
+    ctx.fillStyle = '#060d1b';
     ctx.fill();
 
     // 2. Role Ring Stroke
     ctx.lineWidth = isSelected ? 12 : 8;
-    ctx.strokeStyle = ringColor;
+    ctx.strokeStyle = strokeColor;
     ctx.stroke();
 
     // 3. Inner Circular Clip for Avatar Photo
@@ -260,18 +308,19 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
     ctx.arc(128, 128, 96, 0, Math.PI * 2);
     ctx.clip();
 
-    // Fallback Initial Background
-    ctx.fillStyle = '#1e293b';
+    // Fallback Initial Monogram
+    ctx.fillStyle = '#111e33';
     ctx.fillRect(0, 0, 256, 256);
-    ctx.font = 'bold 88px "Inter", sans-serif';
-    ctx.fillStyle = ringColor;
+    ctx.font = 'bold 96px "Inter", "Segoe UI", sans-serif';
+    ctx.fillStyle = strokeColor;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const initial = (v.alias || 'U')[0].toUpperCase();
-    ctx.fillText(initial, 128, 128);
+    const initial = (v.alias || 'U').replace('@', '')[0]?.toUpperCase() || 'U';
+    ctx.fillText(initial, 128, 132);
     ctx.restore();
 
     const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
     texture.minFilter = THREE.LinearFilter;
 
     // Load actual user avatar image if available
@@ -288,7 +337,8 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
 
         // Crown / Seal Badge in Top-Right
         if (isAdmin) {
-          ctx.font = '36px sans-serif';
+          ctx.font = '40px sans-serif';
+          ctx.textAlign = 'center';
           ctx.fillText('👑', 190, 68);
         } else if (isMember) {
           ctx.font = 'bold 36px serif';
@@ -299,101 +349,115 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
         texture.needsUpdate = true;
       };
       img.src = v.avatar;
+    } else {
+      // If no image, draw badges directly
+      if (isAdmin) {
+        ctx.font = '40px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('👑', 190, 68);
+      } else if (isMember) {
+        ctx.font = 'bold 36px serif';
+        ctx.fillStyle = '#ffd700';
+        ctx.fillText('Ω', 190, 68);
+      }
+      texture.needsUpdate = true;
     }
 
     return texture;
   }, []);
 
-  // Update 3D User Poles matching the reference image and code
+  // Rebuild 3D Stalk Pointers whenever visitors, selectedVisitor, or globe changes
   useEffect(() => {
-    if (!globeInstanceRef.current) return;
+    if (!globeInstanceRef.current || !markersGroupRef.current) return;
     const globe = globeInstanceRef.current;
+    const markersGroup = markersGroupRef.current;
+
+    // Clear previous markers
+    while (markersGroup.children.length > 0) {
+      const child = markersGroup.children[0];
+      markersGroup.remove(child);
+      child.traverse?.((obj) => {
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) {
+          if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose());
+          else obj.material.dispose();
+        }
+      });
+    }
 
     const validVisitors = visitors.filter(
       (v) => typeof v.latitude === 'number' && typeof v.longitude === 'number' && !isNaN(v.latitude) && !isNaN(v.longitude)
     );
 
-    stalkGroupsRef.current = [];
-
-    // Render 3D Stalk Poles matching the reference image:
-    // - Cone pin point at Earth surface
-    // - Slender cylinder pin stem to elevated top position
+    // Build 3D Stalks matching reference GIF:
+    // - Conical base pointing at Earth surface
+    // - Slender 3D cylinder stem extending radially into space
     // - High-res circular avatar badge at the top
-    globe
-      .customLayerData(validVisitors)
-      .customThreeObject((d) => {
-        const R = globe.getGlobeRadius(); // 100
-        const surfCoords = globe.getCoords(d.latitude, d.longitude, 0.001);
-        const topCoords = globe.getCoords(d.latitude, d.longitude, 0.18);
+    validVisitors.forEach((d) => {
+      const surfCoords = globe.getCoords(d.latitude, d.longitude, 0.001);
+      const topCoords = globe.getCoords(d.latitude, d.longitude, 0.18);
 
-        const surfacePosition = new THREE.Vector3(surfCoords.x, surfCoords.y, surfCoords.z);
-        const topPosition = new THREE.Vector3(topCoords.x, topCoords.y, topCoords.z);
+      const surfacePosition = new THREE.Vector3(surfCoords.x, surfCoords.y, surfCoords.z);
+      const topPosition = new THREE.Vector3(topCoords.x, topCoords.y, topCoords.z);
 
-        const lineHeight = surfacePosition.distanceTo(topPosition);
-        const lineCenter = surfacePosition.clone().lerp(topPosition, 0.5);
-        const direction = topPosition.clone().sub(surfacePosition).normalize();
-        const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+      const lineHeight = surfacePosition.distanceTo(topPosition);
+      const lineCenter = surfacePosition.clone().lerp(topPosition, 0.5);
+      const direction = topPosition.clone().sub(surfacePosition).normalize();
+      const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
 
-        const isAdmin = Boolean(d.isCurrentAdmin || d.role === 'admin' || d.isAdmin);
-        const isMember = Boolean(!isAdmin && (d.userTier === 'member' || d.isSocietyMember));
-        const color = isAdmin ? 0xef4444 : isMember ? 0xffd700 : 0x00f3ff;
-        const isSelected = selectedVisitor?.id === d.id;
+      const isAdmin = Boolean(d.isCurrentAdmin || d.role === 'admin' || d.isAdmin);
+      const isMember = Boolean(!isAdmin && (d.userTier === 'member' || d.isSocietyMember));
+      const color = isAdmin ? 0xef4444 : isMember ? 0xffd700 : 0x00f3ff;
+      const isSelected = selectedVisitor?.id === d.id;
 
-        const group = new THREE.Group();
+      const group = new THREE.Group();
 
-        // 1. Cone Pin Point at the surface (matching reference image coneGeometry)
-        const coneGeom = new THREE.ConeGeometry(0.75, 2.2, 16);
-        const coneMat = new THREE.MeshBasicMaterial({ color: isSelected ? 0xf97316 : color });
-        const coneMesh = new THREE.Mesh(coneGeom, coneMat);
-        coneMesh.position.copy(surfacePosition);
-        coneMesh.quaternion.copy(quaternion);
-        group.add(coneMesh);
+      // 1. Cone Pin Point at the surface (inverted so tip touches surface, matching reference)
+      const coneGeom = new THREE.ConeGeometry(1.2, 3.6, 16);
+      coneGeom.rotateX(Math.PI); // Tip points towards ground
+      const coneMat = new THREE.MeshBasicMaterial({ color: isSelected ? 0xf97316 : color });
+      const coneMesh = new THREE.Mesh(coneGeom, coneMat);
+      coneMesh.position.copy(surfacePosition.clone().add(direction.clone().multiplyScalar(1.8)));
+      coneMesh.quaternion.copy(quaternion);
+      group.add(coneMesh);
 
-        // 2. Cylinder Pin Stem from surface to elevated top (matching reference cylinderGeometry)
-        const stemGeom = new THREE.CylinderGeometry(0.18, 0.18, lineHeight, 16);
-        const stemMat = new THREE.MeshBasicMaterial({
-          color: isSelected ? 0xffffff : 0x94a3b8,
-          transparent: true,
-          opacity: isSelected ? 0.95 : 0.65
-        });
-        const stemMesh = new THREE.Mesh(stemGeom, stemMat);
-        stemMesh.position.copy(lineCenter);
-        stemMesh.quaternion.copy(quaternion);
-        group.add(stemMesh);
-
-        // 3. Circular Avatar Badge at topPosition (3D GPU Sprite facing camera)
-        const avatarTex = createAvatarTexture(d, isSelected);
-        const spriteMat = new THREE.SpriteMaterial({
-          map: avatarTex,
-          transparent: true,
-          depthTest: false,
-          depthWrite: false
-        });
-        const sprite = new THREE.Sprite(spriteMat);
-        sprite.position.copy(topPosition);
-        const badgeScale = isSelected ? 16 : 13;
-        sprite.scale.set(badgeScale, badgeScale, 1);
-        group.add(sprite);
-
-        group.userData = {
-          visitor: d,
-          sprite,
-          stem: stemMesh,
-          cone: coneMesh,
-          topPosition
-        };
-
-        stalkGroupsRef.current.push(group);
-        return group;
-      })
-      .onCustomLayerClick((d) => {
-        if (d) flyToVisitor(d);
-      })
-      .onCustomLayerHover((d) => {
-        if (containerRef.current) {
-          containerRef.current.style.cursor = d ? 'pointer' : 'grab';
-        }
+      // 2. Cylinder Pin Stem from surface to elevated top
+      const stemGeom = new THREE.CylinderGeometry(0.22, 0.22, lineHeight, 16);
+      const stemMat = new THREE.MeshBasicMaterial({
+        color: isSelected ? 0xffffff : 0x94a3b8,
+        transparent: true,
+        opacity: isSelected ? 0.95 : 0.75
       });
+      const stemMesh = new THREE.Mesh(stemGeom, stemMat);
+      stemMesh.position.copy(lineCenter);
+      stemMesh.quaternion.copy(quaternion);
+      group.add(stemMesh);
+
+      // 3. Circular Avatar Badge at topPosition (3D GPU Sprite facing camera)
+      const avatarTex = createAvatarTexture(d, isSelected);
+      const spriteMat = new THREE.SpriteMaterial({
+        map: avatarTex,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false
+      });
+      const sprite = new THREE.Sprite(spriteMat);
+      sprite.position.copy(topPosition);
+      const badgeScale = isSelected ? 18 : 14;
+      sprite.scale.set(badgeScale, badgeScale, 1);
+      group.add(sprite);
+
+      group.userData = {
+        visitor: d,
+        sprite,
+        stem: stemMesh,
+        cone: coneMesh,
+        topPos: topPosition,
+        surfacePos: surfacePosition
+      };
+
+      markersGroup.add(group);
+    });
 
     // 2. Pulsing Radar Sensor Rings on ground coordinates
     globe
@@ -405,8 +469,8 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
         const isMember = Boolean(!isAdmin && (d.userTier === 'member' || d.isSocietyMember));
         return isAdmin ? '#ef4444' : isMember ? '#ffd700' : '#00f3ff';
       })
-      .ringMaxRadius(4.2)
-      .ringPropagationSpeed(1.4)
+      .ringMaxRadius(4.5)
+      .ringPropagationSpeed(1.5)
       .ringRepeatPeriod(1200);
 
     // 3. Central Command Relay Arcs
@@ -447,7 +511,7 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
     }
   }, [visitors, selectedVisitor, showArcs, createAvatarTexture]);
 
-  // Update Country Boundaries Layer (Natural Earth GeoJSON)
+  // Update Country Boundaries Vector Layer (Natural Earth GeoJSON)
   useEffect(() => {
     if (!globeInstanceRef.current) return;
     const globe = globeInstanceRef.current;
@@ -455,9 +519,9 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
     if (showBorders && countriesData.length > 0) {
       globe
         .polygonsData(countriesData)
-        .polygonCapColor(() => 'rgba(2, 6, 23, 0.0)') // Transparent inside to allow satellite/tiles to shine through
+        .polygonCapColor(() => 'rgba(2, 6, 23, 0.0)') // Transparent inside so tile map shines through
         .polygonSideColor(() => 'rgba(0, 0, 0, 0.04)')
-        .polygonStrokeColor(() => 'rgba(56, 189, 248, 0.8)') // Glowing cyan vector borders
+        .polygonStrokeColor(() => 'rgba(56, 189, 248, 0.75)') // Glowing cyan borders
         .polygonAltitude(0.005)
         .polygonLabel(({ properties: d }) => `
           <div class="globe-country-tooltip">
@@ -469,59 +533,6 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
       globe.polygonsData([]);
     }
   }, [showBorders, countriesData]);
-
-  // Update State & Provincial Boundaries Layer
-  useEffect(() => {
-    if (!globeInstanceRef.current) return;
-    const globe = globeInstanceRef.current;
-
-    if (showStates) {
-      globe
-        .pathsData(STATE_BOUNDARIES)
-        .pathPoints((d) => d.coords)
-        .pathPointLat((p) => p[1])
-        .pathPointLng((p) => p[0])
-        .pathPointAlt(0.005)
-        .pathColor(() => 'rgba(148, 163, 184, 0.75)') // Crisp slate state border line
-        .pathDashLength(0.02)
-        .pathDashGap(0.01)
-        .pathLabel((d) => `
-          <div class="globe-state-tooltip">
-            <strong>${d.name}</strong>
-            <span>${d.country}</span>
-          </div>
-        `);
-    } else {
-      globe.pathsData([]);
-    }
-  }, [showStates]);
-
-  // Update World Cities & Regional Labels Layer
-  useEffect(() => {
-    if (!globeInstanceRef.current) return;
-    const globe = globeInstanceRef.current;
-
-    if (showCities) {
-      globe
-        .labelsData(WORLD_CITIES)
-        .labelLat((d) => d.lat)
-        .labelLng((d) => d.lng)
-        .labelText((d) => d.name)
-        .labelSize((d) => (d.isCapital || d.isMegacity ? 0.75 : 0.52))
-        .labelDotRadius((d) => (d.isCapital ? 0.38 : 0.25))
-        .labelColor((d) => (d.isCapital ? '#38bdf8' : '#e2e8f0'))
-        .labelAltitude(0.009)
-        .labelResolution(2)
-        .labelLabel((d) => `
-          <div class="globe-city-tooltip">
-            <strong>${d.name}</strong>
-            <span>${d.state ? d.state + ', ' : ''}${d.country} &bull; ${d.isCapital ? 'Capital' : 'Major Center'}</span>
-          </div>
-        `);
-    } else {
-      globe.labelsData([]);
-    }
-  }, [showCities]);
 
   // Auto-rotate toggle
   useEffect(() => {
@@ -537,7 +548,7 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
     if (globeInstanceRef.current && typeof v.latitude === 'number' && typeof v.longitude === 'number') {
       globeInstanceRef.current.controls().autoRotate = false;
       setAutoRotate(false);
-      // Zoom close to coordinates for regional street/city clarity
+      // Zoom close to coordinates for regional street/city/village clarity
       globeInstanceRef.current.pointOfView(
         {
           lat: v.latitude,
@@ -663,10 +674,28 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
             type="button"
             className={`globe-toggle-btn ${mapMode === 'tiles' ? 'active' : ''}`}
             onClick={() => handleMapModeChange('tiles')}
-            title="Google Maps / CartoDB Slippy Tiles (maximum zoom clarity for streets, cities, borders)"
+            title="Google Maps / CartoDB Voyager Slippy Tiles (maximum zoom clarity for all countries, states, cities, towns, and villages)"
           >
             <MapIcon size={12} />
-            <span>MAP TILES (DEEP ZOOM)</span>
+            <span>MAP (DEEP ZOOM)</span>
+          </button>
+          <button
+            type="button"
+            className={`globe-toggle-btn ${mapMode === 'osm' ? 'active' : ''}`}
+            onClick={() => handleMapModeChange('osm')}
+            title="OpenStreetMap Standard: Render every village, hamlet, town, and street worldwide"
+          >
+            <Layers size={12} />
+            <span>OPENSTREETMAP</span>
+          </button>
+          <button
+            type="button"
+            className={`globe-toggle-btn ${mapMode === 'cyber' ? 'active' : ''}`}
+            onClick={() => handleMapModeChange('cyber')}
+            title="Dark Cyber Vector Network"
+          >
+            <Zap size={12} />
+            <span>CYBER DARK</span>
           </button>
           <button
             type="button"
@@ -676,15 +705,6 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
           >
             <Sun size={12} />
             <span>SATELLITE</span>
-          </button>
-          <button
-            type="button"
-            className={`globe-toggle-btn ${mapMode === 'cyber' ? 'active' : ''}`}
-            onClick={() => handleMapModeChange('cyber')}
-            title="Dark Cyber Vector Network"
-          >
-            <Zap size={12} />
-            <span>CYBER</span>
           </button>
         </div>
 
@@ -697,22 +717,6 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
             title="Toggle Country Vector Boundaries"
           >
             Borders: {showBorders ? 'ON' : 'OFF'}
-          </button>
-          <button
-            type="button"
-            className={`globe-chip-toggle ${showStates ? 'active' : ''}`}
-            onClick={() => setShowStates(!showStates)}
-            title="Toggle State & Provincial Boundaries"
-          >
-            States: {showStates ? 'ON' : 'OFF'}
-          </button>
-          <button
-            type="button"
-            className={`globe-chip-toggle ${showCities ? 'active' : ''}`}
-            onClick={() => setShowCities(!showCities)}
-            title="Toggle World Cities & Regional Labels"
-          >
-            Cities: {showCities ? 'ON' : 'OFF'}
           </button>
           <button
             type="button"
@@ -833,7 +837,7 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
           </div>
 
           {/* Online status indicator */}
-          <div style={{ padding: '0 1.25rem 0.6rem' }}>
+          <div style={{ padding: '0 0.25rem 0.6rem' }}>
             <span className="status-pill live">ONLINE // LIVE 3D POLE TELEMETRY</span>
           </div>
 
@@ -900,51 +904,21 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
                       'coord'
                     )
                   }
-                  title="Copy exact Latitude & Longitude"
+                  title="Copy Lat, Lng"
                 >
-                  {copiedField === 'coord' ? (
-                    <Check size={11} color="#10b981" />
-                  ) : (
-                    <Copy size={11} />
-                  )}
+                  {copiedField === 'coord' ? <Check size={11} color="#10b981" /> : <Copy size={11} />}
                 </button>
               </div>
             </div>
 
             <div className="detail-item">
-              <span className="detail-label">NETWORK PROVIDER (ISP &amp; ASN)</span>
-              <span className="detail-value mono">
-                {selectedVisitor.isp || 'Encrypted Provider'}
-                {selectedVisitor.asn ? ` (${selectedVisitor.asn})` : ''}
-              </span>
+              <span className="detail-label">TIMEZONE</span>
+              <span className="detail-value gold">{selectedVisitor.timezone}</span>
             </div>
 
             <div className="detail-item">
-              <span className="detail-label">TIMEZONE &amp; LOCAL TIME</span>
-              <span className="detail-value">
-                <Clock size={11} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
-                {selectedVisitor.timezone || 'UTC'} &bull;{' '}
-                {selectedVisitor.localTime || new Date().toLocaleTimeString()}
-              </span>
-            </div>
-
-            <div className="detail-item">
-              <span className="detail-label">IP TELEMETRY SOURCE</span>
-              <span className="detail-value">
-                {selectedVisitor.geoSource === 'ipstack' ? (
-                  <span className="source-tag ipstack">IPSTACK REAL-TIME API</span>
-                ) : (
-                  <span className="source-tag ipapi">IP-API RESILIENT ENGINE</span>
-                )}
-              </span>
-            </div>
-
-            <div className="detail-item">
-              <span className="detail-label">ESTIMATED NETWORK LATENCY</span>
-              <span className="detail-value green">
-                <Activity size={11} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
-                {selectedVisitor.pingMs ? `${selectedVisitor.pingMs}ms` : '32ms (WebSocket)'}
-              </span>
+              <span className="detail-label">ISP &amp; ASN</span>
+              <span className="detail-value">{selectedVisitor.isp || selectedVisitor.org || 'Relay Node'}</span>
             </div>
           </div>
 
@@ -989,54 +963,56 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
 
       {/* Right Citizens Telemetry Roster Sidebar */}
       <div className="globe-roster-sidebar">
+        {/* Roster Header */}
         <div className="roster-header">
-          <div className="roster-title-row">
+          <div className="roster-title">
             <Users size={14} color="#00f3ff" />
-            <h3>CITIZEN ROSTER ({filteredVisitors.length})</h3>
+            <span>CITIZEN ROSTER</span>
           </div>
+          <span className="roster-count">{filteredVisitors.length} TRACKED</span>
+        </div>
 
-          {/* Search Box */}
-          <div className="roster-search-box">
-            <Search size={13} className="roster-search-icon" />
-            <input
-              type="text"
-              placeholder="Search citizens, cities, IPs..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
+        {/* Filter Tabs */}
+        <div className="roster-filter-tabs">
+          <button
+            type="button"
+            className={`filter-tab-btn ${filterType === 'all' ? 'active' : ''}`}
+            onClick={() => setFilterType('all')}
+          >
+            ALL ({visitors.length})
+          </button>
+          <button
+            type="button"
+            className={`filter-tab-btn ${filterType === 'members' ? 'active' : ''}`}
+            onClick={() => setFilterType('members')}
+          >
+            MEMBERS ({membersCount})
+          </button>
+          <button
+            type="button"
+            className={`filter-tab-btn ${filterType === 'users' ? 'active' : ''}`}
+            onClick={() => setFilterType('users')}
+          >
+            USERS ({normalUsersCount})
+          </button>
+        </div>
 
-          {/* Filter Tabs */}
-          <div className="roster-filter-tabs">
-            <button
-              type="button"
-              className={`roster-tab-btn ${filterType === 'all' ? 'active' : ''}`}
-              onClick={() => setFilterType('all')}
-            >
-              All ({visitors.length})
-            </button>
-            <button
-              type="button"
-              className={`roster-tab-btn ${filterType === 'members' ? 'active' : ''}`}
-              onClick={() => setFilterType('members')}
-            >
-              Members ({membersCount})
-            </button>
-            <button
-              type="button"
-              className={`roster-tab-btn ${filterType === 'users' ? 'active' : ''}`}
-              onClick={() => setFilterType('users')}
-            >
-              Users ({normalUsersCount})
-            </button>
-          </div>
+        {/* Search Bar */}
+        <div className="roster-search-bar">
+          <Search size={13} color="#94a3b8" />
+          <input
+            type="text"
+            placeholder="Search citizens, cities, IPs..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
         </div>
 
         {/* Visitors Scrollable List */}
-        <div className="roster-list-scroll">
+        <div className="roster-list">
           {filteredVisitors.length === 0 ? (
-            <div className="roster-empty-state">
-              <Radio size={24} />
+            <div className="roster-empty">
+              <Radio size={24} color="#64748b" style={{ margin: '0 auto 0.5rem', display: 'block' }} />
               <p>No citizens matching search criteria</p>
             </div>
           ) : (
@@ -1048,46 +1024,41 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
               return (
                 <div
                   key={v.id}
-                  className={`roster-item ${isSelected ? 'selected' : ''} ${
-                    isAdmin ? 'admin-node' : isMember ? 'member-node' : ''
+                  className={`roster-node-item ${isSelected ? 'selected' : ''} ${
+                    isAdmin ? 'current-user-node' : isMember ? 'member-user-node' : ''
                   }`}
                   onClick={() => flyToVisitor(v)}
                 >
-                  <div className="roster-item-top">
-                    <div className="roster-item-user">
-                      <span className="roster-flag">{v.flag || '🌐'}</span>
-                      <strong className="roster-alias">@{v.alias}</strong>
-                    </div>
-
-                    <div className="roster-item-badges">
+                  <div className="node-flag">{v.flag || '🌐'}</div>
+                  <div className="node-info">
+                    <div className="node-alias-row">
+                      <span className="node-alias">@{v.alias}</span>
                       {isAdmin ? (
-                        <span className="roster-badge admin" title="Root Administrator">
-                          👑 ADMIN
-                        </span>
+                        <span className="admin-chip">👑 ADMIN</span>
                       ) : isMember ? (
-                        <span className="roster-badge member" title="Secret Society Sovereign">
-                          Ω MEMBER
-                        </span>
+                        <span className="member-chip">Ω MEMBER</span>
                       ) : (
-                        <span className="roster-badge citizen">CITIZEN</span>
+                        <span className="user-chip">CITIZEN</span>
                       )}
                     </div>
+                    <div className="node-city">
+                      {v.city ? `${v.city}, ` : ''}{v.country || 'Unknown Region'}
+                    </div>
+                    <div className="node-ip">
+                      {v.ip} &bull; {v.latitude?.toFixed(2)}°, {v.longitude?.toFixed(2)}°
+                    </div>
                   </div>
-
-                  <div className="roster-item-location">
-                    <MapPin size={11} className="pin-icon" />
-                    <span>
-                      {v.city ? `${v.city}, ` : ''}
-                      {v.country || 'Unknown Region'}
-                    </span>
-                  </div>
-
-                  <div className="roster-item-footer">
-                    <span className="roster-ip">{v.ip}</span>
-                    <span className="roster-coords">
-                      {v.latitude?.toFixed(2)}°, {v.longitude?.toFixed(2)}°
-                    </span>
-                  </div>
+                  <button
+                    type="button"
+                    className="focus-node-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      flyToVisitor(v);
+                    }}
+                    title="Fly to Citizen 3D Pole"
+                  >
+                    <Crosshair size={13} />
+                  </button>
                 </div>
               );
             })

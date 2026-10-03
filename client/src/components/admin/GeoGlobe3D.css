@@ -52,6 +52,47 @@
 .globe-hud-overlay.top-right {
   top: 1rem;
   right: calc(340px + 1.25rem);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  max-width: calc(100% - 680px);
+  justify-content: flex-end;
+}
+
+.globe-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.75rem;
+  background: rgba(6, 14, 28, 0.9);
+  border: 1px solid rgba(0, 243, 255, 0.32);
+  border-radius: 6px;
+  color: #94a3b8;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  font-family: var(--font-mono, monospace);
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55), inset 0 0 10px rgba(0, 243, 255, 0.04);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+}
+
+.globe-tool-btn:hover {
+  background: rgba(0, 243, 255, 0.18);
+  border-color: #00f3ff;
+  color: #ffffff;
+  box-shadow: 0 0 14px rgba(0, 243, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.globe-tool-btn.active {
+  background: rgba(0, 243, 255, 0.25);
+  border-color: #00f3ff;
+  color: #00f3ff;
+  box-shadow: 0 0 16px rgba(0, 243, 255, 0.4);
 }
 
 .globe-telemetry-badge {

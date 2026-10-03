@@ -1014,6 +1014,7 @@ module.exports = function createAdminRouter(serverContext) {
             userTier,
             tierColor,
             tierLabel,
+            avatar: userProf?.avatar || u?.avatar || null,
             declaredLocation,
             declaredCoords,
             locationRelation
