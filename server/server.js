@@ -124,7 +124,7 @@ function saveMessages(msgs) {
   }
 }
 
-let messages = loadMessages();
+const messages = loadMessages();
 
 // Upload route
 app.use('/upload', uploadRouter);
@@ -522,6 +522,11 @@ const createAdminRouter = require('./admin/adminRoutes');
 app.use('/api/admin', createAdminRouter({
   io,
   messages,
+  getMessages: () => messages,
+  clearMessages: () => {
+    messages.length = 0;
+    saveMessages(messages);
+  },
   saveMessages,
   userProfiles,
   saveProfile,
@@ -577,7 +582,6 @@ app.post('/api/chat/clear', (req, res) => {
 
     const previousCount = messages.length;
     messages.length = 0;
-    messages = [];
     saveMessages(messages);
 
     if (clearJames && jamesBot && jamesBot.memoryService) {
@@ -1782,7 +1786,9 @@ CRITICAL IDENTITY & BEHAVIOR RULES:
 // Periodic cleanup of messages & uploads older than 24 hours (User & James messages)
 const runPeriodicCleanup = () => {
   const prevCount = messages.length;
-  messages = cleanupMessages(messages);
+  const cleaned = cleanupMessages(messages);
+  messages.length = 0;
+  messages.push(...cleaned);
   cleanupUploads(messages);
   saveMessages(messages);
   if (jamesBot && jamesBot.memoryService && typeof jamesBot.memoryService.cleanupOldHistory === 'function') {

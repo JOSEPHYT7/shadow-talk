@@ -518,6 +518,9 @@ export function AdminPanel({
           setMessages(prev => prev.filter(m => m.room !== 'society' && !m.isSociety));
         } else {
           setMessages(prev => prev.filter(m => m.room === 'society' || m.isSociety));
+          try {
+            localStorage.removeItem('shadowtalk_cached_messages');
+          } catch (e) {}
         }
         fetchMessages();
       } else {

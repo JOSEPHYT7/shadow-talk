@@ -42,7 +42,8 @@ const {
 } = require('../services/secretSocietyService');
 
 module.exports = function createAdminRouter(serverContext) {
-  const { io, messages, saveMessages, userProfiles, saveProfile, activeUsers, deleteUploadedFile, jamesBot } = serverContext;
+  const { io, messages, saveMessages, userProfiles, saveProfile, activeUsers, deleteUploadedFile, jamesBot, getMessages, clearMessages } = serverContext;
+  const getActiveMessages = () => (typeof getMessages === 'function' ? getMessages() : messages);
 
   // ----------------------------------------------------------------
   // 1. HIDDEN AUTHENTICATION FLOW ENDPOINTS
@@ -418,7 +419,8 @@ module.exports = function createAdminRouter(serverContext) {
    */
   router.get('/dashboard/messages', requireAdminAuth, (req, res) => {
     const limit = parseInt(req.query.limit, 10) || 150;
-    const formatted = messages.slice(-limit).map(m => ({
+    const currentMsgs = getActiveMessages();
+    const formatted = currentMsgs.slice(-limit).map(m => ({
       ...m,
       room: 'public',
       roomName: 'Public Room'
@@ -558,9 +560,33 @@ module.exports = function createAdminRouter(serverContext) {
    * Administrative Purge / Clear Public Chat Room
    */
   router.post('/dashboard/chat/clear-public', requireAdminAuth, (req, res) => {
-    const previousCount = messages.length;
-    messages.length = 0;
-    saveMessages(messages);
+    const activeMsgs = getActiveMessages();
+    const previousCount = activeMsgs.length;
+
+    if (typeof clearMessages === 'function') {
+      clearMessages();
+    } else {
+      activeMsgs.length = 0;
+      saveMessages(activeMsgs);
+    }
+
+    // Direct disk wipe guarantee
+    try {
+      const msgsPath = path.join(__dirname, '..', 'data', 'messages.json');
+      fs.writeFileSync(msgsPath, JSON.stringify([], null, 2), 'utf8');
+    } catch (e) {
+      console.error('[Admin Chat Clear]: Failed writing empty messages.json:', e.message);
+    }
+
+    // Clear James bot conversation history
+    if (jamesBot && jamesBot.memoryService) {
+      jamesBot.memoryService.conversationHistory = [];
+      jamesBot.memoryService.activeTopics.clear();
+      jamesBot.memoryService.conversationSummary = '';
+      if (typeof jamesBot.memoryService.scheduleSave === 'function') {
+        jamesBot.memoryService.scheduleSave();
+      }
+    }
 
     io.emit('allMessages', []);
     io.emit('chatCleared', { clearedBy: req.adminUsername, timestamp: Date.now(), previousCount });
@@ -582,6 +608,14 @@ module.exports = function createAdminRouter(serverContext) {
     const socMsgs = loadSocietyMessages();
     const previousCount = socMsgs.length;
     saveSocietyMessages([]);
+
+    // Direct disk wipe guarantee
+    try {
+      const socPath = path.join(__dirname, '..', 'data', 'society_messages.json');
+      fs.writeFileSync(socPath, JSON.stringify([], null, 2), 'utf8');
+    } catch (e) {
+      console.error('[Admin Society Clear]: Failed writing empty society_messages.json:', e.message);
+    }
 
     io.to('secret_society_room').emit('societyHistory', []);
     io.to('secret_society_room').emit('societyChatCleared', { clearedBy: req.adminUsername, timestamp: Date.now(), previousCount });

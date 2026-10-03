@@ -1906,20 +1906,8 @@ function App() {
           localStorage.setItem('shadowtalk_cached_messages', JSON.stringify(validMsgs.slice(-100)));
         } catch (e) {}
       } else {
-        // If server sends empty array, fallback to cached messages, but strictly enforce 24h expiration
+        // If server sends empty array, chat has been purged/is empty - remove stale localStorage cache
         try {
-          const cached = localStorage.getItem('shadowtalk_cached_messages');
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed)) {
-              const freshCached = parsed.filter(m => m && (now - (m.timestamp || 0)) < MS_24_HOURS);
-              if (freshCached.length > 0) {
-                setMessages(freshCached);
-                localStorage.setItem('shadowtalk_cached_messages', JSON.stringify(freshCached.slice(-100)));
-                return;
-              }
-            }
-          }
           localStorage.removeItem('shadowtalk_cached_messages');
         } catch (e) {}
         setMessages([]);
