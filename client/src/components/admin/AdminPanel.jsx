@@ -52,7 +52,9 @@ import {
   Trash,
   Bug,
   Info,
-  Filter
+  Filter,
+  Play,
+  Pause
 } from 'lucide-react';
 import GeoGlobe3D from './GeoGlobe3D';
 import './AdminPanel.css';
@@ -70,12 +72,20 @@ export function AdminPanel({
   const [loading, setLoading] = useState(false);
   const [actionStatus, setActionStatus] = useState(null);
 
-  // Telemetry state
+  // Telemetry state & Real-Time Telemetry features
   const [telemetry, setTelemetry] = useState(null);
   const [selectedNewsCategory, setSelectedNewsCategory] = useState('viral');
   const [triggeringNews, setTriggeringNews] = useState(false);
   const [scanningVulnerabilities, setScanningVulnerabilities] = useState(false);
   const [scanResultModal, setScanResultModal] = useState(null);
+
+  // Real-Time Operations & Event Stream state
+  const [wsLatency, setWsLatency] = useState(null);
+  const [liveEvents, setLiveEvents] = useState([]);
+  const [isStreamPaused, setIsStreamPaused] = useState(false);
+  const [maintenanceActive, setMaintenanceActive] = useState(false);
+  const [flushingCache, setFlushingCache] = useState(false);
+  const [togglingMaintenance, setTogglingMaintenance] = useState(false);
 
   // Users state
   const [users, setUsers] = useState([]);
@@ -88,6 +98,7 @@ export function AdminPanel({
   const [confirmPurgeRoom, setConfirmPurgeRoom] = useState(null); // 'public' | 'society' | null
   const [purgingRoom, setPurgingRoom] = useState(false);
   const [deletingMsgId, setDeletingMsgId] = useState(null);
+  const [isRefreshingMessages, setIsRefreshingMessages] = useState(false);
 
   // Broadcast state (Image upload, multi-room target, CTA actions, siren audio)
   const [bcastTitle, setBcastTitle] = useState('');
@@ -140,6 +151,24 @@ export function AdminPanel({
     } catch {}
   };
 
+  // Fetch real-time server ingress event stream
+  const fetchLiveEvents = async () => {
+    try {
+      const res = await fetch(`${serverUrl}/api/admin/dashboard/telemetry/live-stream`, {
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.events)) {
+          setLiveEvents(data.events);
+        }
+        if (typeof data.maintenanceActive === 'boolean') {
+          setMaintenanceActive(data.maintenanceActive);
+        }
+      }
+    } catch {}
+  };
+
   // Fetch users
   const fetchUsers = async () => {
     try {
@@ -155,6 +184,7 @@ export function AdminPanel({
 
   // Fetch both public and secret society messages for an integrated dynamic feed
   const fetchMessages = async () => {
+    setIsRefreshingMessages(true);
     try {
       const [pubRes, socRes] = await Promise.all([
         fetch(`${serverUrl}/api/admin/dashboard/messages?limit=150`, {
@@ -179,8 +209,12 @@ export function AdminPanel({
       // Sort newest first
       combined.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
       setMessages(combined);
+      flashNotice(`Transmissions refreshed (${combined.length} loaded)`);
     } catch (err) {
       console.error('[AdminPanel]: Failed to fetch transmissions:', err);
+      flashNotice('Failed to refresh transmissions', 'error');
+    } finally {
+      setIsRefreshingMessages(false);
     }
   };
 
@@ -238,28 +272,39 @@ export function AdminPanel({
 
   // Initial fetch and tab change polling
   useEffect(() => {
-    if (activeTab === 'telemetry') fetchTelemetry();
-    else if (activeTab === 'users') fetchUsers();
-    else if (activeTab === 'messages') fetchMessages();
-    else if (activeTab === 'security') fetchAuditLogs();
-    else if (activeTab === 'society') {
+    if (activeTab === 'telemetry') {
+      fetchTelemetry();
+      fetchLiveEvents();
+    } else if (activeTab === 'users') {
+      fetchUsers();
+    } else if (activeTab === 'messages') {
+      fetchMessages();
+    } else if (activeTab === 'security') {
+      fetchAuditLogs();
+    } else if (activeTab === 'society') {
       fetchSocietyApps();
       fetchSocietyMembers();
       fetchSocietyWithdrawals();
     }
   }, [activeTab]);
 
-  // Interval auto-refresh for telemetry
+  // Interval auto-refresh for telemetry & live event stream
   useEffect(() => {
     const timer = setInterval(() => {
-      if (activeTab === 'telemetry') fetchTelemetry();
-    }, 5000);
+      if (activeTab === 'telemetry') {
+        fetchTelemetry();
+        fetchLiveEvents();
+      }
+    }, 4000);
     return () => clearInterval(timer);
   }, [activeTab]);
 
-  // Dynamic real-time socket subscription for live transmissions feed
+  // Real-Time Socket Connection & Multi-Channel Admin Monitoring
   useEffect(() => {
     if (!socket) return;
+
+    // Join root telemetry & monitoring room
+    socket.emit('adminJoinMonitoring', { token: adminToken });
 
     const handleNewMessage = (msg) => {
       if (!msg) return;
@@ -292,11 +337,25 @@ export function AdminPanel({
     };
 
     const handleChatCleared = () => {
-      setMessages(prev => prev.filter(m => m.room !== 'public'));
+      setMessages(prev => prev.filter(m => m.room === 'society' || m.isSociety));
+      fetchMessages();
     };
 
     const handleSocietyChatCleared = () => {
-      setMessages(prev => prev.filter(m => m.room !== 'society'));
+      setMessages(prev => prev.filter(m => m.room !== 'society' && !m.isSociety));
+      fetchMessages();
+    };
+
+    const handleAdminLiveEvent = (ev) => {
+      if (!ev || isStreamPaused) return;
+      setLiveEvents(prev => {
+        if (prev.some(e => e.id === ev.id)) return prev;
+        return [ev, ...prev.slice(0, 99)];
+      });
+    };
+
+    const handleMaintenanceNotice = (data) => {
+      setMaintenanceActive(Boolean(data?.active));
     };
 
     socket.on('message', handleNewMessage);
@@ -305,16 +364,40 @@ export function AdminPanel({
     socket.on('societyMessageDeleted', handleSocietyMessageDeleted);
     socket.on('chatCleared', handleChatCleared);
     socket.on('societyChatCleared', handleSocietyChatCleared);
+    socket.on('adminLiveEvent', handleAdminLiveEvent);
+    socket.on('maintenanceNotice', handleMaintenanceNotice);
+
+    // Live WebSocket ping measurement
+    const measurePing = () => {
+      const start = Date.now();
+      socket.timeout(2500).emit('pingTelemetry', (err) => {
+        if (!err) {
+          setWsLatency(Date.now() - start);
+        } else {
+          const fetchStart = Date.now();
+          fetch(`${serverUrl}/api/admin/dashboard/telemetry`, {
+            headers: { Authorization: `Bearer ${adminToken}` }
+          }).then(res => {
+            if (res.ok) setWsLatency(Date.now() - fetchStart);
+          }).catch(() => {});
+        }
+      });
+    };
+    measurePing();
+    const pingInterval = setInterval(measurePing, 4000);
 
     return () => {
+      clearInterval(pingInterval);
       socket.off('message', handleNewMessage);
       socket.off('societyMessage', handleNewSocietyMessage);
       socket.off('messageDeleted', handleMessageDeleted);
       socket.off('societyMessageDeleted', handleSocietyMessageDeleted);
       socket.off('chatCleared', handleChatCleared);
       socket.off('societyChatCleared', handleSocietyChatCleared);
+      socket.off('adminLiveEvent', handleAdminLiveEvent);
+      socket.off('maintenanceNotice', handleMaintenanceNotice);
     };
-  }, [socket]);
+  }, [socket, adminToken, isStreamPaused, serverUrl]);
 
   // Periodic polling for messages when on transmissions feed tab
   useEffect(() => {
@@ -432,10 +515,11 @@ export function AdminPanel({
         const data = await res.json();
         flashNotice(data.message || `${roomType.toUpperCase()} room cleared successfully!`);
         if (roomType === 'society') {
-          setMessages(prev => prev.filter(m => m.room !== 'society'));
+          setMessages(prev => prev.filter(m => m.room !== 'society' && !m.isSociety));
         } else {
-          setMessages(prev => prev.filter(m => m.room !== 'public'));
+          setMessages(prev => prev.filter(m => m.room === 'society' || m.isSociety));
         }
+        fetchMessages();
       } else {
         flashNotice(`Failed to clear ${roomType} room`, 'error');
       }
@@ -444,6 +528,58 @@ export function AdminPanel({
     } finally {
       setPurgingRoom(false);
       setConfirmPurgeRoom(null);
+    }
+  };
+
+  // Real-Time System Cache & Buffer Flush
+  const handleFlushCache = async () => {
+    setFlushingCache(true);
+    try {
+      const res = await fetch(`${serverUrl}/api/admin/dashboard/system/flush-cache`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        flashNotice(data.message || 'System cache buffers purged!');
+        fetchTelemetry();
+        fetchLiveEvents();
+      } else {
+        flashNotice('Failed to flush system cache', 'error');
+      }
+    } catch (err) {
+      flashNotice(`Error: ${err.message}`, 'error');
+    } finally {
+      setFlushingCache(false);
+    }
+  };
+
+  // Real-Time Maintenance Mode / Traffic Shield Toggle
+  const handleToggleMaintenance = async () => {
+    setTogglingMaintenance(true);
+    try {
+      const res = await fetch(`${serverUrl}/api/admin/dashboard/system/toggle-maintenance`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ reason: maintenanceActive ? 'Maintenance completed' : 'Administrative maintenance active' })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMaintenanceActive(Boolean(data.maintenanceActive));
+        flashNotice(`Traffic Shield / Maintenance ${data.maintenanceActive ? 'ENGAGED' : 'DISENGAGED'}`);
+        fetchTelemetry();
+        fetchLiveEvents();
+      }
+    } catch (err) {
+      flashNotice(`Error: ${err.message}`, 'error');
+    } finally {
+      setTogglingMaintenance(false);
     }
   };
 
@@ -804,8 +940,8 @@ export function AdminPanel({
     );
   });
 
-  const pendingApps = societyApps.filter(a => a.status === 'pending');
-  const filteredApps = societyApps.filter((a) => {
+  const pendingApps = societyApps.filter(a => a.status === 'pending' || (!a.status && a.status !== 'approved' && a.status !== 'rejected'));
+  const filteredApps = pendingApps.filter((a) => {
     if (!societySearch) return true;
     const q = societySearch.toLowerCase();
     return (
@@ -1025,6 +1161,57 @@ export function AdminPanel({
                     <span className="metric-label">REGISTERED PROFILES</span>
                     <span className="metric-val emerald">{telemetry?.stats?.totalRegisteredProfiles || 0}</span>
                   </div>
+                  <div className="metric-box">
+                    <span className="metric-label">WS LATENCY (PING)</span>
+                    <span className={`metric-val ${wsLatency !== null && wsLatency < 80 ? 'cyan' : wsLatency !== null && wsLatency < 200 ? 'amber' : 'red'}`}>
+                      {wsLatency !== null ? `${wsLatency} ms` : 'MEASURING...'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* REAL-TIME OPERATIONS & SYSTEM CONTROL STRIP */}
+              <div className="telemetry-ops-strip">
+                <div className="ops-strip-title">
+                  <Zap size={14} className="cyan-text" />
+                  <span>REAL-TIME ROOT CONTROLS:</span>
+                </div>
+                <div className="ops-buttons-group">
+                  <button
+                    type="button"
+                    className="ops-action-btn cache"
+                    disabled={flushingCache}
+                    onClick={handleFlushCache}
+                    title="Purge in-memory message buffers and invoke V8 engine garbage collection"
+                  >
+                    {flushingCache ? <RefreshCw size={13} className="spin-icon" /> : <Trash2 size={13} />}
+                    <span>{flushingCache ? 'Flushing Memory Buffers...' : 'Flush System Cache / Heap GC'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`ops-action-btn shield ${maintenanceActive ? 'engaged' : ''}`}
+                    disabled={togglingMaintenance}
+                    onClick={handleToggleMaintenance}
+                    title="Toggle traffic shield to protect server during heavy loads"
+                  >
+                    <Shield size={13} />
+                    <span>{maintenanceActive ? '⚠️ Traffic Shield: ENGAGED' : '🛡️ Traffic Shield: DISENGAGED'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="ops-action-btn sync"
+                    onClick={() => {
+                      fetchTelemetry();
+                      fetchLiveEvents();
+                      flashNotice('Real-time telemetry and event stream recalibrated.');
+                    }}
+                    title="Force immediate refresh of all hardware and network diagnostics"
+                  >
+                    <RefreshCw size={13} />
+                    <span>Recalibrate Telemetry</span>
+                  </button>
                 </div>
               </div>
 
@@ -1237,6 +1424,69 @@ export function AdminPanel({
                       <span>Export Report (.json)</span>
                     </button>
                   </div>
+                </div>
+              </div>
+
+              {/* REAL-TIME SERVER INGRESS & LIVE EVENT STREAM */}
+              <div className="telemetry-card live-stream-card">
+                <div className="card-header stream-header">
+                  <div className="stream-header-left">
+                    <span className="live-stream-pulse" />
+                    <h4>LIVE SERVER INGRESS &amp; EVENT STREAM</h4>
+                    <span className="stream-badge-count">{liveEvents.length} EVENTS RECORDED</span>
+                  </div>
+                  <div className="stream-header-actions">
+                    <button
+                      type="button"
+                      className={`stream-ctrl-btn ${isStreamPaused ? 'paused' : ''}`}
+                      onClick={() => setIsStreamPaused(!isStreamPaused)}
+                      title={isStreamPaused ? 'Resume stream' : 'Pause live auto-update'}
+                    >
+                      {isStreamPaused ? <Play size={12} /> : <Pause size={12} />}
+                      <span>{isStreamPaused ? 'Resume Stream' : 'Pause Stream'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="stream-ctrl-btn danger"
+                      onClick={() => {
+                        setLiveEvents([]);
+                        flashNotice('Event stream buffer cleared.');
+                      }}
+                      title="Clear terminal event log"
+                    >
+                      <Trash2 size={12} />
+                      <span>Clear Buffer</span>
+                    </button>
+                  </div>
+                </div>
+                <p className="card-subtext">
+                  Continuous zero-latency event socket logging all administrative actions, socket handshakes, broadcasts, and system optimizations as they execute.
+                </p>
+
+                <div className="live-event-terminal-window">
+                  {liveEvents.length === 0 ? (
+                    <div className="terminal-empty-state">
+                      <span className="terminal-prompt">&gt;</span> Listening for live server socket events and administrative dispatches...
+                    </div>
+                  ) : (
+                    liveEvents.map((ev) => {
+                      const timeStr = new Date(ev.timestamp).toLocaleTimeString();
+                      return (
+                        <div key={ev.id} className={`terminal-event-row ${ev.severity || 'info'}`}>
+                          <span className="event-time">[{timeStr}]</span>
+                          <span className={`event-type-pill ${ev.severity || 'info'}`}>
+                            {ev.type || 'SYSTEM_EVENT'}
+                          </span>
+                          <span className="event-summary">{ev.summary}</span>
+                          {ev.metadata && Object.keys(ev.metadata).length > 0 && (
+                            <span className="event-meta">
+                              {JSON.stringify(ev.metadata)}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
             </div>
@@ -1688,9 +1938,15 @@ export function AdminPanel({
                   <span style={{ fontSize: '0.72rem', color: '#64748b', fontFamily: 'monospace' }}>
                     {filteredMessages.length} TRANSMISSIONS LOADED
                   </span>
-                  <button type="button" className="admin-btn-refresh" onClick={fetchMessages}>
-                    <RefreshCw size={13} />
-                    <span>Refresh</span>
+                  <button
+                    type="button"
+                    className="admin-btn-refresh"
+                    onClick={fetchMessages}
+                    disabled={isRefreshingMessages}
+                    title="Force refresh transmissions from public and Secret Society channels"
+                  >
+                    <RefreshCw size={13} className={isRefreshingMessages ? 'spin-icon' : ''} />
+                    <span>{isRefreshingMessages ? 'Refreshing...' : 'Refresh'}</span>
                   </button>
                 </div>
               </div>

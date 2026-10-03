@@ -1,5 +1,5 @@
 {
-  "updatedAt": 1790858443107,
+  "updatedAt": 1791021928223,
   "summary": "",
   "topics": [],
   "welcomedUsers": [
@@ -25,11 +25,11 @@
   ],
   "lastReturnGreetTime": {},
   "dailyNewsStats": {
-    "date": "2026-10-01",
-    "count": 3,
+    "date": "2026-10-03",
+    "count": 1,
     "targetToday": 10,
-    "lastSentTime": 1790858441101,
-    "lastCategory": "science"
+    "lastSentTime": 1791020567325,
+    "lastCategory": "tech"
   },
   "users": [
     {
@@ -45,10 +45,10 @@
       "key": "uid:usr_2i4zg49q8",
       "userId": "usr_2i4zg49q8",
       "alias": "darshanaa",
-      "count": 8,
+      "count": 10,
       "notes": [],
       "topics": [],
-      "lastSeen": 1790765295703
+      "lastSeen": 1791021926212
     },
     {
       "key": "uid:usr_j4ltzh3hg",

@@ -711,6 +711,10 @@ io.on('connection', (socket) => {
   broadcastUserCount();
   socket.emit('onlineUsers', getOnlineUserAliases());
 
+  socket.on('pingTelemetry', (ack) => {
+    if (typeof ack === 'function') ack({ pong: true, time: Date.now() });
+  });
+
   const handleUserDisconnect = (socketId) => {
     const user = activeUsers.get(socketId);
     activeUsers.delete(socketId);
@@ -1183,6 +1187,29 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('adminJoinMonitoring', (payload) => {
+    const adminToken = typeof payload === 'string' ? payload : payload?.token;
+    try {
+      const { verifyAdminToken } = require('./admin/adminAuthSession');
+      const session = verifyAdminToken(adminToken);
+      if (session) {
+        socket.join('admin_telemetry_room');
+        socket.join('secret_society_room');
+        socket.emit('adminMonitoringActive', {
+          status: 'CONNECTED',
+          username: session.username,
+          serverUptime: Math.round(process.uptime()),
+          timestamp: Date.now()
+        });
+        console.log(`[Admin Socket]: Socket ${socket.id} joined admin_telemetry_room as @${session.username}`);
+      } else {
+        socket.emit('adminMonitoringError', { error: 'Invalid admin credentials' });
+      }
+    } catch (err) {
+      console.error('[Admin Socket Error]:', err.message);
+    }
+  });
+
   socket.on('societyMessage', (msg) => {
     if (!msg) return;
     if (!socket.rooms.has('secret_society_room')) {
@@ -1233,6 +1260,7 @@ io.on('connection', (socket) => {
     saveSocietyMessages(msgs);
 
     io.to('secret_society_room').emit('societyMessage', societyMsg);
+    io.to('admin_telemetry_room').emit('societyMessage', societyMsg);
 
     // Advanced James Bot in Secret Society Room (Enclave Intelligence Engine)
     const lower = (societyMsg.text || '').toLowerCase();

@@ -827,3 +827,207 @@
     margin: 1rem;
   }
 }
+
+/* ==========================================================================
+   GLOBE.GL 3D STALK PINS WITH FLOATING AVATARS (Google Earth Style)
+   ========================================================================== */
+
+.globe-stalk-pin {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translate(-50%, -100%);
+  cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.globe-stalk-pin:hover,
+.globe-stalk-pin.selected {
+  z-index: 100;
+  transform: translate(-50%, -105%) scale(1.15);
+}
+
+.pin-floating-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.pin-avatar-badge {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid #00f3ff;
+  background: #020617;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-shadow: 0 0 12px rgba(0, 243, 255, 0.6);
+  transition: all 0.2s ease;
+}
+
+.pin-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.pin-avatar-char {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #f8fafc;
+  font-family: var(--font-mono, monospace);
+}
+
+.pin-badge-crown {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  font-size: 0.65rem;
+  filter: drop-shadow(0 0 4px #ef4444);
+}
+
+.pin-badge-seal {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  font-size: 0.7rem;
+  font-weight: 900;
+  color: #ffd700;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 50%;
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 0 4px #ffd700);
+}
+
+.pin-alias-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.45rem;
+  background: rgba(2, 6, 23, 0.92);
+  border: 1px solid #00f3ff;
+  border-radius: 12px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.pin-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.pin-stalk-stem {
+  width: 2px;
+  height: 38px;
+  background: linear-gradient(to bottom, #00f3ff, rgba(0, 243, 255, 0.2));
+  box-shadow: 0 0 6px rgba(0, 243, 255, 0.4);
+}
+
+.pin-ground-anchor {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #00f3ff;
+  box-shadow: 0 0 10px #00f3ff;
+}
+
+/* Minimize Button on Visitor Dossier Card */
+.visitor-card-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.btn-minimize-dossier {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #94a3b8;
+  border-radius: 5px;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-minimize-dossier:hover {
+  background: rgba(0, 243, 255, 0.15);
+  border-color: #00f3ff;
+  color: #00f3ff;
+  box-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
+}
+
+/* Compact Minimized Pill on Bottom-Left */
+.globe-minimized-pill {
+  position: absolute;
+  left: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.95rem;
+  background: rgba(13, 21, 34, 0.92);
+  border: 1px solid rgba(0, 243, 255, 0.4);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6), 0 0 12px rgba(0, 243, 255, 0.2);
+  backdrop-filter: blur(12px);
+  color: #e2e8f0;
+  font-family: inherit;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.globe-minimized-pill:hover {
+  background: rgba(15, 28, 48, 0.96);
+  border-color: #00f3ff;
+  box-shadow: 0 0 18px rgba(0, 243, 255, 0.4);
+  transform: translateY(-2px);
+}
+
+.globe-minimized-pill .min-flag {
+  font-size: 1.1rem;
+}
+
+.globe-minimized-pill .min-alias {
+  color: #00f3ff;
+  font-family: var(--font-mono, monospace);
+}
+
+.globe-minimized-pill .min-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  color: #94a3b8;
+  padding-left: 0.4rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.globe-minimized-pill:hover .min-action {
+  color: #f1f5f9;
+}
+

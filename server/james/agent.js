@@ -40,7 +40,7 @@ class JamesAgent {
     this.getUserCount = options.getUserCount || (() => 1);
     this.getOnlineUsersList = options.getOnlineUsersList || (() => []);
     this.getAllMessages = options.getAllMessages || (() => []);
-    this.onPollUpdated = options.onPollUpdated || (() => {});
+    this.onPollUpdated = options.onPollUpdated || (() => { });
 
     // 1. Initialize Subsystems
     this.webResearch = new WebResearch();
@@ -330,7 +330,7 @@ class JamesAgent {
       const targetUser = msg.alias || 'User';
       const reason = decision.reason || 'Community guideline violation';
       console.warn(`[JamesAgent Moderation]: Violation detected for ${targetUser}: ${reason}`);
-      
+
       setTimeout(() => {
         this.broadcastMessage(`⚠️ @${targetUser}: ${reason} Please keep the conversation friendly and avoid message flooding.`);
       }, 800);
@@ -689,7 +689,7 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
                     snippet: 'Direct site fetch'
                   });
                 }
-              } catch (e) {}
+              } catch (e) { }
               this.io.emit('jamesStatus', {
                 alias: 'James',
                 status: 'searching',
@@ -803,7 +803,7 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
                   allowDownload: true
                 };
               }
-            } catch (e) {}
+            } catch (e) { }
           } else if (fnName === 'generate_pdf') {
             try {
               const parsed = JSON.parse(toolOutput);
@@ -816,7 +816,7 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
                   allowDownload: true
                 };
               }
-            } catch (e) {}
+            } catch (e) { }
           } else if (fnName === 'generate_qr_code') {
             try {
               const parsed = JSON.parse(toolOutput);
@@ -827,7 +827,7 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
                   allowDownload: true
                 };
               }
-            } catch (e) {}
+            } catch (e) { }
           } else if (fnName === 'generate_voice') {
             try {
               const parsed = JSON.parse(toolOutput);
@@ -839,7 +839,7 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
                   allowDownload: true
                 };
               }
-            } catch (e) {}
+            } catch (e) { }
           } else if (fnName === 'create_poll') {
             try {
               const parsed = JSON.parse(toolOutput);
@@ -849,7 +849,7 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
                   fileType: 'application/x-poll'
                 };
               }
-            } catch (e) {}
+            } catch (e) { }
           } else if (fnName === 'run_code') {
             try {
               const parsed = JSON.parse(toolOutput);
@@ -857,7 +857,7 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
                 codeExecution: parsed,
                 fileType: 'application/x-code-result'
               };
-            } catch (e) {}
+            } catch (e) { }
           } else if (fnName === 'get_weather') {
             try {
               const parsed = JSON.parse(toolOutput);
@@ -868,7 +868,7 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
                   fileType: 'application/x-weather-card'
                 };
               }
-            } catch (e) {}
+            } catch (e) { }
           } else if (fnName === 'get_world_news') {
             try {
               const parsed = JSON.parse(toolOutput);
@@ -884,7 +884,7 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
                   this.io.emit('pollCreated', parsed.debatePoll);
                 }
               }
-            } catch (e) {}
+            } catch (e) { }
           } else if (fnName === 'get_crypto_prices') {
             try {
               const parsed = JSON.parse(toolOutput);
@@ -895,7 +895,7 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
                   fileType: 'application/x-crypto-card'
                 };
               }
-            } catch (e) {}
+            } catch (e) { }
           } else if (fnName === 'inspect_github_repo') {
             try {
               const parsed = JSON.parse(toolOutput);
@@ -906,7 +906,7 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
                   fileType: 'application/x-repo-card'
                 };
               }
-            } catch (e) {}
+            } catch (e) { }
           } else if (fnName === 'get_wiki_summary') {
             try {
               const parsed = JSON.parse(toolOutput);
@@ -917,7 +917,7 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
                   fileType: 'application/x-wiki-card'
                 };
               }
-            } catch (e) {}
+            } catch (e) { }
           }
 
           // Extract web sources for ChatGPT-style source badges (deduplicated by domain)
@@ -941,11 +941,11 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
                           snippet: item.snippet || ''
                         });
                       }
-                    } catch (urlErr) {}
+                    } catch (urlErr) { }
                   }
                 }
               }
-            } catch (pErr) {}
+            } catch (pErr) { }
 
             if (collectedSources.length > 0) {
               this.io.emit('jamesStatus', {
@@ -1037,7 +1037,7 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
         if (card.sourceUrl) {
           try {
             sourceDomain = new URL(card.sourceUrl).hostname.replace(/^www\./, '');
-          } catch (e) {}
+          } catch (e) { }
         } else if (card.source && card.source.includes('.')) {
           sourceDomain = card.source.replace(/^@/, '').toLowerCase().trim();
         }

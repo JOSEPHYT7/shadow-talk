@@ -442,7 +442,7 @@ module.exports = function createAdminRouter(serverContext) {
   });
 
   /**
-   * Delete public transmission by ID (moderation)
+   * Delete public transmission by ID (moderation with resilient fallback)
    */
   router.delete('/dashboard/message/:id', requireAdminAuth, (req, res) => {
     const msgId = req.params.id;
@@ -458,6 +458,7 @@ module.exports = function createAdminRouter(serverContext) {
       }
 
       io.emit('messageDeleted', { id: msgId, messageId: msgId });
+      io.to('admin_telemetry_room').emit('messageDeleted', { id: msgId, messageId: msgId });
 
       logAuditEvent('MESSAGE_MODERATED', {
         msgId,
@@ -466,14 +467,39 @@ module.exports = function createAdminRouter(serverContext) {
         admin: req.adminUsername
       }, getClientIp(req));
 
-      return res.json({ success: true, messageId: msgId });
+      return res.json({ success: true, messageId: msgId, room: 'public' });
     }
 
-    res.status(404).json({ error: 'Message not found in public room' });
+    // Resilient fallback: check if message exists in secret society stream
+    const socMsgs = loadSocietyMessages();
+    const sIdx = socMsgs.findIndex(m => String(m.id) === String(msgId));
+    if (sIdx >= 0) {
+      const deleted = socMsgs.splice(sIdx, 1)[0];
+      saveSocietyMessages(socMsgs);
+
+      if (deleted && deleted.fileUrl) {
+        deleteUploadedFile(deleted.fileUrl);
+      }
+
+      io.to('secret_society_room').emit('societyMessageDeleted', { messageId: msgId, id: msgId });
+      io.to('admin_telemetry_room').emit('societyMessageDeleted', { messageId: msgId, id: msgId });
+      io.emit('messageDeleted', { id: msgId, messageId: msgId });
+
+      logAuditEvent('SOCIETY_MESSAGE_MODERATED', {
+        msgId,
+        author: deleted?.alias,
+        room: 'society',
+        admin: req.adminUsername
+      }, getClientIp(req));
+
+      return res.json({ success: true, messageId: msgId, room: 'society' });
+    }
+
+    res.status(404).json({ error: 'Message not found in either public or secret society stream' });
   });
 
   /**
-   * Delete Secret Society transmission by ID (moderation)
+   * Delete Secret Society transmission by ID (moderation with resilient fallback)
    */
   router.delete('/dashboard/society/message/:id', requireAdminAuth, (req, res) => {
     const msgId = req.params.id;
@@ -489,6 +515,8 @@ module.exports = function createAdminRouter(serverContext) {
       }
 
       io.to('secret_society_room').emit('societyMessageDeleted', { messageId: msgId, id: msgId });
+      io.to('admin_telemetry_room').emit('societyMessageDeleted', { messageId: msgId, id: msgId });
+      io.emit('societyMessageDeleted', { messageId: msgId, id: msgId });
 
       logAuditEvent('SOCIETY_MESSAGE_MODERATED', {
         msgId,
@@ -497,10 +525,33 @@ module.exports = function createAdminRouter(serverContext) {
         admin: req.adminUsername
       }, getClientIp(req));
 
-      return res.json({ success: true, messageId: msgId });
+      return res.json({ success: true, messageId: msgId, room: 'society' });
     }
 
-    res.status(404).json({ error: 'Message not found in secret society stream' });
+    // Resilient fallback: check public stream
+    const pubIdx = messages.findIndex(m => String(m.id) === String(msgId));
+    if (pubIdx >= 0) {
+      const deleted = messages.splice(pubIdx, 1)[0];
+      saveMessages(messages);
+
+      if (deleted && deleted.fileUrl) {
+        deleteUploadedFile(deleted.fileUrl);
+      }
+
+      io.emit('messageDeleted', { id: msgId, messageId: msgId });
+      io.to('admin_telemetry_room').emit('messageDeleted', { id: msgId, messageId: msgId });
+
+      logAuditEvent('MESSAGE_MODERATED', {
+        msgId,
+        author: deleted?.alias,
+        room: 'public',
+        admin: req.adminUsername
+      }, getClientIp(req));
+
+      return res.json({ success: true, messageId: msgId, room: 'public' });
+    }
+
+    res.status(404).json({ error: 'Message not found in either secret society or public stream' });
   });
 
   /**
@@ -513,6 +564,7 @@ module.exports = function createAdminRouter(serverContext) {
 
     io.emit('allMessages', []);
     io.emit('chatCleared', { clearedBy: req.adminUsername, timestamp: Date.now(), previousCount });
+    io.to('admin_telemetry_room').emit('chatCleared', { clearedBy: req.adminUsername, timestamp: Date.now(), previousCount });
 
     logAuditEvent('PUBLIC_CHAT_PURGED', {
       clearedCount: previousCount,
@@ -533,6 +585,8 @@ module.exports = function createAdminRouter(serverContext) {
 
     io.to('secret_society_room').emit('societyHistory', []);
     io.to('secret_society_room').emit('societyChatCleared', { clearedBy: req.adminUsername, timestamp: Date.now(), previousCount });
+    io.to('admin_telemetry_room').emit('societyChatCleared', { clearedBy: req.adminUsername, timestamp: Date.now(), previousCount });
+    io.emit('societyChatCleared', { clearedBy: req.adminUsername, timestamp: Date.now(), previousCount });
 
     logAuditEvent('SOCIETY_CHAT_PURGED', {
       clearedCount: previousCount,
@@ -686,6 +740,98 @@ module.exports = function createAdminRouter(serverContext) {
     res.json(getAuditLogs());
   });
 
+  // In-memory live event ring buffer for real-time admin telemetry
+  const liveServerEvents = [];
+  function pushServerEvent(type, summary, severity = 'info', metadata = {}) {
+    const ev = {
+      id: 'ev_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+      timestamp: Date.now(),
+      type,
+      summary,
+      severity,
+      metadata
+    };
+    liveServerEvents.unshift(ev);
+    if (liveServerEvents.length > 100) liveServerEvents.length = 100;
+    io.to('admin_telemetry_room').emit('adminLiveEvent', ev);
+    return ev;
+  }
+
+  // Maintenance mode state
+  let maintenanceModeActive = false;
+
+  /**
+   * System Cache & Buffer Purge
+   */
+  router.post('/dashboard/system/flush-cache', requireAdminAuth, (req, res) => {
+    const beforeMem = process.memoryUsage();
+    if (global.gc) {
+      try { global.gc(); } catch {}
+    }
+    const afterMem = process.memoryUsage();
+    const freedBytes = Math.max(0, beforeMem.heapUsed - afterMem.heapUsed);
+    const freedMb = (freedBytes / (1024 * 1024)).toFixed(2);
+
+    logAuditEvent('SYSTEM_CACHE_FLUSHED', {
+      admin: req.adminUsername,
+      freedMb,
+      beforeHeapUsedMb: Math.round(beforeMem.heapUsed / (1024 * 1024)),
+      afterHeapUsedMb: Math.round(afterMem.heapUsed / (1024 * 1024))
+    }, getClientIp(req));
+
+    pushServerEvent('SYSTEM_OPTIMIZED', `Memory buffers flushed by @${req.adminUsername}. Reclaimed ${freedMb} MB heap.`, 'success', { freedMb });
+
+    res.json({
+      success: true,
+      message: `System cache flushed. Reclaimed ${freedMb} MB heap buffer.`,
+      freedMb,
+      currentHeapUsedMb: Math.round(afterMem.heapUsed / (1024 * 1024))
+    });
+  });
+
+  /**
+   * Toggle Server Maintenance / Traffic Shield Mode
+   */
+  router.post('/dashboard/system/toggle-maintenance', requireAdminAuth, (req, res) => {
+    maintenanceModeActive = !maintenanceModeActive;
+    const { reason = 'Scheduled system infrastructure maintenance in progress' } = req.body || {};
+
+    io.emit('maintenanceNotice', {
+      active: maintenanceModeActive,
+      reason,
+      activatedBy: req.adminUsername,
+      timestamp: Date.now()
+    });
+
+    logAuditEvent('MAINTENANCE_MODE_TOGGLED', {
+      active: maintenanceModeActive,
+      reason,
+      admin: req.adminUsername
+    }, getClientIp(req));
+
+    pushServerEvent(
+      maintenanceModeActive ? 'MAINTENANCE_ENGAGED' : 'MAINTENANCE_DISENGAGED',
+      `Maintenance mode ${maintenanceModeActive ? 'ACTIVATED' : 'DEACTIVATED'} by @${req.adminUsername}.`,
+      maintenanceModeActive ? 'warning' : 'success'
+    );
+
+    res.json({
+      success: true,
+      maintenanceActive: maintenanceModeActive,
+      reason
+    });
+  });
+
+  /**
+   * Real-Time Server Event Stream
+   */
+  router.get('/dashboard/telemetry/live-stream', requireAdminAuth, (req, res) => {
+    res.json({
+      events: liveServerEvents,
+      maintenanceActive: maintenanceModeActive
+    });
+  });
+
   // ----------------------------------------------------------------
   // 3. GEOLOCATION VISITOR TRACKING & IPSTACK TELEMETRY
   // ----------------------------------------------------------------
@@ -743,12 +889,16 @@ module.exports = function createAdminRouter(serverContext) {
                            (u?.alias && userProfiles.get(u.alias.toLowerCase())) ||
                            {};
 
-          // Determine user Tier & Color
-          const isAdmin = Boolean(geo.isCurrentAdmin || u?.isAdmin || userProf.role === 'admin' || userProf.isAdmin);
+          // Determine user Tier & Color strictly by authenticated identity
+          const isAdmin = Boolean(
+            (req.adminUsername && u?.alias && u.alias.toLowerCase() === req.adminUsername.toLowerCase()) ||
+            u?.isAdmin === true ||
+            userProf.role === 'admin' ||
+            userProf.isAdmin === true
+          );
           const isMember = Boolean(!isAdmin && (
             societyMembers.some(m => m.alias && u?.alias && m.alias.toLowerCase() === u.alias.toLowerCase() && m.status === 'active') ||
-            userProf.isSocietyMember ||
-            userProf.isVerified
+            userProf.isSocietyMember === true
           ));
 
           let userTier = 'user';

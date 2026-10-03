@@ -12,6 +12,7 @@
   "dependencies": {
     "crypto-js": "^4.2.0",
     "framer-motion": "^13.4.0",
+    "globe.gl": "^2.46.2",
     "lucide-react": "^1.39.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

@@ -230,7 +230,7 @@ async function resolveIpLocation(rawIp, seedHint = '') {
         ...realHost,
         ip: `${realHost.ip} (Localhost / Master Relay)`,
         localIp: cleanIp,
-        isCurrentAdmin: true
+        isLocal: true
       };
       geoCache.set(cleanIp, localResult);
       return localResult;
