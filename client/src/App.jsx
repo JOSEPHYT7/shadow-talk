@@ -5599,8 +5599,9 @@ function App() {
                 type="button"
                 className="auth-modal-close"
                 onClick={() => setShowWithdrawModal(false)}
+                title="Close"
               >
-                ✕
+                <X size={18} />
               </button>
             </div>
             <p className="auth-modal-desc">
@@ -5642,9 +5643,9 @@ function App() {
       {/* Modal: Request Username Change (for Verified Members) */}
       {showNameChangeModal && (
         <div className="auth-modal-overlay" onClick={() => setShowNameChangeModal(false)}>
-          <div className="auth-modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+          <div className="auth-modal-card" onClick={e => e.stopPropagation()}>
             <div className="auth-modal-header">
-              <div className="auth-modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className="auth-modal-title">
                 <Edit3 size={18} color="#00f3ff" />
                 <span>REQUEST USERNAME CHANGE</span>
               </div>
@@ -5652,8 +5653,9 @@ function App() {
                 type="button"
                 className="auth-modal-close"
                 onClick={() => setShowNameChangeModal(false)}
+                title="Close"
               >
-                ✕
+                <X size={18} />
               </button>
             </div>
             <p className="auth-modal-desc">
@@ -5667,7 +5669,7 @@ function App() {
                   className="auth-text-field"
                   value={`@${identity.alias}`}
                   disabled
-                  style={{ opacity: 0.7, background: 'rgba(255,255,255,0.03)' }}
+                  style={{ opacity: 0.7, background: 'rgba(255,255,255,0.03)', cursor: 'not-allowed' }}
                 />
               </div>
               <div className="auth-field-group">
@@ -5677,7 +5679,7 @@ function App() {
                   <input
                     type="text"
                     className="auth-text-field"
-                    style={{ paddingLeft: '28px' }}
+                    style={{ paddingLeft: '28px', width: '100%' }}
                     placeholder="new_alias"
                     value={newNameInput}
                     onChange={(e) => setNewNameInput(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ''))}
