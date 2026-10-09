@@ -198,7 +198,10 @@ const {
   validateSocietyToken,
   loadSocietyMessages,
   saveSocietyMessages,
-  submitWithdrawalRequest
+  submitWithdrawalRequest,
+  submitNameChangeRequest,
+  loadNameChangeRequests,
+  loadMembers
 } = require('./services/secretSocietyService');
 const { EnclaveIntelligenceService } = require('./services/enclaveIntelligenceService');
 const enclaveIntel = new EnclaveIntelligenceService();
@@ -216,6 +219,39 @@ app.post('/api/membership/withdraw-request', (req, res) => {
     res.json(result);
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// Name Change Request endpoint for verified members
+app.post('/api/membership/name-change-request', (req, res) => {
+  try {
+    const { alias, userId, requestedAlias, reason } = req.body || {};
+    const result = submitNameChangeRequest({ alias, userId, requestedAlias, reason });
+    io.emit('adminNotice', {
+      type: 'SOCIETY_NAME_CHANGE_REQUESTED',
+      alias,
+      requestedAlias,
+      reason,
+      timestamp: Date.now()
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/membership/name-change-request/status', (req, res) => {
+  try {
+    const { userId, alias } = req.query || {};
+    const list = loadNameChangeRequests();
+    const cleanAlias = (alias || '').trim().replace(/^@/, '').toLowerCase();
+    const pending = list.find(r =>
+      ((userId && r.userId === userId) || (cleanAlias && r.currentAlias.toLowerCase() === cleanAlias)) &&
+      r.status === 'pending'
+    );
+    res.json({ pending: pending || null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -472,7 +508,8 @@ const getOnlineUserAliases = () => {
     const sock = io.sockets.sockets.get(socketId);
     if (sock && sock.connected && user && user.alias) {
       if (user.alias !== 'James' && user.userId !== 'bot_james') {
-        aliases.add(user.alias);
+        const displayAlias = user.alias.toLowerCase() === 'joseph_creator' ? 'joseph' : user.alias;
+        aliases.add(displayAlias);
       }
     }
   }
@@ -700,6 +737,15 @@ function broadcastSocietyCount() {
   io.to('secret_society_room').emit('societyOnlineMembers', uniqueAliases);
 }
 
+// Security: Mask the administrator username in chat to protect secret identity
+function maskAdminDisplayAlias(alias) {
+  if (!alias || typeof alias !== 'string') return alias || '';
+  if (alias.toLowerCase() === 'joseph_creator') {
+    return 'joseph';
+  }
+  return alias;
+}
+
 // Socket.IO connection
 io.on('connection', (socket) => {
   const clientIp = socket.handshake.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
@@ -767,11 +813,12 @@ io.on('connection', (socket) => {
           saveProfile(profile);
           io.emit('userProfileUpdated', profile);
           if (profile.alias && profile.alias !== 'Visitor' && profile.alias !== 'James') {
+            const displayAlias = maskAdminDisplayAlias(profile.alias);
             io.emit('presenceNotice', {
               id: 'pres_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-              alias: profile.alias,
+              alias: displayAlias,
               type: 'went_offline',
-              text: `@${profile.alias} went offline`,
+              text: `@${displayAlias} went offline`,
               timestamp: Date.now()
             });
           }
@@ -789,11 +836,12 @@ io.on('connection', (socket) => {
   socket.on('userLeaving', () => {
     const user = activeUsers.get(socket.id);
     if (user && user.alias && user.alias !== 'Visitor' && user.alias !== 'James') {
+      const displayAlias = maskAdminDisplayAlias(user.alias);
       io.emit('presenceNotice', {
         id: 'pres_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-        alias: user.alias,
+        alias: displayAlias,
         type: 'left_room',
-        text: `@${user.alias} left the room`,
+        text: `@${displayAlias} left the room`,
         timestamp: Date.now()
       });
     }
@@ -868,11 +916,12 @@ io.on('connection', (socket) => {
 
       // Broadcast Telegram-style presence notice (joined the room / came online back)
       if (!isRefresh && userData.alias && userData.alias !== 'Visitor' && userData.alias !== 'James') {
+        const displayAlias = maskAdminDisplayAlias(userData.alias);
         const pType = isReturning ? 'online_back' : 'joined_room';
-        const pText = isReturning ? `@${userData.alias} came online back` : `@${userData.alias} joined the room`;
+        const pText = isReturning ? `@${displayAlias} came online back` : `@${displayAlias} joined the room`;
         io.emit('presenceNotice', {
           id: 'pres_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-          alias: userData.alias,
+          alias: displayAlias,
           type: pType,
           text: pText,
           timestamp: Date.now()
@@ -899,11 +948,70 @@ io.on('connection', (socket) => {
       const userId = userData.userId || ('usr_' + userData.alias.toLowerCase());
       let existing = getOrCreateProfile(userId, userData.alias) || {};
 
+      // Check if user is an inducted Secret Society Member
+      let isInductedMember = false;
+      try {
+        const members = loadMembers();
+        isInductedMember = members.some(m =>
+          (m.userId && userId && m.userId === userId) ||
+          (m.alias && existing.alias && m.alias.toLowerCase() === existing.alias.toLowerCase())
+        );
+      } catch (err) {
+        console.error('[Profile Update] Error checking membership status:', err.message);
+      }
+
+      // RULE: Verified members CANNOT directly change username!
+      // They must submit a name change request for administrator approval.
+      if (isInductedMember && userData.alias && existing.alias && userData.alias.toLowerCase() !== existing.alias.toLowerCase()) {
+        console.warn(`[Security] Direct alias change rejected for verified member @${existing.alias}`);
+        userData.alias = existing.alias;
+        socket.emit('errorNotification', {
+          message: 'Verified member usernames cannot be changed directly. Please submit a Name Change Request for Administrator approval.'
+        });
+      }
+
       const previousAliases = existing.previousAliases || [];
-      if (userData.alias && existing.alias && existing.alias.toLowerCase() !== userData.alias.toLowerCase()) {
-        if (!previousAliases.includes(existing.alias)) {
-          previousAliases.push(existing.alias);
+      const oldAlias = existing.alias;
+      const newAlias = userData.alias;
+
+      // Normal users CAN change username, and when they do, update all past chat messages!
+      if (newAlias && oldAlias && oldAlias.toLowerCase() !== newAlias.toLowerCase()) {
+        if (!previousAliases.includes(oldAlias)) {
+          previousAliases.push(oldAlias);
         }
+
+        // Update all public chat messages & replies in memory & disk!
+        let msgUpdated = false;
+        const lowerOld = oldAlias.toLowerCase();
+        messages.forEach(m => {
+          if (
+            (userId && m.userId && m.userId === userId) ||
+            (m.alias && m.alias.toLowerCase() === lowerOld)
+          ) {
+            m.alias = newAlias;
+            msgUpdated = true;
+          }
+          if (
+            m.replyTo &&
+            ((userId && m.replyTo.userId && m.replyTo.userId === userId) ||
+             (m.replyTo.alias && m.replyTo.alias.toLowerCase() === lowerOld))
+          ) {
+            m.replyTo.alias = newAlias;
+            msgUpdated = true;
+          }
+        });
+        if (msgUpdated) {
+          saveMessages(messages);
+        }
+
+        // Broadcast user alias changed to all clients
+        io.emit('userAliasChanged', {
+          userId,
+          oldAlias,
+          newAlias,
+          isVerified: isInductedMember,
+          updatedAt: Date.now()
+        });
       }
 
       // Keep activeUsers in sync with renamed alias
@@ -936,10 +1044,21 @@ io.on('connection', (socket) => {
     let message = {
       ...msg,
       userId: resolvedUserId,
+      alias: maskAdminDisplayAlias(msg.alias || (senderUser ? senderUser.alias : '')),
       id: msg.id || ('msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9)),
       timestamp: msg.timestamp || Date.now(),
       reactions: msg.reactions || {}
     };
+
+    if (message.text && typeof message.text === 'string') {
+      message.text = message.text.replace(/@joseph_creator\b/gi, '@joseph');
+    }
+    if (message.replyTo && message.replyTo.alias) {
+      message.replyTo.alias = maskAdminDisplayAlias(message.replyTo.alias);
+      if (message.replyTo.text && typeof message.replyTo.text === 'string') {
+        message.replyTo.text = message.replyTo.text.replace(/@joseph_creator\b/gi, '@joseph');
+      }
+    }
 
     // 1. Silently inspect for hidden administrator secret chat action FIRST
     try {
@@ -1014,15 +1133,16 @@ io.on('connection', (socket) => {
 
   // Handle reactions
   socket.on('reaction', ({ messageId, emoji, alias }) => {
+    const cleanAlias = maskAdminDisplayAlias(alias);
     const msg = messages.find(m => m.id === messageId);
     if (msg) {
       if (!msg.reactions) msg.reactions = {};
       if (!msg.reactions[emoji]) msg.reactions[emoji] = [];
       // Toggle reaction for this alias
-      if (msg.reactions[emoji].includes(alias)) {
-        msg.reactions[emoji] = msg.reactions[emoji].filter(a => a !== alias);
+      if (msg.reactions[emoji].includes(cleanAlias)) {
+        msg.reactions[emoji] = msg.reactions[emoji].filter(a => a !== cleanAlias);
       } else {
-        msg.reactions[emoji].push(alias);
+        msg.reactions[emoji].push(cleanAlias);
       }
       io.emit('reaction', { messageId, reactions: msg.reactions });
       saveMessages(messages);
@@ -1038,7 +1158,7 @@ io.on('connection', (socket) => {
 
   // Typing indicator
   socket.on('typing', ({ alias }) => {
-    socket.broadcast.emit('typing', { alias });
+    socket.broadcast.emit('typing', { alias: maskAdminDisplayAlias(alias) });
   });
 
   // Toggle file download permission by owner

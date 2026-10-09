@@ -1,7 +1,7 @@
 [
   {
-    "id": "msg_1791031597782_xjn0vfn",
-    "text": "hi",
+    "id": "msg_1791537662214_hmpap3d",
+    "text": "hhi",
     "userId": "usr_2i4zg49q8",
     "alias": "darshanaa",
     "color": "#00a8ff",
@@ -9,13 +9,13 @@
     "bio": "Encrypted mesh developer",
     "status": "Online",
     "isVerified": true,
-    "timestamp": 1791031597782,
+    "timestamp": 1791537662214,
     "reactions": {},
     "replyTo": null
   },
   {
-    "id": "msg_1791031601548_jcldd06",
-    "text": "james",
+    "id": "msg_1791537709533_m5ts2m8",
+    "text": "@James hi",
     "userId": "usr_2i4zg49q8",
     "alias": "darshanaa",
     "color": "#00a8ff",
@@ -23,49 +23,31 @@
     "bio": "Encrypted mesh developer",
     "status": "Online",
     "isVerified": true,
-    "timestamp": 1791031601548,
+    "timestamp": 1791537709533,
     "reactions": {},
     "replyTo": null
   },
   {
-    "id": "msg_1791031604461_q5zwxcp",
-    "timestamp": 1791031604461,
+    "id": "msg_1791537715080_kqlf8xk",
+    "timestamp": 1791537715080,
     "alias": "James",
     "userId": "bot_james",
     "color": "#00f3ff",
     "avatar": "/uploads/ShadowTalk-IG.jpeg",
     "isVerified": true,
-    "text": "Hey Darshanaa! 👋 How's it going? Just hanging out here, working on some code. What are you up to today?",
+    "text": "Hey Darshanaa! 👋 What's up? Good to see you in here — just vibing with some code myself. How's your day going?",
     "sources": [],
     "replyTo": {
-      "id": "msg_1791031597782_xjn0vfn",
+      "id": "msg_1791537709533_m5ts2m8",
       "alias": "darshanaa",
       "color": "#00a8ff",
-      "text": "hi"
+      "text": "@James hi"
     },
     "reactions": {}
   },
   {
-    "id": "msg_1791031606162_fvuyojv",
-    "timestamp": 1791031606162,
-    "alias": "James",
-    "userId": "bot_james",
-    "color": "#00f3ff",
-    "avatar": "/uploads/ShadowTalk-IG.jpeg",
-    "isVerified": true,
-    "text": "Hey @darshanaa! 👋 What's up? How's your day going?",
-    "sources": [],
-    "replyTo": {
-      "id": "msg_1791031601548_jcldd06",
-      "alias": "darshanaa",
-      "color": "#00a8ff",
-      "text": "james"
-    },
-    "reactions": {}
-  },
-  {
-    "id": "msg_1791032932502_kjk73j9",
-    "text": "hi",
+    "id": "msg_1791537760574_yfjrndv",
+    "text": "fine!",
     "userId": "usr_2i4zg49q8",
     "alias": "darsha",
     "color": "#00a8ff",
@@ -73,19 +55,19 @@
     "bio": "Encrypted mesh developer",
     "status": "Online",
     "isVerified": true,
-    "timestamp": 1791032932502,
+    "timestamp": 1791537760574,
     "reactions": {},
     "replyTo": null
   },
   {
-    "id": "msg_1791036681964_oavauvm",
-    "timestamp": 1791036681964,
+    "id": "msg_1791539724546_lckofah",
+    "timestamp": 1791539724546,
     "alias": "James",
     "userId": "bot_james",
     "color": "#00f3ff",
     "avatar": "/uploads/ShadowTalk-IG.jpeg",
     "isVerified": true,
-    "text": "Quiet day in the room! Feel free to bounce any ideas or code snippets off me if you're experimenting with anything new.",
+    "text": "Hope everyone's having a productive session today! Anyone working on anything interesting? 🚀",
     "sources": [],
     "replyTo": null,
     "reactions": {}

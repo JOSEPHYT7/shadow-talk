@@ -565,6 +565,127 @@ function processWithdrawal(withdrawalId, action = 'approved') {
   };
 }
 
+// --- Name Change Requests for Verified Members ---
+const nameChangeRequestsFile = path.join(__dirname, '..', 'data', 'name_change_requests.json');
+if (!fs.existsSync(nameChangeRequestsFile)) {
+  fs.writeFileSync(nameChangeRequestsFile, JSON.stringify([], null, 2), 'utf8');
+}
+
+function loadNameChangeRequests() {
+  try {
+    if (!fs.existsSync(nameChangeRequestsFile)) return [];
+    const raw = fs.readFileSync(nameChangeRequestsFile, 'utf8');
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error('[Secret Society Service]: Failed to load name change requests:', err.message);
+    return [];
+  }
+}
+
+function saveNameChangeRequests(list) {
+  try {
+    fs.writeFileSync(nameChangeRequestsFile, JSON.stringify(list, null, 2), 'utf8');
+  } catch (err) {
+    console.error('[Secret Society Service]: Failed to save name change requests:', err.message);
+  }
+}
+
+function submitNameChangeRequest({ alias, userId, requestedAlias, reason }) {
+  if (!alias || !requestedAlias) throw new Error('Current username and desired new username are required');
+  const cleanCurrent = alias.trim().replace(/^@/, '');
+  const cleanRequested = requestedAlias.trim().replace(/^@/, '').toLowerCase().replace(/[^a-z0-9._-]/g, '');
+
+  if (!cleanRequested || cleanRequested.length < 2) {
+    throw new Error('Requested username must be at least 2 characters long and contain only letters, numbers, dot, underscore, or dash.');
+  }
+  if (cleanCurrent.toLowerCase() === cleanRequested.toLowerCase()) {
+    throw new Error('New username must be different from current username');
+  }
+
+  // Check if member exists in secret society
+  const members = loadMembers();
+  const member = members.find(m =>
+    (m.alias && m.alias.toLowerCase() === cleanCurrent.toLowerCase()) ||
+    (userId && m.userId && m.userId === userId)
+  );
+
+  const requests = loadNameChangeRequests();
+  const existingPending = requests.find(r =>
+    ((r.currentAlias && r.currentAlias.toLowerCase() === cleanCurrent.toLowerCase()) || (userId && r.userId === userId)) &&
+    r.status === 'pending'
+  );
+
+  if (existingPending) {
+    existingPending.requestedAlias = cleanRequested;
+    existingPending.reason = (reason || '').trim();
+    existingPending.updatedAt = new Date().toISOString();
+    saveNameChangeRequests(requests);
+    return {
+      success: true,
+      request: existingPending,
+      message: `Pending request updated: Requesting change to @${cleanRequested}. Awaiting Administrator decision.`
+    };
+  }
+
+  const req = {
+    id: 'ncr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+    userId: userId || member?.userId || ('usr_' + cleanCurrent.toLowerCase()),
+    currentAlias: member?.alias || cleanCurrent,
+    requestedAlias: cleanRequested,
+    reason: (reason || '').trim(),
+    email: member?.email || '',
+    role: member?.role || 'Verified Member',
+    submittedAt: new Date().toISOString(),
+    status: 'pending'
+  };
+
+  requests.push(req);
+  saveNameChangeRequests(requests);
+  return {
+    success: true,
+    request: req,
+    message: `Username change request submitted for Administrator approval. Requested: @${cleanRequested}`
+  };
+}
+
+function processNameChangeRequest(requestId, decision = 'approved') {
+  const requests = loadNameChangeRequests();
+  const item = requests.find(r => r.id === requestId);
+  if (!item) throw new Error('Name change request not found');
+
+  item.status = decision;
+  item.processedAt = new Date().toISOString();
+  saveNameChangeRequests(requests);
+
+  let updatedMember = null;
+  if (decision === 'approved') {
+    const members = loadMembers();
+    const memberIndex = members.findIndex(m =>
+      (m.userId && item.userId && m.userId === item.userId) ||
+      (m.alias && item.currentAlias && m.alias.toLowerCase() === item.currentAlias.toLowerCase())
+    );
+    if (memberIndex !== -1) {
+      members[memberIndex].alias = item.requestedAlias;
+      members[memberIndex].updatedAt = Date.now();
+      saveMembers(members);
+      updatedMember = members[memberIndex];
+    }
+  }
+
+  return {
+    success: true,
+    requestId: item.id,
+    currentAlias: item.currentAlias,
+    requestedAlias: item.requestedAlias,
+    userId: item.userId,
+    status: decision,
+    updatedMember,
+    message: decision === 'approved'
+      ? `Name change approved: @${item.currentAlias} is now @${item.requestedAlias}.`
+      : `Name change request from @${item.currentAlias} was declined.`
+  };
+}
+
 /**
  * Get all members (safe - without password hashes)
  */
@@ -601,6 +722,10 @@ module.exports = {
   saveWithdrawals,
   submitWithdrawalRequest,
   processWithdrawal,
+  loadNameChangeRequests,
+  saveNameChangeRequests,
+  submitNameChangeRequest,
+  processNameChangeRequest,
   addMemberDirect,
   removeMember,
   regenerateMemberPassword,

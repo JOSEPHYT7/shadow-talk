@@ -33,6 +33,8 @@ const {
   deleteRejectedApplication,
   loadWithdrawals,
   processWithdrawal,
+  loadNameChangeRequests,
+  processNameChangeRequest,
   getSanitizedMembers,
   addMemberDirect,
   removeMember,
@@ -1184,6 +1186,174 @@ module.exports = function createAdminRouter(serverContext) {
         withdrawalId,
         admin: req.adminUsername
       }, getClientIp(req));
+
+      res.json(result);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  // Get member name change requests
+  router.get('/dashboard/society/name-changes', requireAdminAuth, (req, res) => {
+    try {
+      const list = loadNameChangeRequests();
+      res.json(list);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Accept member name change request & update user across mesh
+  router.post('/dashboard/society/name-changes/accept', requireAdminAuth, (req, res) => {
+    try {
+      const { requestId } = req.body || {};
+      if (!requestId) return res.status(400).json({ error: 'Request ID is required' });
+
+      const result = processNameChangeRequest(requestId, 'approved');
+      const { currentAlias, requestedAlias, userId } = result;
+
+      logAuditEvent('SOCIETY_NAME_CHANGE_APPROVED', {
+        requestId,
+        currentAlias,
+        requestedAlias,
+        userId,
+        admin: req.adminUsername
+      }, getClientIp(req));
+
+      // 1. Update userProfiles Map & profiles.json
+      if (currentAlias && requestedAlias) {
+        const lowerOld = currentAlias.toLowerCase();
+        let targetProfile = null;
+        for (const p of userProfiles.values()) {
+          if (
+            (userId && p.userId && p.userId === userId) ||
+            (p.alias && p.alias.toLowerCase() === lowerOld)
+          ) {
+            targetProfile = p;
+            break;
+          }
+        }
+        if (targetProfile) {
+          targetProfile.previousAliases = targetProfile.previousAliases || [];
+          if (!targetProfile.previousAliases.includes(currentAlias)) {
+            targetProfile.previousAliases.push(currentAlias);
+          }
+          targetProfile.alias = requestedAlias;
+          targetProfile.updatedAt = Date.now();
+          saveProfile(targetProfile);
+          io.emit('userProfileUpdated', targetProfile);
+        }
+      }
+
+      // 2. Update all public chat messages & replies in memory & disk
+      if (currentAlias && requestedAlias) {
+        let msgUpdated = false;
+        const lowerOld = currentAlias.toLowerCase();
+        const curMessages = typeof getMessages === 'function' ? getMessages() : messages;
+        if (Array.isArray(curMessages)) {
+          curMessages.forEach(m => {
+            if (
+              (userId && m.userId && m.userId === userId) ||
+              (m.alias && m.alias.toLowerCase() === lowerOld)
+            ) {
+              m.alias = requestedAlias;
+              msgUpdated = true;
+            }
+            if (
+              m.replyTo &&
+              ((userId && m.replyTo.userId && m.replyTo.userId === userId) ||
+               (m.replyTo.alias && m.replyTo.alias.toLowerCase() === lowerOld))
+            ) {
+              m.replyTo.alias = requestedAlias;
+              msgUpdated = true;
+            }
+          });
+          if (msgUpdated && typeof saveMessages === 'function') {
+            saveMessages(curMessages);
+          }
+        }
+
+        // 3. Update society messages if applicable
+        try {
+          const socMsgs = loadSocietyMessages();
+          let socUpdated = false;
+          socMsgs.forEach(m => {
+            if (
+              (userId && m.userId && m.userId === userId) ||
+              (m.alias && m.alias.toLowerCase() === lowerOld)
+            ) {
+              m.alias = requestedAlias;
+              socUpdated = true;
+            }
+          });
+          if (socUpdated) {
+            saveSocietyMessages(socMsgs);
+          }
+        } catch {}
+
+        // 4. Update in activeUsers Map
+        if (activeUsers) {
+          for (const u of activeUsers.values()) {
+            if (
+              (userId && u.userId && u.userId === userId) ||
+              (u.alias && u.alias.toLowerCase() === lowerOld)
+            ) {
+              u.alias = requestedAlias;
+            }
+          }
+        }
+
+        // 5. Broadcast live events across all connected clients
+        io.emit('userAliasChanged', {
+          userId,
+          oldAlias: currentAlias,
+          newAlias: requestedAlias,
+          isVerified: true,
+          updatedAt: Date.now()
+        });
+        io.emit('nameChangeDecision', {
+          requestId,
+          userId,
+          oldAlias: currentAlias,
+          newAlias: requestedAlias,
+          status: 'approved',
+          message: `Administrator approved username change to @${requestedAlias}`
+        });
+      }
+
+      res.json(result);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  // Decline member name change request
+  router.post('/dashboard/society/name-changes/decline', requireAdminAuth, (req, res) => {
+    try {
+      const { requestId, reason } = req.body || {};
+      if (!requestId) return res.status(400).json({ error: 'Request ID is required' });
+
+      const result = processNameChangeRequest(requestId, 'declined');
+      const { currentAlias, requestedAlias, userId } = result;
+
+      logAuditEvent('SOCIETY_NAME_CHANGE_DECLINED', {
+        requestId,
+        currentAlias,
+        requestedAlias,
+        userId,
+        reason,
+        admin: req.adminUsername
+      }, getClientIp(req));
+
+      io.emit('nameChangeDecision', {
+        requestId,
+        userId,
+        oldAlias: currentAlias,
+        newAlias: requestedAlias,
+        status: 'declined',
+        reason: reason || 'Administrator declined the name change request',
+        message: `Administrator declined username change request to @${requestedAlias}`
+      });
 
       res.json(result);
     } catch (err) {

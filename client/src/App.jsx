@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import CryptoJS from 'crypto-js';
 import {
@@ -17,6 +17,8 @@ import {
   EyeOff,
   User,
   Shield,
+  Edit3,
+  Clock,
   FileText,
   Download,
   CornerDownLeft,
@@ -1497,6 +1499,74 @@ function App() {
     }
   };
 
+  // --- Member Name Change Request States ---
+  const [showNameChangeModal, setShowNameChangeModal] = useState(false);
+  const [requestedNewAlias, setRequestedNewAlias] = useState('');
+  const [nameChangeReason, setNameChangeReason] = useState('');
+  const [nameChangeSubmitting, setNameChangeSubmitting] = useState(false);
+  const [pendingNameChange, setPendingNameChange] = useState(null);
+
+  const checkPendingNameChange = useCallback(async () => {
+    if (!identity?.alias) return;
+    try {
+      const res = await fetch(`${SERVER_URL}/api/membership/name-change-request/status?alias=${encodeURIComponent(identity.alias)}&userId=${encodeURIComponent(identity.userId || '')}`);
+      const data = await res.json();
+      if (data?.pending) {
+        setPendingNameChange(data.pending);
+      } else {
+        setPendingNameChange(null);
+      }
+    } catch {
+      // ignore
+    }
+  }, [identity?.alias, identity?.userId]);
+
+  useEffect(() => {
+    if (identity?.isVerified || identity?.isSocietyMember) {
+      checkPendingNameChange();
+    }
+  }, [identity?.isVerified, identity?.isSocietyMember, checkPendingNameChange]);
+
+  const handleNameChangeSubmit = async (e) => {
+    if (e) e.preventDefault();
+    const cleanRequested = (requestedNewAlias || '').trim().replace(/^@/, '').toLowerCase();
+    if (!cleanRequested) {
+      alert('Please enter a desired new username.');
+      return;
+    }
+    if (cleanRequested === identity.alias.toLowerCase()) {
+      alert('The requested username is the same as your current username.');
+      return;
+    }
+    setNameChangeSubmitting(true);
+    try {
+      const res = await fetch(`${SERVER_URL}/api/membership/name-change-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          alias: identity.alias,
+          userId: identity.userId,
+          requestedAlias: cleanRequested,
+          reason: nameChangeReason.trim()
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(`Your request to change username to @${cleanRequested} has been submitted for Administrator review.`);
+        setShowNameChangeModal(false);
+        setRequestedNewAlias('');
+        setNameChangeReason('');
+        setPendingNameChange(data.request);
+      } else {
+        alert(data.error || 'Failed to submit name change request.');
+      }
+    } catch (err) {
+      alert('Network error submitting request: ' + err.message);
+    } finally {
+      setNameChangeSubmitting(false);
+    }
+  };
+
   // Mobile Instagram Swipe-to-Reply Gesture States & Long-Press Reaction Bar
   const [swipingMsgId, setSwipingMsgId] = useState(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
@@ -1896,9 +1966,37 @@ function App() {
   };
 
   const identityRef = useRef(identity);
+  const lastSavedAliasRef = useRef(identity?.alias || '');
+
   useEffect(() => {
     identityRef.current = identity;
+    if (identity?.alias) {
+      try {
+        localStorage.setItem('bbx_identity', JSON.stringify(identity));
+      } catch {}
+    }
   }, [identity]);
+
+  const handleSaveProfile = () => {
+    setShowIdentityModal(false);
+    const cleanAlias = (identity?.alias || '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '');
+    if (!cleanAlias) return;
+
+    try {
+      localStorage.setItem('bbx_identity', JSON.stringify({ ...identity, alias: cleanAlias }));
+    } catch {}
+
+    if (cleanAlias !== lastSavedAliasRef.current) {
+      if (socketRef.current?.connected) {
+        socketRef.current.emit('updateUserAlias', {
+          oldAlias: lastSavedAliasRef.current,
+          newAlias: cleanAlias,
+          userId: identity.userId
+        });
+      }
+      lastSavedAliasRef.current = cleanAlias;
+    }
+  };
 
   useEffect(() => {
     socketRef.current = io(SOCKET_URL, {
@@ -2233,6 +2331,87 @@ function App() {
           sessionToken: null,
           stage: null
         });
+      }
+    });
+
+    // Real-time synchronization of username changes across all messages
+    socketRef.current.on('userAliasChanged', ({ userId, oldAlias, newAlias, isVerified }) => {
+      if (!oldAlias || !newAlias) return;
+      const lowerOld = oldAlias.toLowerCase();
+
+      setMessages((prev) => {
+        const next = prev.map(m => {
+          let updated = false;
+          let mCopy = { ...m };
+          if (
+            (userId && m.userId && m.userId === userId) ||
+            (m.alias && m.alias.toLowerCase() === lowerOld)
+          ) {
+            mCopy.alias = newAlias;
+            if (isVerified !== undefined) mCopy.isVerified = isVerified;
+            updated = true;
+          }
+          if (
+            m.replyTo &&
+            ((userId && m.replyTo.userId && m.replyTo.userId === userId) ||
+             (m.replyTo.alias && m.replyTo.alias.toLowerCase() === lowerOld))
+          ) {
+            mCopy.replyTo = { ...m.replyTo, alias: newAlias };
+            updated = true;
+          }
+          return updated ? mCopy : m;
+        });
+        try {
+          localStorage.setItem('shadowtalk_cached_messages', JSON.stringify(next.slice(-100)));
+        } catch {}
+        return next;
+      });
+
+      // Update current user if this is their alias
+      if (
+        (identityRef.current?.userId && userId && identityRef.current.userId === userId) ||
+        (identityRef.current?.alias && identityRef.current.alias.toLowerCase() === lowerOld)
+      ) {
+        setIdentity(prev => ({
+          ...prev,
+          alias: newAlias,
+          isVerified: isVerified !== undefined ? isVerified : prev.isVerified
+        }));
+      }
+
+      // Update userProfilesMap
+      setUserProfilesMap((prev) => {
+        const next = { ...prev };
+        if (userId && next[userId]) {
+          next[userId] = { ...next[userId], alias: newAlias };
+        }
+        if (next[lowerOld]) {
+          const prof = { ...next[lowerOld], alias: newAlias };
+          delete next[lowerOld];
+          next[newAlias.toLowerCase()] = prof;
+        }
+        return next;
+      });
+    });
+
+    // Real-time notification of admin approval/rejection for name change requests
+    socketRef.current.on('nameChangeDecision', ({ currentAlias, requestedAlias, status, reviewNote }) => {
+      if (currentAlias && identityRef.current?.alias &&
+          currentAlias.toLowerCase() === identityRef.current.alias.toLowerCase()) {
+        if (status === 'approved') {
+          alert(`Your request to change username to @${requestedAlias} has been APPROVED by the Administrator!`);
+          setIdentity(prev => ({ ...prev, alias: requestedAlias }));
+          setPendingNameChange(null);
+        } else {
+          alert(`Your request to change username to @${requestedAlias} was REJECTED by the Administrator.\nReason: ${reviewNote || 'None provided'}`);
+          setPendingNameChange(null);
+        }
+      }
+    });
+
+    socketRef.current.on('errorNotification', (err) => {
+      if (err?.message) {
+        alert(err.message);
       }
     });
 
@@ -4971,23 +5150,51 @@ function App() {
               <div className="form-group">
                 <div className="form-label-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
                   <label className="form-label" style={{ margin: 0 }}>USERNAME</label>
-                  <button
-                    type="button"
-                    className="dice-randomize-btn"
-                    onClick={generateNewIdentity}
-                    title="Generate New Real Username"
-                  >
-                    <RefreshCw size={12} /> Randomize Username
-                  </button>
+                  {!(identity.isVerified || identity.isSocietyMember) && (
+                    <button
+                      type="button"
+                      className="dice-randomize-btn"
+                      onClick={generateNewIdentity}
+                      title="Generate New Real Username"
+                    >
+                      <RefreshCw size={12} /> Randomize Username
+                    </button>
+                  )}
                 </div>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={identity.alias}
-                  onChange={e => setIdentity({ ...identity, alias: e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, '') })}
-                  maxLength={24}
-                  placeholder="e.g. alex_vance, elena_reed..."
-                />
+                {(identity.isVerified || identity.isSocietyMember) ? (
+                  <div className="verified-alias-locked-box" style={{ background: 'rgba(0, 243, 255, 0.05)', border: '1px solid rgba(0, 243, 255, 0.25)', borderRadius: '8px', padding: '0.75rem' }}>
+                    <div className="locked-alias-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span className="locked-alias-text" style={{ fontFamily: 'monospace', fontWeight: 600, color: '#00f3ff', fontSize: '1rem' }}>@{identity.alias}</span>
+                      <span className="locked-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: '#10b981', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '2px 8px', borderRadius: '4px' }}>
+                        <Lock size={12} /> Verified Identity Locked
+                      </span>
+                    </div>
+                    {pendingNameChange ? (
+                      <div className="pending-name-notice" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: '#f59e0b', marginTop: '0.5rem', background: 'rgba(245, 158, 11, 0.08)', padding: '6px 10px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.25)' }}>
+                        <Clock size={13} color="#f59e0b" />
+                        <span>Pending Request: <strong>@{pendingNameChange.requestedAlias}</strong> (Awaiting Administrator Approval)</span>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        style={{ marginTop: '0.5rem', fontSize: '0.8rem', padding: '0.4rem 0.75rem', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                        onClick={() => setShowNameChangeModal(true)}
+                      >
+                        <Edit3 size={13} /> Request Username Change
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={identity.alias}
+                    onChange={e => setIdentity({ ...identity, alias: e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, '') })}
+                    maxLength={24}
+                    placeholder="e.g. alex_vance, elena_reed..."
+                  />
+                )}
               </div>
 
               {/* Custom Profile Picture Upload from Device */}
@@ -5099,6 +5306,16 @@ function App() {
                       >
                         <ShieldCheck size={14} /> Update Application
                       </button>
+                      {!pendingNameChange && (
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => setShowNameChangeModal(true)}
+                          title="Submit username change request to Administrator"
+                        >
+                          <Edit3 size={14} /> Request Name Change
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="btn-secondary revoke-btn"
@@ -5142,7 +5359,7 @@ function App() {
                 </div>
               </div>
 
-              <button className="btn-primary" style={{ marginTop: '0.8rem', width: '100%' }} onClick={() => setShowIdentityModal(false)}>
+              <button className="btn-primary" style={{ marginTop: '0.8rem', width: '100%' }} onClick={handleSaveProfile}>
                 <Check size={16} /> Save Profile Changes
               </button>
             </div>
@@ -5415,6 +5632,84 @@ function App() {
                   disabled={withdrawSubmitting || !withdrawReason.trim()}
                 >
                   {withdrawSubmitting ? 'Transmitting Reason...' : 'Submit Withdrawal Request'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Request Username Change (for Verified Members) */}
+      {showNameChangeModal && (
+        <div className="auth-modal-overlay" onClick={() => setShowNameChangeModal(false)}>
+          <div className="auth-modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+            <div className="auth-modal-header">
+              <div className="auth-modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Edit3 size={18} color="#00f3ff" />
+                <span>REQUEST USERNAME CHANGE</span>
+              </div>
+              <button
+                type="button"
+                className="auth-modal-close"
+                onClick={() => setShowNameChangeModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <p className="auth-modal-desc">
+              Verified members have locked identity handles to protect community trust. To change your username, submit your desired alias and reason to the Administrator for approval.
+            </p>
+            <form onSubmit={handleRequestNameChange}>
+              <div className="auth-field-group">
+                <label>CURRENT USERNAME</label>
+                <input
+                  type="text"
+                  className="auth-text-field"
+                  value={`@${identity.alias}`}
+                  disabled
+                  style={{ opacity: 0.7, background: 'rgba(255,255,255,0.03)' }}
+                />
+              </div>
+              <div className="auth-field-group">
+                <label>REQUESTED NEW USERNAME *</label>
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#00f3ff', fontFamily: 'monospace', fontWeight: 600 }}>@</span>
+                  <input
+                    type="text"
+                    className="auth-text-field"
+                    style={{ paddingLeft: '28px' }}
+                    placeholder="new_alias"
+                    value={newNameInput}
+                    onChange={(e) => setNewNameInput(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ''))}
+                    maxLength={24}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="auth-field-group">
+                <label>JUSTIFICATION / REASON (OPTIONAL)</label>
+                <textarea
+                  rows={3}
+                  className="auth-text-field"
+                  placeholder="Explain why you wish to update your verified alias..."
+                  value={nameChangeReason}
+                  onChange={(e) => setNameChangeReason(e.target.value)}
+                />
+              </div>
+              <div className="auth-actions-row">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowNameChangeModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={nameChangeSubmitting || !newNameInput.trim()}
+                >
+                  {nameChangeSubmitting ? 'Submitting...' : 'Submit Request'}
                 </button>
               </div>
             </form>

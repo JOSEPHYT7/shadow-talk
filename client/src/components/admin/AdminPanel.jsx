@@ -54,7 +54,8 @@ import {
   Info,
   Filter,
   Play,
-  Pause
+  Pause,
+  Edit3
 } from 'lucide-react';
 import GeoGlobe3D from './GeoGlobe3D';
 import './AdminPanel.css';
@@ -160,7 +161,8 @@ export function AdminPanel({
   const [societyApps, setSocietyApps] = useState([]);
   const [societyMembers, setSocietyMembers] = useState([]);
   const [societyWithdrawals, setSocietyWithdrawals] = useState([]);
-  const [societySubTab, setSocietySubTab] = useState('applications'); // 'applications' | 'members' | 'withdrawals'
+  const [nameChangeRequests, setNameChangeRequests] = useState([]);
+  const [societySubTab, setSocietySubTab] = useState('applications'); // 'applications' | 'members' | 'withdrawals' | 'name-changes'
   const [societySearch, setSocietySearch] = useState('');
   const [generatedCredentialModal, setGeneratedCredentialModal] = useState(null);
   const [copiedPass, setCopiedPass] = useState(false);
@@ -307,6 +309,19 @@ export function AdminPanel({
     } catch {}
   };
 
+  // Fetch society member username change requests
+  const fetchNameChangeRequests = async () => {
+    try {
+      const res = await fetch(`${serverUrl}/api/admin/dashboard/society/name-changes`, {
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setNameChangeRequests(Array.isArray(data) ? data : []);
+      }
+    } catch {}
+  };
+
   // Initial fetch and tab change polling
   useEffect(() => {
     if (activeTab === 'telemetry') {
@@ -322,6 +337,7 @@ export function AdminPanel({
       fetchSocietyApps();
       fetchSocietyMembers();
       fetchSocietyWithdrawals();
+      fetchNameChangeRequests();
     }
   }, [activeTab]);
 
@@ -874,6 +890,48 @@ export function AdminPanel({
     } catch {}
   };
 
+  const handleApproveNameChange = async (requestId) => {
+    if (!confirm('Approve this username change request? The member\'s verified identity and society dossier will update.')) return;
+    try {
+      const res = await fetch(`${serverUrl}/api/admin/dashboard/society/name-changes/approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ requestId })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        flashNotice(`Username updated to @${data.newAlias}`);
+        fetchNameChangeRequests();
+        fetchSocietyMembers();
+        fetchUsers();
+      } else {
+        flashNotice(data.error || 'Failed to approve username change', 'error');
+      }
+    } catch {
+      flashNotice('Error approving username change', 'error');
+    }
+  };
+
+  const handleDismissNameChange = async (requestId) => {
+    try {
+      const res = await fetch(`${serverUrl}/api/admin/dashboard/society/name-changes/dismiss`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ requestId })
+      });
+      if (res.ok) {
+        flashNotice('Username change request dismissed');
+        fetchNameChangeRequests();
+      }
+    } catch {}
+  };
+
   const handleRegeneratePassphrase = async (memberId) => {
     try {
       const res = await fetch(`${serverUrl}/api/admin/dashboard/society/member/regenerate-password`, {
@@ -1009,6 +1067,18 @@ export function AdminPanel({
     return (
       (w.alias && w.alias.toLowerCase().includes(q)) ||
       (w.reason && w.reason.toLowerCase().includes(q))
+    );
+  });
+
+  const pendingNameChanges = nameChangeRequests.filter(r => r.status === 'pending');
+  const filteredNameChanges = nameChangeRequests.filter((r) => {
+    if (!societySearch) return true;
+    const q = societySearch.toLowerCase();
+    return (
+      (r.oldAlias && r.oldAlias.toLowerCase().includes(q)) ||
+      (r.newAlias && r.newAlias.toLowerCase().includes(q)) ||
+      (r.userId && r.userId.toLowerCase().includes(q)) ||
+      (r.reason && r.reason.toLowerCase().includes(q))
     );
   });
 
@@ -1631,6 +1701,14 @@ export function AdminPanel({
                   <LogOut size={13} />
                   <span>Withdrawal Requests ({pendingWithdrawals.length} Pending)</span>
                 </button>
+                <button
+                  type="button"
+                  className={`subtab-btn ${societySubTab === 'name-changes' ? 'active' : ''}`}
+                  onClick={() => setSocietySubTab('name-changes')}
+                >
+                  <Edit3 size={13} />
+                  <span>Name Changes ({pendingNameChanges.length} Pending)</span>
+                </button>
               </div>
 
               {/* View 1: Candidate Applications */}
@@ -1833,6 +1911,71 @@ export function AdminPanel({
                             >
                               <UserX size={13} />
                               <span>Approve Resignation &amp; Revoke Member</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {/* View 4: Username / Alias Change Requests */}
+              {societySubTab === 'name-changes' && (
+                <div className="society-withdrawals-feed">
+                  {filteredNameChanges.length === 0 ? (
+                    <div className="society-empty-box">No username change requests found.</div>
+                  ) : (
+                    filteredNameChanges.map((req) => (
+                      <div key={req.id} className={`withdrawal-card ${req.status}`}>
+                        <div className="withdrawal-card-header">
+                          <div className="withdrawal-user-info">
+                            <Edit3 size={16} color={req.status === 'approved' ? '#38ef7d' : '#00f3ff'} />
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ color: '#94a3b8', textDecoration: 'line-through', fontSize: '0.85rem' }}>@{req.oldAlias}</span>
+                                <ChevronRight size={14} color="#00f3ff" />
+                                <span style={{ color: '#00f3ff', fontWeight: 'bold', fontSize: '1rem' }}>@{req.newAlias}</span>
+                              </div>
+                              <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                                UID: {req.userId?.slice(0, 8)}... | Submitted on {new Date(req.submittedAt || req.timestamp).toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+                          <span className={`status-badge-chip ${req.status}`}>
+                            {req.status?.toUpperCase()}
+                          </span>
+                        </div>
+
+                        {req.reason && (
+                          <div className="withdrawal-reason-quote">
+                            <strong style={{ display: 'block', fontSize: '0.68rem', color: '#00f3ff', marginBottom: '0.3rem', letterSpacing: '0.06em' }}>
+                              JUSTIFICATION / REASON:
+                            </strong>
+                            <p style={{ margin: 0, fontStyle: 'italic', color: '#cbd5e1' }}>"{req.reason}"</p>
+                          </div>
+                        )}
+
+                        {req.status === 'pending' && (
+                          <div className="withdrawal-actions-footer">
+                            <button
+                              type="button"
+                              className="btn-dismiss-withdrawal"
+                              onClick={() => handleDismissNameChange(req.id)}
+                              title="Dismiss name change request"
+                            >
+                              <XCircle size={13} />
+                              <span>Dismiss</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-approve-withdrawal"
+                              style={{ background: 'rgba(0, 243, 255, 0.15)', borderColor: '#00f3ff', color: '#00f3ff' }}
+                              onClick={() => handleApproveNameChange(req.id)}
+                              title="Approve username change and update member identity"
+                            >
+                              <CheckCircle size={13} />
+                              <span>Approve &amp; Update Alias</span>
                             </button>
                           </div>
                         )}
