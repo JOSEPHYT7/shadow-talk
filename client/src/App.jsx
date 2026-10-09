@@ -1499,74 +1499,6 @@ function App() {
     }
   };
 
-  // --- Member Name Change Request States ---
-  const [showNameChangeModal, setShowNameChangeModal] = useState(false);
-  const [requestedNewAlias, setRequestedNewAlias] = useState('');
-  const [nameChangeReason, setNameChangeReason] = useState('');
-  const [nameChangeSubmitting, setNameChangeSubmitting] = useState(false);
-  const [pendingNameChange, setPendingNameChange] = useState(null);
-
-  const checkPendingNameChange = useCallback(async () => {
-    if (!identity?.alias) return;
-    try {
-      const res = await fetch(`${SERVER_URL}/api/membership/name-change-request/status?alias=${encodeURIComponent(identity.alias)}&userId=${encodeURIComponent(identity.userId || '')}`);
-      const data = await res.json();
-      if (data?.pending) {
-        setPendingNameChange(data.pending);
-      } else {
-        setPendingNameChange(null);
-      }
-    } catch {
-      // ignore
-    }
-  }, [identity?.alias, identity?.userId]);
-
-  useEffect(() => {
-    if (identity?.isVerified || identity?.isSocietyMember) {
-      checkPendingNameChange();
-    }
-  }, [identity?.isVerified, identity?.isSocietyMember, checkPendingNameChange]);
-
-  const handleNameChangeSubmit = async (e) => {
-    if (e) e.preventDefault();
-    const cleanRequested = (requestedNewAlias || '').trim().replace(/^@/, '').toLowerCase();
-    if (!cleanRequested) {
-      alert('Please enter a desired new username.');
-      return;
-    }
-    if (cleanRequested === identity.alias.toLowerCase()) {
-      alert('The requested username is the same as your current username.');
-      return;
-    }
-    setNameChangeSubmitting(true);
-    try {
-      const res = await fetch(`${SERVER_URL}/api/membership/name-change-request`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          alias: identity.alias,
-          userId: identity.userId,
-          requestedAlias: cleanRequested,
-          reason: nameChangeReason.trim()
-        })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        alert(`Your request to change username to @${cleanRequested} has been submitted for Administrator review.`);
-        setShowNameChangeModal(false);
-        setRequestedNewAlias('');
-        setNameChangeReason('');
-        setPendingNameChange(data.request);
-      } else {
-        alert(data.error || 'Failed to submit name change request.');
-      }
-    } catch (err) {
-      alert('Network error submitting request: ' + err.message);
-    } finally {
-      setNameChangeSubmitting(false);
-    }
-  };
-
   // Mobile Instagram Swipe-to-Reply Gesture States & Long-Press Reaction Bar
   const [swipingMsgId, setSwipingMsgId] = useState(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
@@ -1602,6 +1534,74 @@ function App() {
   const [showVaultModal, setShowVaultModal] = useState(false);
   const [lightboxImage, setLightboxImage] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+
+  // --- Member Name Change Request States ---
+  const [showNameChangeModal, setShowNameChangeModal] = useState(false);
+  const [newNameInput, setNewNameInput] = useState('');
+  const [nameChangeReason, setNameChangeReason] = useState('');
+  const [nameChangeSubmitting, setNameChangeSubmitting] = useState(false);
+  const [pendingNameChange, setPendingNameChange] = useState(null);
+
+  const checkPendingNameChange = useCallback(async () => {
+    if (!identity?.alias) return;
+    try {
+      const res = await fetch(`${SERVER_URL}/api/membership/name-change-request/status?alias=${encodeURIComponent(identity.alias)}&userId=${encodeURIComponent(identity.userId || '')}`);
+      const data = await res.json();
+      if (data?.pending) {
+        setPendingNameChange(data.pending);
+      } else {
+        setPendingNameChange(null);
+      }
+    } catch {
+      // ignore
+    }
+  }, [identity?.alias, identity?.userId]);
+
+  useEffect(() => {
+    if (identity?.isVerified || identity?.isSocietyMember) {
+      checkPendingNameChange();
+    }
+  }, [identity?.isVerified, identity?.isSocietyMember, checkPendingNameChange]);
+
+  const handleRequestNameChange = async (e) => {
+    if (e) e.preventDefault();
+    const cleanRequested = (newNameInput || '').trim().replace(/^@/, '').toLowerCase();
+    if (!cleanRequested) {
+      alert('Please enter a desired new username.');
+      return;
+    }
+    if (cleanRequested === identity.alias?.toLowerCase()) {
+      alert('The requested username is the same as your current username.');
+      return;
+    }
+    setNameChangeSubmitting(true);
+    try {
+      const res = await fetch(`${SERVER_URL}/api/membership/name-change-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          alias: identity.alias,
+          userId: identity.userId,
+          requestedAlias: cleanRequested,
+          reason: nameChangeReason.trim()
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(`Your request to change username to @${cleanRequested} has been submitted for Administrator review.`);
+        setShowNameChangeModal(false);
+        setNewNameInput('');
+        setNameChangeReason('');
+        setPendingNameChange(data.request);
+      } else {
+        alert(data.error || 'Failed to submit name change request.');
+      }
+    } catch (err) {
+      alert('Network error submitting request: ' + err.message);
+    } finally {
+      setNameChangeSubmitting(false);
+    }
+  };
 
   const [hoveredMsgId, setHoveredMsgId] = useState(null);
   const [activeReactionMsgId, setActiveReactionMsgId] = useState(null);
