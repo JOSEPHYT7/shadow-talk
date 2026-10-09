@@ -745,13 +745,8 @@ function broadcastSocietyCount() {
   io.to('secret_society_room').emit('societyOnlineMembers', uniqueAliases);
 }
 
-// Security: Mask the administrator username in chat to protect secret identity
 function maskAdminDisplayAlias(alias) {
-  if (!alias || typeof alias !== 'string') return alias || '';
-  if (alias.toLowerCase() === 'joseph_creator') {
-    return 'joseph';
-  }
-  return alias;
+  return alias || '';
 }
 
 // Socket.IO connection
@@ -1049,24 +1044,21 @@ io.on('connection', (socket) => {
     const senderUser = activeUsers.get(socket.id);
     const resolvedUserId = msg.userId || (senderUser ? senderUser.userId : null);
 
+    const PROFANITY_REGEX = /\b(fuck|shit|bitch|fucking|fucker|fuk|fk|f\*ck|b\*tch|sh\*t)\b/i;
+    let cleanBio = msg.bio || (senderUser ? senderUser.bio : '');
+    if (cleanBio && PROFANITY_REGEX.test(cleanBio)) {
+      cleanBio = isCreatorAlias(msg.alias) ? 'Creator & Architect of Shadow Talk' : 'Encrypted mesh developer';
+    }
+
     let message = {
       ...msg,
       userId: resolvedUserId,
-      alias: maskAdminDisplayAlias(msg.alias || (senderUser ? senderUser.alias : '')),
+      alias: msg.alias || (senderUser ? senderUser.alias : ''),
+      bio: cleanBio,
       id: msg.id || ('msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9)),
       timestamp: msg.timestamp || Date.now(),
       reactions: msg.reactions || {}
     };
-
-    if (message.text && typeof message.text === 'string') {
-      message.text = message.text.replace(/@joseph_creator\b/gi, '@joseph');
-    }
-    if (message.replyTo && message.replyTo.alias) {
-      message.replyTo.alias = maskAdminDisplayAlias(message.replyTo.alias);
-      if (message.replyTo.text && typeof message.replyTo.text === 'string') {
-        message.replyTo.text = message.replyTo.text.replace(/@joseph_creator\b/gi, '@joseph');
-      }
-    }
 
     // 1. Silently inspect for hidden administrator secret chat action FIRST
     try {

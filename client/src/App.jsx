@@ -214,6 +214,23 @@ function resolveMediaUrl(url) {
   return SOCKET_URL + url;
 }
 
+const PROFANITY_REGEX = /\b(fuck|shit|bitch|fucking|fucker|fuk|fk|f\*ck|b\*tch|sh\*t)\b/i;
+
+function isCreatorAlias(alias) {
+  if (!alias || typeof alias !== 'string') return false;
+  const lower = alias.trim().toLowerCase().replace(/^@/, '');
+  return lower === 'joseph_creator' || lower === 'joseph';
+}
+
+function sanitizeBio(bio, defaultBio = 'Encrypted mesh developer') {
+  if (!bio || typeof bio !== 'string') return defaultBio;
+  const trimmed = bio.trim();
+  if (PROFANITY_REGEX.test(trimmed)) {
+    return defaultBio;
+  }
+  return trimmed || defaultBio;
+}
+
 function getOrCreateIdentity() {
   let identity = localStorage.getItem('bbx_identity');
   if (identity) {
@@ -221,13 +238,17 @@ function getOrCreateIdentity() {
       const parsed = JSON.parse(identity);
       if (parsed.alias) {
         const cleanAlias = parsed.alias.replace(/\s*#\d+$/, '');
+        const isCreator = isCreatorAlias(cleanAlias);
+        const defaultBio = isCreator ? 'Creator & Architect of Shadow Talk' : 'Encrypted mesh developer';
+        const cleanBio = sanitizeBio(parsed.bio, defaultBio);
+        const resolvedAlias = isCreator ? 'joseph_creator' : cleanAlias;
         const updated = {
           ...parsed,
           userId: parsed.userId || ('usr_' + Math.random().toString(36).substring(2, 11)),
-          alias: cleanAlias,
-          bio: parsed.bio || 'Encrypted mesh developer',
+          alias: resolvedAlias,
+          bio: cleanBio,
           status: parsed.status || 'Online',
-          isVerified: !!parsed.isVerified
+          isVerified: isCreator ? true : !!parsed.isVerified
         };
         localStorage.setItem('bbx_identity', JSON.stringify(updated));
         return updated;
@@ -1982,8 +2003,15 @@ function App() {
     const cleanAlias = (identity?.alias || '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '');
     if (!cleanAlias) return;
 
+    const isCreator = isCreatorAlias(cleanAlias);
+    const defaultBio = isCreator ? 'Creator & Architect of Shadow Talk' : 'Encrypted mesh developer';
+    const cleanBio = sanitizeBio(identity?.bio, defaultBio);
+    const resolvedAlias = isCreator ? 'joseph_creator' : cleanAlias;
+    const updatedIdentity = { ...identity, alias: resolvedAlias, bio: cleanBio };
+    setIdentity(updatedIdentity);
+
     try {
-      localStorage.setItem('bbx_identity', JSON.stringify({ ...identity, alias: cleanAlias }));
+      localStorage.setItem('bbx_identity', JSON.stringify(updatedIdentity));
     } catch {}
 
     if (cleanAlias !== lastSavedAliasRef.current) {
@@ -2103,17 +2131,20 @@ function App() {
               if (dmsg && (dmsg.alias || dmsg.userId) && (dmsg.bio !== undefined || dmsg.status)) {
                 const key = (dmsg.alias || '').toLowerCase();
                 const uId = dmsg.userId;
+                const isCreator = isCreatorAlias(dmsg.alias) || (uId && uId === 'usr_78qzmjll4');
+                const defaultBio = isCreator ? 'Creator & Architect of Shadow Talk' : 'Encrypted mesh developer';
                 const p = {
-                  alias: dmsg.alias,
+                  alias: isCreator ? 'joseph_creator' : dmsg.alias,
                   userId: uId,
                   color: dmsg.color,
                   avatar: dmsg.avatar,
-                  bio: dmsg.bio,
+                  bio: sanitizeBio(dmsg.bio, defaultBio),
                   status: dmsg.status,
-                  isVerified: dmsg.isVerified
+                  isVerified: isCreator ? true : dmsg.isVerified
                 };
                 if (key) updated[key] = { ...(updated[key] || {}), ...p };
                 if (uId) updated[uId] = { ...(updated[uId] || {}), ...p };
+                if (isCreator) updated['joseph_creator'] = { ...(updated['joseph_creator'] || {}), ...p };
               }
             } catch { }
           });
@@ -2194,19 +2225,22 @@ function App() {
         if (dmsg && (dmsg.alias || dmsg.userId) && (dmsg.bio !== undefined || dmsg.status)) {
           const key = (dmsg.alias || '').toLowerCase();
           const uId = dmsg.userId;
+          const isCreator = isCreatorAlias(dmsg.alias) || (uId && uId === 'usr_78qzmjll4');
+          const defaultBio = isCreator ? 'Creator & Architect of Shadow Talk' : 'Encrypted mesh developer';
           const p = {
-            alias: dmsg.alias,
+            alias: isCreator ? 'joseph_creator' : dmsg.alias,
             userId: uId,
             color: dmsg.color,
             avatar: dmsg.avatar,
-            bio: dmsg.bio,
+            bio: sanitizeBio(dmsg.bio, defaultBio),
             status: dmsg.status,
-            isVerified: dmsg.isVerified
+            isVerified: isCreator ? true : dmsg.isVerified
           };
           setUserProfilesMap((prev) => {
             const next = { ...prev };
             if (key) next[key] = { ...(next[key] || {}), ...p };
             if (uId) next[uId] = { ...(next[uId] || {}), ...p };
+            if (isCreator) next['joseph_creator'] = { ...(next['joseph_creator'] || {}), ...p };
             return next;
           });
         }
@@ -3389,13 +3423,15 @@ function App() {
       (cleanAlias && identity?.alias && cleanAlias.toLowerCase() === identity.alias.toLowerCase())
     );
     if (isSelf) {
+      const isCreator = isCreatorAlias(identity.alias);
+      const defaultBio = isCreator ? 'Creator & Architect of Shadow Talk' : 'Encrypted mesh developer';
       return {
-        alias: identity.alias,
+        alias: isCreator ? 'joseph_creator' : identity.alias,
         userId: identity.userId,
         color: identity.color || '#00f3ff',
         avatar: identity.avatar !== undefined ? identity.avatar : null,
-        isVerified: !!identity.isVerified,
-        bio: identity.bio || 'Encrypted mesh developer',
+        isVerified: isCreator ? true : !!identity.isVerified,
+        bio: sanitizeBio(identity.bio, defaultBio),
         status: identity.status || 'Online',
         isOnline: true
       };
@@ -3412,6 +3448,25 @@ function App() {
         bio: "Full-stack engineer & verified community member. Always around!",
         status: 'Online',
         isOnline: true
+      };
+    }
+
+    // Special handling for the Platform Creator & Architect (@joseph_creator)
+    if (isCreatorAlias(cleanAlias) || (userId && userId === 'usr_78qzmjll4')) {
+      let cached = userProfilesMap['joseph_creator'] || (userId ? userProfilesMap[userId] : null);
+      const isOnline = cached?.isOnline !== undefined ? Boolean(cached.isOnline) : (cached?.status ? cached.status !== 'Offline' : true);
+      const rawBio = cached?.bio || fallbackBio || '';
+      const resolvedBio = sanitizeBio(rawBio, 'Creator & Architect of Shadow Talk');
+
+      return {
+        alias: 'joseph_creator',
+        userId: cached?.userId || userId || 'usr_78qzmjll4',
+        color: cached?.color || fallbackColor || '#ff5e00',
+        avatar: cached?.avatar !== undefined ? cached.avatar : (fallbackAvatar || null),
+        isVerified: true,
+        bio: resolvedBio,
+        status: cached?.status || fallbackStatus || 'Online',
+        isOnline: isOnline
       };
     }
 
@@ -3444,7 +3499,7 @@ function App() {
     const resolvedColor = cached?.color || fallbackColor || '#00f3ff';
     const resolvedAvatar = cached?.avatar !== undefined ? cached.avatar : (fallbackAvatar || null);
     const resolvedVerified = cached?.isVerified !== undefined ? cached.isVerified : !!fallbackVerified;
-    const resolvedBio = cached?.bio || fallbackBio || 'Encrypted mesh user';
+    const resolvedBio = sanitizeBio(cached?.bio || fallbackBio, 'Encrypted mesh user');
 
     return {
       alias: cached?.alias || cleanAlias,
@@ -3461,10 +3516,12 @@ function App() {
   const openUserProfile = (alias, color, avatar, isVerified, bio, status, userId) => {
     if (!alias && !userId) return;
     const cleanAlias = (alias || '').replace(/^@/, '');
-    const profile = getUserProfile(cleanAlias, color, avatar, isVerified, bio, status, userId);
+    const isCreator = isCreatorAlias(cleanAlias) || (userId && userId === 'usr_78qzmjll4');
+    const resolvedAlias = isCreator ? 'joseph_creator' : cleanAlias;
+    const profile = getUserProfile(resolvedAlias, color, avatar, isCreator ? true : isVerified, bio, status, userId);
     setSelectedUserProfile({
       ...profile,
-      clickedAlias: cleanAlias
+      clickedAlias: resolvedAlias
     });
   };
 
@@ -4834,7 +4891,8 @@ function App() {
         const isOffline = activeProfile.status === 'Offline' || activeProfile.isOnline === false;
         const displayStatus = isOffline ? 'Offline' : (activeProfile.status || 'Online');
         const statusSlug = displayStatus.toLowerCase().replace(/\s+/g, '-');
-        const hasRenamed = Boolean(
+        const isCreator = isCreatorAlias(activeProfile.alias) || isCreatorAlias(selectedUserProfile.clickedAlias);
+        const hasRenamed = !isCreator && Boolean(
           selectedUserProfile.clickedAlias &&
           activeProfile.alias &&
           selectedUserProfile.clickedAlias.toLowerCase() !== activeProfile.alias.toLowerCase()
@@ -4876,7 +4934,7 @@ function App() {
                   <span>{displayStatus}</span>
                 </span>
                 <p className="user-popup-bio">
-                  {activeProfile.bio || 'Encrypted mesh user'}
+                  {sanitizeBio(activeProfile.bio, isCreator ? 'Creator & Architect of Shadow Talk' : 'Encrypted mesh user')}
                 </p>
 
                 <div className="user-popup-actions">

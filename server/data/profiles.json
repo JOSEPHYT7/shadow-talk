@@ -6,7 +6,7 @@
     "isOnline": true,
     "status": "Online",
     "createdAt": 1789926139032,
-    "updatedAt": 1791566101496,
+    "updatedAt": 1791569220682,
     "previousAliases": [],
     "color": "#00a8ff",
     "avatar": "data:image/svg+xml;utf8,<svg viewBox=\"0 0 100 100\" xmlns=\"http://www.w3.org/2000/svg\">\n      <circle cx=\"50\" cy=\"50\" r=\"48\" fill=\"%2310b981\"/>\n      <ellipse cx=\"50\" cy=\"98\" rx=\"32\" ry=\"22\" fill=\"%23047857\"/>\n      <circle cx=\"24\" cy=\"42\" r=\"10\" fill=\"%23064e3b\"/>\n      <circle cx=\"76\" cy=\"42\" r=\"10\" fill=\"%23064e3b\"/>\n      <rect x=\"44\" y=\"62\" width=\"12\" height=\"14\" rx=\"3\" fill=\"%23ffedd5\"/>\n      <circle cx=\"50\" cy=\"48\" r=\"22\" fill=\"%23ffedd5\"/>\n      <circle cx=\"43\" cy=\"48\" r=\"2.5\" fill=\"%23064e3b\"/>\n      <circle cx=\"57\" cy=\"48\" r=\"2.5\" fill=\"%23064e3b\"/>\n      <circle cx=\"43\" cy=\"47\" r=\"0.8\" fill=\"%23ffffff\"/>\n      <circle cx=\"57\" cy=\"47\" r=\"0.8\" fill=\"%23ffffff\"/>\n      <path d=\"M45 56 Q50 61 55 56\" stroke=\"%23047857\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/>\n      <path d=\"M30 40 C32 26, 44 20, 64 20 C72 20, 74 28, 70 36 C62 30, 48 30, 36 38 Z\" fill=\"%23064e3b\"/>\n      <path d=\"M30 38 Q50 36 70 38\" stroke=\"%23064e3b\" stroke-width=\"6\" stroke-linecap=\"round\"/>\n    </svg>",
@@ -14,16 +14,16 @@
     "isVerified": true,
     "isRefresh": true,
     "hasVisited": true,
-    "lastSeen": 1791566100709
+    "lastSeen": 1791569220041
   },
   "usr_2i4zg49q8": {
     "alias": "darsha",
     "userId": "usr_2i4zg49q8",
     "welcomed": true,
-    "isOnline": true,
-    "status": "Online",
+    "isOnline": false,
+    "status": "Offline",
     "createdAt": 1789835101841,
-    "updatedAt": 1791565875318,
+    "updatedAt": 1791566759626,
     "previousAliases": [
       "kai_rivera24",
       "d",
@@ -39,7 +39,7 @@
     "avatar": "data:image/svg+xml;utf8,<svg viewBox=\"0 0 100 100\" xmlns=\"http://www.w3.org/2000/svg\">\n      <circle cx=\"50\" cy=\"50\" r=\"48\" fill=\"%23f97316\"/>\n      <ellipse cx=\"50\" cy=\"98\" rx=\"32\" ry=\"22\" fill=\"%230284c7\"/>\n      <circle cx=\"40\" cy=\"20\" r=\"10\" fill=\"%23431407\"/>\n      <circle cx=\"60\" cy=\"20\" r=\"10\" fill=\"%23431407\"/>\n      <rect x=\"44\" y=\"62\" width=\"12\" height=\"14\" rx=\"3\" fill=\"%23fed7aa\"/>\n      <circle cx=\"50\" cy=\"48\" r=\"22\" fill=\"%23fed7aa\"/>\n      <circle cx=\"43\" cy=\"48\" r=\"2.5\" fill=\"%23431407\"/>\n      <circle cx=\"57\" cy=\"48\" r=\"2.5\" fill=\"%23431407\"/>\n      <ellipse cx=\"38\" cy=\"52\" rx=\"3\" ry=\"2\" fill=\"%23fdba74\"/>\n      <ellipse cx=\"62\" cy=\"52\" rx=\"3\" ry=\"2\" fill=\"%23fdba74\"/>\n      <path d=\"M46 56 Q50 61 54 56\" stroke=\"%239a3412\" stroke-width=\"2.2\" stroke-linecap=\"round\" fill=\"none\"/>\n      <path d=\"M30 40 C32 26, 48 24, 70 26 C68 34, 52 32, 36 40 Z\" fill=\"%23431407\"/>\n    </svg>",
     "bio": "Encrypted mesh developer",
     "isVerified": true,
-    "lastSeen": 1791565874620,
+    "lastSeen": 1791566759626,
     "isRefresh": true,
     "hasVisited": true,
     "isSocietyMember": true,
@@ -54,7 +54,7 @@
     "status": "Online",
     "isOnline": true,
     "isVerified": true,
-    "updatedAt": 1791556093997
+    "updatedAt": 1791569135955
   },
   "usr_system_root_0x9": {
     "alias": "system_root",
@@ -66,9 +66,9 @@
     "isOnline": false,
     "isVerified": true,
     "welcomed": true,
-    "lastSeen": 1790951294000,
-    "createdAt": 1788964094000,
-    "updatedAt": 1790951294000
+    "lastSeen": 1790964335957,
+    "createdAt": 1788977135957,
+    "updatedAt": 1790964335957
   },
   "user_charles": {
     "alias": "Charlie",
@@ -83,10 +83,10 @@
     "alias": "amara",
     "userId": "usr_j4ltzh3hg",
     "welcomed": true,
-    "isOnline": true,
-    "status": "Online",
+    "isOnline": false,
+    "status": "Offline",
     "createdAt": 1789916342119,
-    "updatedAt": 1791565774730,
+    "updatedAt": 1791566709649,
     "previousAliases": [
       "aria_knight60",
       "amara_cruz"
@@ -95,7 +95,7 @@
     "avatar": "data:image/svg+xml;utf8,<svg viewBox=\"0 0 100 100\" xmlns=\"http://www.w3.org/2000/svg\">\n      <circle cx=\"50\" cy=\"50\" r=\"48\" fill=\"%23b45309\"/>\n      <ellipse cx=\"50\" cy=\"98\" rx=\"32\" ry=\"22\" fill=\"%2318181b\"/>\n      <rect x=\"44\" y=\"62\" width=\"12\" height=\"14\" rx=\"3\" fill=\"%23ffedd5\"/>\n      <circle cx=\"50\" cy=\"48\" r=\"22\" fill=\"%23ffedd5\"/>\n      <circle cx=\"43\" cy=\"48\" r=\"2.5\" fill=\"%2327272a\"/>\n      <circle cx=\"57\" cy=\"48\" r=\"2.5\" fill=\"%2327272a\"/>\n      <circle cx=\"39\" cy=\"52\" r=\"1.5\" fill=\"%23ea580c\"/>\n      <circle cx=\"61\" cy=\"52\" r=\"1.5\" fill=\"%23ea580c\"/>\n      <path d=\"M45 57 Q50 62 55 57\" stroke=\"%23c2410c\" stroke-width=\"2.2\" stroke-linecap=\"round\" fill=\"none\"/>\n      <path d=\"M28 42 C28 22, 42 16, 64 18 C74 19, 76 28, 74 38 C68 28, 54 26, 42 32 Z\" fill=\"%23ea580c\"/>\n      <path d=\"M46 16 Q52 10 54 16\" stroke=\"%23ea580c\" stroke-width=\"4\" stroke-linecap=\"round\"/>\n    </svg>",
     "bio": "hello people",
     "isVerified": false,
-    "lastSeen": 1791565774268,
+    "lastSeen": 1791566709649,
     "isRefresh": true,
     "hasVisited": true
   },
