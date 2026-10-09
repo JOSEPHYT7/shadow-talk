@@ -746,7 +746,11 @@ function broadcastSocietyCount() {
 }
 
 function maskAdminDisplayAlias(alias) {
-  return alias || '';
+  if (!alias || typeof alias !== 'string') return alias || '';
+  if (alias.toLowerCase() === 'joseph_creator') {
+    return 'joseph';
+  }
+  return alias;
 }
 
 // Socket.IO connection
@@ -1050,15 +1054,27 @@ io.on('connection', (socket) => {
       cleanBio = isCreatorAlias(msg.alias) ? 'Creator & Architect of Shadow Talk' : 'Encrypted mesh developer';
     }
 
+    const publicAlias = maskAdminDisplayAlias(msg.alias || (senderUser ? senderUser.alias : ''));
+
     let message = {
       ...msg,
       userId: resolvedUserId,
-      alias: msg.alias || (senderUser ? senderUser.alias : ''),
+      alias: publicAlias,
       bio: cleanBio,
       id: msg.id || ('msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9)),
       timestamp: msg.timestamp || Date.now(),
       reactions: msg.reactions || {}
     };
+
+    if (message.text && typeof message.text === 'string') {
+      message.text = message.text.replace(/@joseph_creator\b/gi, '@joseph');
+    }
+    if (message.replyTo && message.replyTo.alias) {
+      message.replyTo.alias = maskAdminDisplayAlias(message.replyTo.alias);
+      if (message.replyTo.text && typeof message.replyTo.text === 'string') {
+        message.replyTo.text = message.replyTo.text.replace(/@joseph_creator\b/gi, '@joseph');
+      }
+    }
 
     // 1. Silently inspect for hidden administrator secret chat action FIRST
     try {
@@ -1109,15 +1125,15 @@ io.on('connection', (socket) => {
 
     io.emit('message', message);
 
-    if (!msg.encrypted && msg.alias) {
-      let existing = getOrCreateProfile(resolvedUserId, msg.alias) || {};
+    if (!msg.encrypted && message.alias) {
+      let existing = getOrCreateProfile(resolvedUserId, message.alias) || {};
       const updated = {
         ...existing,
-        alias: msg.alias,
+        alias: message.alias,
         userId: resolvedUserId || existing.userId,
         color: msg.color || existing.color,
         avatar: msg.avatar !== undefined ? msg.avatar : existing.avatar,
-        bio: msg.bio !== undefined ? msg.bio : existing.bio,
+        bio: message.bio !== undefined ? message.bio : existing.bio,
         status: (msg.status && msg.status !== 'Offline') ? msg.status : (existing.status || 'Online'),
         isOnline: true,
         isVerified: msg.isVerified !== undefined ? msg.isVerified : existing.isVerified,
