@@ -317,12 +317,19 @@ const DATA_DIR = path.join(__dirname, 'data');
 const PROFILES_FILE = path.join(DATA_DIR, 'profiles.json');
 const serverStartTime = Date.now();
 
+const isCreatorAlias = (alias) => {
+  if (!alias || typeof alias !== 'string') return false;
+  const lower = alias.trim().toLowerCase();
+  return lower === 'joseph_creator' || lower === 'joseph';
+};
+
 function loadProfiles() {
   try {
     if (fs.existsSync(PROFILES_FILE)) {
       const data = JSON.parse(fs.readFileSync(PROFILES_FILE, 'utf-8'));
       for (const [id, p] of Object.entries(data)) {
         if (p && (p.userId || p.alias)) {
+          if (p.alias && isCreatorAlias(p.alias)) continue;
           if (p.userId) userProfiles.set(p.userId, p);
           if (p.alias) userProfiles.set(p.alias.toLowerCase(), p);
         }
@@ -336,7 +343,7 @@ function loadProfiles() {
   try {
     if (Array.isArray(messages)) {
       for (const m of messages) {
-        if (m && m.alias && m.alias !== 'James' && m.alias !== 'System') {
+        if (m && m.alias && m.alias !== 'James' && m.alias !== 'System' && !isCreatorAlias(m.alias)) {
           const lower = m.alias.toLowerCase();
           let p = getOrCreateProfile(m.userId, m.alias);
           if (!p) {
@@ -399,6 +406,7 @@ function persistProfiles() {
       const exportObj = {};
       for (const p of userProfiles.values()) {
         if (p && p.userId) {
+          if (p.alias && isCreatorAlias(p.alias)) continue;
           exportObj[p.userId] = p;
         }
       }
@@ -424,6 +432,7 @@ function getOrCreateProfile(userId, alias) {
 
 function saveProfile(profile) {
   if (!profile) return;
+  if (profile.alias && isCreatorAlias(profile.alias)) return;
   if (profile.userId) userProfiles.set(profile.userId, profile);
   if (profile.alias) userProfiles.set(profile.alias.toLowerCase(), profile);
   persistProfiles();
@@ -473,7 +482,7 @@ const getRealUserCount = () => {
     const sock = io.sockets.sockets.get(socketId);
     if (sock && sock.connected) {
       if (user && user.alias) {
-        if (user.alias === 'James' || user.userId === 'bot_james') continue; // Exclude internal bot
+        if (user.alias === 'James' || user.userId === 'bot_james' || isCreatorAlias(user.alias)) continue; // Exclude internal bot and creator
         // Deduplicate using userId (unique per browser client) or alias
         const key = (user.userId || user.alias).toString().toLowerCase();
         uniqueUsers.add(key);
@@ -507,9 +516,8 @@ const getOnlineUserAliases = () => {
 
     const sock = io.sockets.sockets.get(socketId);
     if (sock && sock.connected && user && user.alias) {
-      if (user.alias !== 'James' && user.userId !== 'bot_james') {
-        const displayAlias = user.alias.toLowerCase() === 'joseph_creator' ? 'joseph' : user.alias;
-        aliases.add(displayAlias);
+      if (user.alias !== 'James' && user.userId !== 'bot_james' && !isCreatorAlias(user.alias)) {
+        aliases.add(user.alias);
       }
     }
   }
@@ -542,7 +550,7 @@ const jamesBot = new JamesBot(io, (msg) => {
   getOnlineUsersList: () => {
     const list = [];
     for (const u of activeUsers.values()) {
-      if (u && u.alias && u.alias !== 'James' && u.userId !== 'bot_james') {
+      if (u && u.alias && u.alias !== 'James' && u.userId !== 'bot_james' && !isCreatorAlias(u.alias)) {
         list.push(u);
       }
     }
@@ -786,7 +794,7 @@ io.on('connection', (socket) => {
     }
 
     if (user && (user.userId || user.alias)) {
-      if (user.alias === 'James' || user.userId === 'bot_james') return;
+      if (user.alias === 'James' || user.userId === 'bot_james' || isCreatorAlias(user.alias)) return;
 
       // Check if user still has other active sockets open (e.g. another tab)
       let stillOnline = false;
@@ -812,7 +820,7 @@ io.on('connection', (socket) => {
           profile.updatedAt = Date.now();
           saveProfile(profile);
           io.emit('userProfileUpdated', profile);
-          if (profile.alias && profile.alias !== 'Visitor' && profile.alias !== 'James') {
+          if (profile.alias && profile.alias !== 'Visitor' && profile.alias !== 'James' && !isCreatorAlias(profile.alias)) {
             const displayAlias = maskAdminDisplayAlias(profile.alias);
             io.emit('presenceNotice', {
               id: 'pres_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
@@ -835,7 +843,7 @@ io.on('connection', (socket) => {
 
   socket.on('userLeaving', () => {
     const user = activeUsers.get(socket.id);
-    if (user && user.alias && user.alias !== 'Visitor' && user.alias !== 'James') {
+    if (user && user.alias && user.alias !== 'Visitor' && user.alias !== 'James' && !isCreatorAlias(user.alias)) {
       const displayAlias = maskAdminDisplayAlias(user.alias);
       io.emit('presenceNotice', {
         id: 'pres_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
@@ -915,7 +923,7 @@ io.on('connection', (socket) => {
       io.emit('userProfileUpdated', updatedProfile);
 
       // Broadcast Telegram-style presence notice (joined the room / came online back)
-      if (!isRefresh && userData.alias && userData.alias !== 'Visitor' && userData.alias !== 'James') {
+      if (!isRefresh && userData.alias && userData.alias !== 'Visitor' && userData.alias !== 'James' && !isCreatorAlias(userData.alias)) {
         const displayAlias = maskAdminDisplayAlias(userData.alias);
         const pType = isReturning ? 'online_back' : 'joined_room';
         const pText = isReturning ? `@${displayAlias} came online back` : `@${displayAlias} joined the room`;

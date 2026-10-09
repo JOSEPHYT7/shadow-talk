@@ -1,8 +1,8 @@
 /**
- * Secret Society Member Administration & Cryptographic Verification Service
- * Manages member induction, secure password hashing (PBKDF2/SHA-512), credential generation,
- * and email transmission of enclave passphrases.
- */
+* Secret Society Member Administration & Cryptographic Verification Service
+* Manages member induction, secure password hashing (PBKDF2/SHA-512), credential generation,
+* and email transmission of enclave passphrases.
+*/
 
 const fs = require('fs');
 const path = require('path');
@@ -218,7 +218,7 @@ async function approveCandidate(applicationId, customPassphrase = null) {
   // Check if alias or email already an active member
   const existing = members.find(
     m => (app.alias && m.alias && m.alias.toLowerCase() === app.alias.toLowerCase()) ||
-         (app.email && m.email && m.email.toLowerCase() === app.email.toLowerCase())
+      (app.email && m.email && m.email.toLowerCase() === app.email.toLowerCase())
   );
 
   const rawPassphrase = customPassphrase?.trim() || generateMemorablePassphrase();
@@ -259,7 +259,7 @@ async function approveCandidate(applicationId, customPassphrase = null) {
   saveMembers(members);
 
   // Send induction email asynchronously
-  sendAcceptanceEmail(app.email, app.alias, rawPassphrase).catch(() => {});
+  sendAcceptanceEmail(app.email, app.alias, rawPassphrase).catch(() => { });
 
   return {
     success: true,
@@ -334,7 +334,7 @@ async function addMemberDirect({ alias, email, fullName, role, location, customP
   saveMembers(members);
 
   if (cleanEmail) {
-    sendAcceptanceEmail(cleanEmail, cleanAlias, rawPassphrase).catch(() => {});
+    sendAcceptanceEmail(cleanEmail, cleanAlias, rawPassphrase).catch(() => { });
   }
 
   return {
@@ -380,7 +380,7 @@ async function regenerateMemberPassword(memberId) {
   saveMembers(members);
 
   if (member.email) {
-    sendAcceptanceEmail(member.email, member.alias, rawPassphrase).catch(() => {});
+    sendAcceptanceEmail(member.email, member.alias, rawPassphrase).catch(() => { });
   }
 
   return {
@@ -655,7 +655,10 @@ function processNameChangeRequest(requestId, decision = 'approved') {
 
   item.status = decision;
   item.processedAt = new Date().toISOString();
-  saveNameChangeRequests(requests);
+
+  // Remove the request from active requests after approval or decline
+  const remaining = requests.filter(r => r.id !== requestId);
+  saveNameChangeRequests(remaining);
 
   let updatedMember = null;
   if (decision === 'approved') {

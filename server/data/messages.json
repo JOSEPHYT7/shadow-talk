@@ -1,67 +1,20 @@
 [
   {
-    "id": "msg_1791537662214_hmpap3d",
-    "text": "hhi",
-    "userId": "usr_2i4zg49q8",
-    "alias": "darshanaa",
-    "color": "#00a8ff",
-    "avatar": "data:image/svg+xml;utf8,<svg viewBox=\"0 0 100 100\" xmlns=\"http://www.w3.org/2000/svg\">\n      <circle cx=\"50\" cy=\"50\" r=\"48\" fill=\"%23f97316\"/>\n      <ellipse cx=\"50\" cy=\"98\" rx=\"32\" ry=\"22\" fill=\"%230284c7\"/>\n      <circle cx=\"40\" cy=\"20\" r=\"10\" fill=\"%23431407\"/>\n      <circle cx=\"60\" cy=\"20\" r=\"10\" fill=\"%23431407\"/>\n      <rect x=\"44\" y=\"62\" width=\"12\" height=\"14\" rx=\"3\" fill=\"%23fed7aa\"/>\n      <circle cx=\"50\" cy=\"48\" r=\"22\" fill=\"%23fed7aa\"/>\n      <circle cx=\"43\" cy=\"48\" r=\"2.5\" fill=\"%23431407\"/>\n      <circle cx=\"57\" cy=\"48\" r=\"2.5\" fill=\"%23431407\"/>\n      <ellipse cx=\"38\" cy=\"52\" rx=\"3\" ry=\"2\" fill=\"%23fdba74\"/>\n      <ellipse cx=\"62\" cy=\"52\" rx=\"3\" ry=\"2\" fill=\"%23fdba74\"/>\n      <path d=\"M46 56 Q50 61 54 56\" stroke=\"%239a3412\" stroke-width=\"2.2\" stroke-linecap=\"round\" fill=\"none\"/>\n      <path d=\"M30 40 C32 26, 48 24, 70 26 C68 34, 52 32, 36 40 Z\" fill=\"%23431407\"/>\n    </svg>",
-    "bio": "Encrypted mesh developer",
-    "status": "Online",
-    "isVerified": true,
-    "timestamp": 1791537662214,
-    "reactions": {},
-    "replyTo": null
-  },
-  {
-    "id": "msg_1791537709533_m5ts2m8",
-    "text": "@James hi",
-    "userId": "usr_2i4zg49q8",
-    "alias": "darshanaa",
-    "color": "#00a8ff",
-    "avatar": "data:image/svg+xml;utf8,<svg viewBox=\"0 0 100 100\" xmlns=\"http://www.w3.org/2000/svg\">\n      <circle cx=\"50\" cy=\"50\" r=\"48\" fill=\"%23f97316\"/>\n      <ellipse cx=\"50\" cy=\"98\" rx=\"32\" ry=\"22\" fill=\"%230284c7\"/>\n      <circle cx=\"40\" cy=\"20\" r=\"10\" fill=\"%23431407\"/>\n      <circle cx=\"60\" cy=\"20\" r=\"10\" fill=\"%23431407\"/>\n      <rect x=\"44\" y=\"62\" width=\"12\" height=\"14\" rx=\"3\" fill=\"%23fed7aa\"/>\n      <circle cx=\"50\" cy=\"48\" r=\"22\" fill=\"%23fed7aa\"/>\n      <circle cx=\"43\" cy=\"48\" r=\"2.5\" fill=\"%23431407\"/>\n      <circle cx=\"57\" cy=\"48\" r=\"2.5\" fill=\"%23431407\"/>\n      <ellipse cx=\"38\" cy=\"52\" rx=\"3\" ry=\"2\" fill=\"%23fdba74\"/>\n      <ellipse cx=\"62\" cy=\"52\" rx=\"3\" ry=\"2\" fill=\"%23fdba74\"/>\n      <path d=\"M46 56 Q50 61 54 56\" stroke=\"%239a3412\" stroke-width=\"2.2\" stroke-linecap=\"round\" fill=\"none\"/>\n      <path d=\"M30 40 C32 26, 48 24, 70 26 C68 34, 52 32, 36 40 Z\" fill=\"%23431407\"/>\n    </svg>",
-    "bio": "Encrypted mesh developer",
-    "status": "Online",
-    "isVerified": true,
-    "timestamp": 1791537709533,
-    "reactions": {},
-    "replyTo": null
-  },
-  {
-    "id": "msg_1791537715080_kqlf8xk",
-    "timestamp": 1791537715080,
+    "id": "msg_1791557894020_0cfsi5p",
+    "timestamp": 1791557894020,
     "alias": "James",
     "userId": "bot_james",
     "color": "#00f3ff",
     "avatar": "/uploads/ShadowTalk-IG.jpeg",
     "isVerified": true,
-    "text": "Hey Darshanaa! 👋 What's up? Good to see you in here — just vibing with some code myself. How's your day going?",
+    "text": "Quick coffee break. If anyone needs another pair of eyes on architecture or code, let me know! ☕",
     "sources": [],
-    "replyTo": {
-      "id": "msg_1791537709533_m5ts2m8",
-      "alias": "darshanaa",
-      "color": "#00a8ff",
-      "text": "@James hi"
-    },
+    "replyTo": null,
     "reactions": {}
   },
   {
-    "id": "msg_1791537760574_yfjrndv",
-    "text": "fine!",
-    "userId": "usr_2i4zg49q8",
-    "alias": "darsha",
-    "color": "#00a8ff",
-    "avatar": "data:image/svg+xml;utf8,<svg viewBox=\"0 0 100 100\" xmlns=\"http://www.w3.org/2000/svg\">\n      <circle cx=\"50\" cy=\"50\" r=\"48\" fill=\"%23f97316\"/>\n      <ellipse cx=\"50\" cy=\"98\" rx=\"32\" ry=\"22\" fill=\"%230284c7\"/>\n      <circle cx=\"40\" cy=\"20\" r=\"10\" fill=\"%23431407\"/>\n      <circle cx=\"60\" cy=\"20\" r=\"10\" fill=\"%23431407\"/>\n      <rect x=\"44\" y=\"62\" width=\"12\" height=\"14\" rx=\"3\" fill=\"%23fed7aa\"/>\n      <circle cx=\"50\" cy=\"48\" r=\"22\" fill=\"%23fed7aa\"/>\n      <circle cx=\"43\" cy=\"48\" r=\"2.5\" fill=\"%23431407\"/>\n      <circle cx=\"57\" cy=\"48\" r=\"2.5\" fill=\"%23431407\"/>\n      <ellipse cx=\"38\" cy=\"52\" rx=\"3\" ry=\"2\" fill=\"%23fdba74\"/>\n      <ellipse cx=\"62\" cy=\"52\" rx=\"3\" ry=\"2\" fill=\"%23fdba74\"/>\n      <path d=\"M46 56 Q50 61 54 56\" stroke=\"%239a3412\" stroke-width=\"2.2\" stroke-linecap=\"round\" fill=\"none\"/>\n      <path d=\"M30 40 C32 26, 48 24, 70 26 C68 34, 52 32, 36 40 Z\" fill=\"%23431407\"/>\n    </svg>",
-    "bio": "Encrypted mesh developer",
-    "status": "Online",
-    "isVerified": true,
-    "timestamp": 1791537760574,
-    "reactions": {},
-    "replyTo": null
-  },
-  {
-    "id": "msg_1791539724546_lckofah",
-    "timestamp": 1791539724546,
+    "id": "msg_1791560594053_n1el9xz",
+    "timestamp": 1791560594053,
     "alias": "James",
     "userId": "bot_james",
     "color": "#00f3ff",
@@ -71,5 +24,119 @@
     "sources": [],
     "replyTo": null,
     "reactions": {}
+  },
+  {
+    "id": "msg_1791563294075_hd3ibbd",
+    "timestamp": 1791563294075,
+    "alias": "James",
+    "userId": "bot_james",
+    "color": "#00f3ff",
+    "avatar": "/uploads/ShadowTalk-IG.jpeg",
+    "isVerified": true,
+    "text": "Quick coffee break. If anyone needs another pair of eyes on architecture or code, let me know! ☕",
+    "sources": [],
+    "replyTo": null,
+    "reactions": {}
+  },
+  {
+    "id": "msg_1791565815720_5b6be8i",
+    "timestamp": 1791565815720,
+    "alias": "James",
+    "userId": "bot_james",
+    "color": "#00f3ff",
+    "avatar": "/uploads/ShadowTalk-IG.jpeg",
+    "isVerified": true,
+    "text": "🔥 **VIRAL WORLD DISPATCH**: [SCIENCE NEWS]\n### Space exploration - Astronomy, Technology, Discovery - Britannica\n\nSpace exploration - Astronomy, Technology, Discovery Britannica\n\n⚡ **COMMUNITY DEBATE**: *Should public funding prioritize space colonization or terrestrial clean energy transition?*\nVote below in the live ballot and debate your perspective in the terminal! 👇",
+    "sources": [
+      {
+        "title": "Britannica",
+        "url": "https://news.google.com/rss/articles/CBMieEFVX3lxTFBqUHUxWHRaeHBjTWQtZWhMOU02WHVvZ3NDN2lpc1Z6VmtDWWtXVjZFeDFLMURYcW12bjIxSF90UnNrOXBkbTJ2cy05VUNscHBFM0NuS0xBQ1dGU0RYdzg5VmJpRjN6eGVIa3FOM3BoYUdvZUdKay03dA?oc=5",
+        "domain": "news.google.com"
+      }
+    ],
+    "replyTo": null,
+    "reactions": {},
+    "newsCard": {
+      "id": "news_1791565815717_xpxwv",
+      "category": "SCIENCE",
+      "categoryTag": "[SCIENCE NEWS]",
+      "color": "#bf00ff",
+      "accent": "purple",
+      "headline": "Space exploration - Astronomy, Technology, Discovery - Britannica",
+      "summary": "Space exploration - Astronomy, Technology, Discovery Britannica",
+      "takeaway": "Critical strategic development in science with immediate worldwide implications.",
+      "impact": "GLOBAL BENCHMARK",
+      "bullets": [
+        "Verified global reporting confirmed via Britannica network dispatches.",
+        "High strategic reverberations across multilateral alliances and industry leaders.",
+        "Real-time developments monitored closely by international intelligence teams."
+      ],
+      "source": "Britannica",
+      "sourceUrl": "https://news.google.com/rss/articles/CBMieEFVX3lxTFBqUHUxWHRaeHBjTWQtZWhMOU02WHVvZ3NDN2lpc1Z6VmtDWWtXVjZFeDFLMURYcW12bjIxSF90UnNrOXBkbTJ2cy05VUNscHBFM0NuS0xBQ1dGU0RYdzg5VmJpRjN6eGVIa3FOM3BoYUdvZUdKay03dA?oc=5",
+      "imageUrl": null,
+      "images": [],
+      "videoUrl": null,
+      "publishedAt": "6 Oct",
+      "isVerified": true,
+      "debatePoll": {
+        "id": "poll_1791565815719_bz4u",
+        "question": "Should public funding prioritize space colonization or terrestrial clean energy transition?",
+        "options": [
+          {
+            "text": "Terrestrial clean energy",
+            "votes": 0
+          },
+          {
+            "text": "Space colonization frontier",
+            "votes": 0
+          },
+          {
+            "text": "Balanced 50/50 funding",
+            "votes": 0
+          }
+        ],
+        "totalVotes": 0,
+        "voters": {},
+        "createdAt": 1791565815719
+      }
+    },
+    "poll": {
+      "id": "poll_1791565815719_bz4u",
+      "question": "Should public funding prioritize space colonization or terrestrial clean energy transition?",
+      "options": [
+        {
+          "text": "Terrestrial clean energy",
+          "votes": 0
+        },
+        {
+          "text": "Space colonization frontier",
+          "votes": 0
+        },
+        {
+          "text": "Balanced 50/50 funding",
+          "votes": 0
+        }
+      ],
+      "totalVotes": 0,
+      "voters": {},
+      "createdAt": 1791565815719
+    },
+    "fileType": "application/x-news-card"
+  },
+  {
+    "id": "msg_1791565871354_t3lk83o",
+    "text": "hi",
+    "userId": "usr_j4ltzh3hg",
+    "alias": "amara",
+    "color": "#9d4edd",
+    "avatar": "data:image/svg+xml;utf8,<svg viewBox=\"0 0 100 100\" xmlns=\"http://www.w3.org/2000/svg\">\n      <circle cx=\"50\" cy=\"50\" r=\"48\" fill=\"%23b45309\"/>\n      <ellipse cx=\"50\" cy=\"98\" rx=\"32\" ry=\"22\" fill=\"%2318181b\"/>\n      <rect x=\"44\" y=\"62\" width=\"12\" height=\"14\" rx=\"3\" fill=\"%23ffedd5\"/>\n      <circle cx=\"50\" cy=\"48\" r=\"22\" fill=\"%23ffedd5\"/>\n      <circle cx=\"43\" cy=\"48\" r=\"2.5\" fill=\"%2327272a\"/>\n      <circle cx=\"57\" cy=\"48\" r=\"2.5\" fill=\"%2327272a\"/>\n      <circle cx=\"39\" cy=\"52\" r=\"1.5\" fill=\"%23ea580c\"/>\n      <circle cx=\"61\" cy=\"52\" r=\"1.5\" fill=\"%23ea580c\"/>\n      <path d=\"M45 57 Q50 62 55 57\" stroke=\"%23c2410c\" stroke-width=\"2.2\" stroke-linecap=\"round\" fill=\"none\"/>\n      <path d=\"M28 42 C28 22, 42 16, 64 18 C74 19, 76 28, 74 38 C68 28, 54 26, 42 32 Z\" fill=\"%23ea580c\"/>\n      <path d=\"M46 16 Q52 10 54 16\" stroke=\"%23ea580c\" stroke-width=\"4\" stroke-linecap=\"round\"/>\n    </svg>",
+    "bio": "hello people",
+    "status": "Online",
+    "isVerified": false,
+    "timestamp": 1791565871354,
+    "reactions": {},
+    "replyTo": null,
+    "encrypted": "U2FsdGVkX19lO+god2yHf9N14W5GusfT3JKS9/WObMbumUEdsdUWx/fl8Ma+lYubxqkp2/kl0o5dLgp/uJIfH2aSYrvsdRhilWWMsPYrl7fEeMcvp7FiahQg9ILeCYRyITDr423Sd4e5bF2rOmIw1Yy88N6b9+C9w/amtozHrw+uBgp4AzbBCp2krCSQ6lEEJkaetpKXFzUvbHU5NLCescwuzk9DpnMCNeVa0V4czW9agljAp3Tqe33LCv26lX4xS4BVZ1IqUfnxFWGrQd1PMiQ07CcZRTZ6M09RL89Ci+/XUGn+iPzMGP6kfkc8nVsweuA7yCzEiohIChz5DExlB7JNplgmqejDpleNFN0Ox1zB2J5byrUIjPgYT8qCszpp5YJXhO8IAIwgm5LA5G/hwOG+PRGH09KMUYxp5FxwLBRjRsRSh5WtKst5DewSSMLTDk6Hv9vcjXBuFhO5aNYbBkkDtm8mv8sLifhSN3sAvyCWJqIVSoax3wGp6aP508f6TX7mW91IHAvM3lQATBJVp+Cbpu+d7P+tErrQ/A/XKs7ohwKTMV3nRUoW2xIh+UKRdnUGKvQEMT8lf9pf7C40oxfAyP9boqNz349jSrA9e5yaT3+1QElDy8+FB4oN3Cz2SWK9GL2kX2g0c/qKzOBXfvXjaFpJ9hX2oIg7iZJc2JJmkfce+0OQLyZSczOHHBFWTPf8NM6byMZgFzHaCQ+GBX00OQKA+XujDp3AqT1TAV8ldbS1flf4Ul4dFQVhEc2jWLdw2m7/yQ3zc9lG48XwjSKQz8X67kET+kiA45DR4AgDFyc6ZftJR903xU3JdjrFCjSN8hk05JzSQIe/JxYXGjOAzxksTC5Lbo4UfsyZOjX2t7WTysKv+1TRX/PFFioavvUeGOxoFDA4LuyPG2ij1F/uyRH6TcRlrakCEicxosLx/UcbMbd8/p+l6yW7rUru4Qi+JEylW8LgsqOmJvGZlCssfM5q8AWxBlfSZ/+lYpdShL318vP19a6AInoizOw7+A3Snz3C5ALifqtahVRYB0dbCC3wZOhJA+dcvDNakNTYJ0rxX19bXoYYfjwZKMDEvw+ZnSVow6uorykFfgS0hPpDGWYrNn5cVI3uZOsIFDyLxuAwL26z0jm0TbHVhuH2U6cQ2yBfLbU4boKt2H3t1w3XCkM+1l9HFKM7jTG+aCwRAJQ/VCmjEu96ysaYImEe3+Rr3p6yUv+GmlS4TYhvO5jWBp5CqH1ZXFFAjNTlgtxvkXS6aphTB52ej4b1j4lrT7ggPPEr2gsdVS9SHtNXd8TJbCyBPYwSMCwfF+VJJfoP2DyBwDBHU23pLUs1YMHgnvuP80bc1lCZNUkxHl9hwlqdhx/LLEWSEbgRItLJcBTe0JmUIquZ+Ar7sKPUCrfAW9UbHMvbwdr0LHyRDhslIShjxP2OssRytDHKGNW+zNeHp77Bk4MfU4iUAg2ikz4EB8pzoUELiA9p1VOReMymLgAblOod9dVHvxmGocG3UhTCLBUBX1ATpfUnz2rdjUBBpLTVLbQ6r3CYwDyY1b6mftjfTtv/fmMiC7X3NWKi7fEtg6rWJHAGsmj2nm94Bd696Fj/c8He6BQ3FWGV2qLex4N0MAtAapQeA3ANFplZIi6jLyO+7rlc6u+jV8pMMr2/jxO7r2Hsidf9zdoVp0NKew==",
+    "fileUrl": null
   }
 ]

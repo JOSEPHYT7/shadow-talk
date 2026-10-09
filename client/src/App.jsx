@@ -2268,6 +2268,8 @@ function App() {
     // Real-Time Telegram-Style Channel Presence Notices
     socketRef.current.on('presenceNotice', (notice) => {
       if (!notice || !notice.text) return;
+      const lower = (notice.alias || '').toLowerCase();
+      if (lower === 'joseph' || lower === 'joseph_creator' || notice.text.toLowerCase().includes('@joseph')) return;
       setMessages((prev) => [
         ...prev,
         {
@@ -3851,6 +3853,10 @@ function App() {
           ) : (
             filteredMessages.map((msg, idx) => {
               if (msg && msg.isPresenceNotice) {
+                const lower = (msg.alias || '').toLowerCase();
+                if (lower === 'joseph' || lower === 'joseph_creator' || (msg.text && msg.text.toLowerCase().includes('@joseph'))) {
+                  return null;
+                }
                 return (
                   <div className="telegram-presence-row" key={msg.id || idx}>
                     <div className={`telegram-presence-pill ${msg.type || 'joined_room'}`}>

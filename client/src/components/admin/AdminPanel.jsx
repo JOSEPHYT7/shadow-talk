@@ -43,6 +43,7 @@ import {
   AlertOctagon,
   Fingerprint,
   ChevronRight,
+  ArrowRight,
   Image as ImageIcon,
   Upload,
   ShieldAlert,
@@ -866,6 +867,7 @@ export function AdminPanel({
       });
       if (res.ok) {
         flashNotice('Membership withdrawn and verified badge revoked');
+        setSocietyWithdrawals(prev => prev.filter(w => w.id !== withdrawalId));
         fetchSocietyWithdrawals();
         fetchSocietyMembers();
         fetchUsers();
@@ -885,6 +887,7 @@ export function AdminPanel({
       });
       if (res.ok) {
         flashNotice('Withdrawal request dismissed');
+        setSocietyWithdrawals(prev => prev.filter(w => w.id !== withdrawalId));
         fetchSocietyWithdrawals();
       }
     } catch {}
@@ -904,6 +907,7 @@ export function AdminPanel({
       const data = await res.json();
       if (res.ok && data.success) {
         flashNotice(`Username updated to @${data.newAlias}`);
+        setNameChangeRequests(prev => prev.filter(r => r.id !== requestId));
         fetchNameChangeRequests();
         fetchSocietyMembers();
         fetchUsers();
@@ -927,6 +931,7 @@ export function AdminPanel({
       });
       if (res.ok) {
         flashNotice('Username change request dismissed');
+        setNameChangeRequests(prev => prev.filter(r => r.id !== requestId));
         fetchNameChangeRequests();
       }
     } catch {}
@@ -1061,7 +1066,7 @@ export function AdminPanel({
   });
 
   const pendingWithdrawals = societyWithdrawals.filter(w => w.status === 'pending');
-  const filteredWithdrawals = societyWithdrawals.filter((w) => {
+  const filteredWithdrawals = pendingWithdrawals.filter((w) => {
     if (!societySearch) return true;
     const q = societySearch.toLowerCase();
     return (
@@ -1071,7 +1076,7 @@ export function AdminPanel({
   });
 
   const pendingNameChanges = nameChangeRequests.filter(r => r.status === 'pending');
-  const filteredNameChanges = nameChangeRequests.filter((r) => {
+  const filteredNameChanges = pendingNameChanges.filter((r) => {
     if (!societySearch) return true;
     const q = societySearch.toLowerCase();
     return (
@@ -1217,7 +1222,7 @@ export function AdminPanel({
             onClick={() => setActiveTab('society')}
           >
             <Shield size={14} color="#ffd700" />
-            <span>Enclave Induction Council ({pendingApps.length + pendingWithdrawals.length})</span>
+            <span>Enclave Induction Council ({pendingApps.length + pendingWithdrawals.length + pendingNameChanges.length})</span>
           </button>
           <button
             type="button"
@@ -1638,6 +1643,12 @@ export function AdminPanel({
                       <span>WITHDRAWALS: {pendingWithdrawals.length}</span>
                     </div>
                   )}
+                  {pendingNameChanges.length > 0 && (
+                    <div className="society-stat-badge namechanges">
+                      <Edit3 size={14} color="#00f3ff" />
+                      <span>NAME CHANGES: {pendingNameChanges.length}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="society-toolbar-right">
@@ -1803,31 +1814,39 @@ export function AdminPanel({
                   <table className="admin-table">
                     <thead>
                       <tr>
-                        <th>MEMBER ALIAS</th>
-                        <th>FULL NAME</th>
-                        <th>EMAIL</th>
+                        <th style={{ width: '190px' }}>MEMBER ALIAS</th>
+                        <th style={{ width: '160px' }}>FULL NAME</th>
+                        <th style={{ width: '230px' }}>EMAIL / COMM</th>
                         <th>ROLE / RELAY</th>
-                        <th>CLEARANCE</th>
-                        <th>INDUCTED DATE</th>
-                        <th>ACTIONS</th>
+                        <th style={{ width: '150px' }}>CLEARANCE</th>
+                        <th style={{ width: '140px' }}>INDUCTED DATE</th>
+                        <th style={{ width: '200px', textAlign: 'center' }}>ACTIONS</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredMembers.map((m) => (
                         <tr key={m.id}>
                           <td>
-                            <strong className="gold-text">@{m.alias}</strong>
+                            <div className="member-alias-cell">
+                              <Shield size={14} color="#ffd700" className="member-shield-icon" />
+                              <strong className="gold-text">@{m.alias}</strong>
+                            </div>
                           </td>
-                          <td>{m.fullName || '—'}</td>
-                          <td>{m.email || '—'}</td>
+                          <td className="member-name-cell">{m.fullName || '—'}</td>
+                          <td className="member-email-cell"><code>{m.email || '—'}</code></td>
                           <td>
-                            <span>{m.role || 'Sovereign Inductee'}</span>
-                            {m.location && <span className="sub-loc">({m.location})</span>}
+                            <div className="member-role-cell">
+                              <span className="member-role-title">{m.role || 'Sovereign Inductee'}</span>
+                              {m.location && <span className="sub-loc">({m.location})</span>}
+                            </div>
                           </td>
                           <td>
-                            <span className="badge-clearance">{m.clearance || 'LEVEL-4'}</span>
+                            <span className="badge-clearance">
+                              <Lock size={10} color="#ffd700" />
+                              <span>{m.clearance || 'LEVEL-4 INDUCTED'}</span>
+                            </span>
                           </td>
-                          <td>{new Date(m.joinedAt).toLocaleDateString()}</td>
+                          <td className="member-date-cell">{new Date(m.joinedAt).toLocaleDateString()}</td>
                           <td>
                             <div className="table-actions">
                               <button
@@ -1922,45 +1941,55 @@ export function AdminPanel({
 
               {/* View 4: Username / Alias Change Requests */}
               {societySubTab === 'name-changes' && (
-                <div className="society-withdrawals-feed">
+                <div className="namechange-feed">
                   {filteredNameChanges.length === 0 ? (
                     <div className="society-empty-box">No username change requests found.</div>
                   ) : (
                     filteredNameChanges.map((req) => (
-                      <div key={req.id} className={`withdrawal-card ${req.status}`}>
-                        <div className="withdrawal-card-header">
-                          <div className="withdrawal-user-info">
-                            <Edit3 size={16} color={req.status === 'approved' ? '#38ef7d' : '#00f3ff'} />
-                            <div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ color: '#94a3b8', textDecoration: 'line-through', fontSize: '0.85rem' }}>@{req.oldAlias}</span>
-                                <ChevronRight size={14} color="#00f3ff" />
-                                <span style={{ color: '#00f3ff', fontWeight: 'bold', fontSize: '1rem' }}>@{req.newAlias}</span>
-                              </div>
-                              <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                                UID: {req.userId?.slice(0, 8)}... | Submitted on {new Date(req.submittedAt || req.timestamp).toLocaleString()}
-                              </span>
-                            </div>
+                      <div key={req.id} className={`namechange-card ${req.status || 'pending'}`}>
+                        <div className="namechange-card-header">
+                          <div className="namechange-transition-badge">
+                            <Edit3 size={13} className="namechange-badge-icon" />
+                            <span className="namechange-alias-old">@{req.oldAlias || req.currentAlias}</span>
+                            <ArrowRight size={14} className="namechange-arrow-icon" />
+                            <span className="namechange-alias-new">@{req.newAlias || req.requestedAlias}</span>
                           </div>
-                          <span className={`status-badge-chip ${req.status}`}>
-                            {req.status?.toUpperCase()}
+                          <span className={`status-badge-chip ${req.status || 'pending'}`}>
+                            {(req.status || 'pending').toUpperCase()}
                           </span>
                         </div>
 
+                        <div className="namechange-meta-row">
+                          <div className="info-cell">
+                            <span className="cell-lbl">MEMBER NAME:</span>
+                            <span className="cell-val">{req.fullName || 'Verified Member'}</span>
+                          </div>
+                          <div className="info-cell">
+                            <span className="cell-lbl">UID / ACCOUNT:</span>
+                            <span className="cell-val"><code>{req.userId?.slice(0, 12)}...</code></span>
+                          </div>
+                          <div className="info-cell">
+                            <span className="cell-lbl">EMAIL / CONTACT:</span>
+                            <span className="cell-val">{req.email || '—'}</span>
+                          </div>
+                          <div className="info-cell">
+                            <span className="cell-lbl">FILED AT:</span>
+                            <span className="cell-val">{new Date(req.submittedAt || req.timestamp).toLocaleString()}</span>
+                          </div>
+                        </div>
+
                         {req.reason && (
-                          <div className="withdrawal-reason-quote">
-                            <strong style={{ display: 'block', fontSize: '0.68rem', color: '#00f3ff', marginBottom: '0.3rem', letterSpacing: '0.06em' }}>
-                              JUSTIFICATION / REASON:
-                            </strong>
-                            <p style={{ margin: 0, fontStyle: 'italic', color: '#cbd5e1' }}>"{req.reason}"</p>
+                          <div className="namechange-reason-box">
+                            <span className="reason-lbl">STATED JUSTIFICATION / REASON FOR MODIFICATION:</span>
+                            <p>"{req.reason}"</p>
                           </div>
                         )}
 
                         {req.status === 'pending' && (
-                          <div className="withdrawal-actions-footer">
+                          <div className="namechange-actions">
                             <button
                               type="button"
-                              className="btn-dismiss-withdrawal"
+                              className="btn-dismiss-namechange"
                               onClick={() => handleDismissNameChange(req.id)}
                               title="Dismiss name change request"
                             >
@@ -1969,14 +1998,27 @@ export function AdminPanel({
                             </button>
                             <button
                               type="button"
-                              className="btn-approve-withdrawal"
-                              style={{ background: 'rgba(0, 243, 255, 0.15)', borderColor: '#00f3ff', color: '#00f3ff' }}
+                              className="btn-approve-namechange"
                               onClick={() => handleApproveNameChange(req.id)}
                               title="Approve username change and update member identity"
                             >
                               <CheckCircle size={13} />
-                              <span>Approve &amp; Update Alias</span>
+                              <span>Approve &amp; Update Member Alias</span>
                             </button>
+                          </div>
+                        )}
+
+                        {req.status === 'approved' && (
+                          <div className="namechange-status-note approved">
+                            <CheckCircle size={13} />
+                            <span>Identity successfully transitioned to @{req.newAlias || req.requestedAlias} across network.</span>
+                          </div>
+                        )}
+
+                        {req.status === 'dismissed' && (
+                          <div className="namechange-status-note dismissed">
+                            <XCircle size={13} />
+                            <span>Request was dismissed by administration.</span>
                           </div>
                         )}
                       </div>

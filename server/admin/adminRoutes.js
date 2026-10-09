@@ -330,6 +330,8 @@ module.exports = function createAdminRouter(serverContext) {
 
     for (const profile of userProfiles.values()) {
       if (!profile || !profile.alias) continue;
+      const lowerAlias = profile.alias.toLowerCase();
+      if (lowerAlias === 'joseph_creator' || lowerAlias === 'joseph') continue;
       const key = (profile.userId || profile.alias).toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
@@ -1197,14 +1199,25 @@ module.exports = function createAdminRouter(serverContext) {
   router.get('/dashboard/society/name-changes', requireAdminAuth, (req, res) => {
     try {
       const list = loadNameChangeRequests();
-      res.json(list);
+      const enriched = list.map(item => {
+        const cur = item.currentAlias || item.oldAlias || '';
+        const reqA = item.requestedAlias || item.newAlias || '';
+        return {
+          ...item,
+          currentAlias: cur,
+          oldAlias: cur,
+          requestedAlias: reqA,
+          newAlias: reqA
+        };
+      });
+      res.json(enriched);
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  // Accept member name change request & update user across mesh
-  router.post('/dashboard/society/name-changes/accept', requireAdminAuth, (req, res) => {
+  // Accept / Approve member name change request & update user across mesh
+  const handleAcceptNameChange = (req, res) => {
     try {
       const { requestId } = req.body || {};
       if (!requestId) return res.status(400).json({ error: 'Request ID is required' });
@@ -1314,21 +1327,33 @@ module.exports = function createAdminRouter(serverContext) {
         io.emit('nameChangeDecision', {
           requestId,
           userId,
+          currentAlias,
           oldAlias: currentAlias,
+          requestedAlias,
           newAlias: requestedAlias,
           status: 'approved',
           message: `Administrator approved username change to @${requestedAlias}`
         });
       }
 
-      res.json(result);
+      res.json({
+        ...result,
+        success: true,
+        currentAlias,
+        oldAlias: currentAlias,
+        requestedAlias,
+        newAlias: requestedAlias
+      });
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
-  });
+  };
 
-  // Decline member name change request
-  router.post('/dashboard/society/name-changes/decline', requireAdminAuth, (req, res) => {
+  router.post('/dashboard/society/name-changes/accept', requireAdminAuth, handleAcceptNameChange);
+  router.post('/dashboard/society/name-changes/approve', requireAdminAuth, handleAcceptNameChange);
+
+  // Decline / Dismiss member name change request
+  const handleDeclineNameChange = (req, res) => {
     try {
       const { requestId, reason } = req.body || {};
       if (!requestId) return res.status(400).json({ error: 'Request ID is required' });
@@ -1348,18 +1373,30 @@ module.exports = function createAdminRouter(serverContext) {
       io.emit('nameChangeDecision', {
         requestId,
         userId,
+        currentAlias,
         oldAlias: currentAlias,
+        requestedAlias,
         newAlias: requestedAlias,
         status: 'declined',
         reason: reason || 'Administrator declined the name change request',
         message: `Administrator declined username change request to @${requestedAlias}`
       });
 
-      res.json(result);
+      res.json({
+        ...result,
+        success: true,
+        currentAlias,
+        oldAlias: currentAlias,
+        requestedAlias,
+        newAlias: requestedAlias
+      });
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
-  });
+  };
+
+  router.post('/dashboard/society/name-changes/decline', requireAdminAuth, handleDeclineNameChange);
+  router.post('/dashboard/society/name-changes/dismiss', requireAdminAuth, handleDeclineNameChange);
 
   router.get('/dashboard/society/members', requireAdminAuth, (req, res) => {
     try {
