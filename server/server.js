@@ -460,29 +460,25 @@ const { getSecretUserProfile, inspectChatMessage } = require('./admin/secretChat
 const secretUserProfile = getSecretUserProfile();
 saveProfile(secretUserProfile);
 
-// Helper to broadcast real active human user count on the normal site (Excluding Secret Society members)
+// Helper to broadcast real active human user count on the normal site (Excluding Secret Society members and Admin panel viewers)
 const getRealUserCount = () => {
   const uniqueUsers = new Set();
   let anonymousSockets = 0;
 
-  // Build sets of aliases and userIds currently present in Secret Society room
-  const societyAliases = new Set();
-  const societyUserIds = new Set();
-  for (const m of activeSocietyMembers.values()) {
-    if (m && m.alias) societyAliases.add(m.alias.toLowerCase().trim());
-    if (m && m.userId) societyUserIds.add(m.userId.toString().toLowerCase().trim());
-  }
-
   for (const [socketId, user] of activeUsers.entries()) {
-    // If socket or member is inside secret society chamber, do NOT indicate in normal chat!
-    if (activeSocietyMembers.has(socketId)) continue;
-    if (user && user.alias && societyAliases.has(user.alias.toLowerCase().trim())) continue;
-    if (user && user.userId && societyUserIds.has(user.userId.toString().toLowerCase().trim())) continue;
+    // 1. If user/socket is actively on the Admin Panel, do NOT count in public chat!
+    if (user && user.currentView === 'admin') continue;
+
+    // 2. If user/socket is inside secret society chamber or viewing society chat, do NOT count in public chat!
+    if (user && user.currentView === 'society') continue;
+
+    // 3. If socket is actively in secret society room and not in public chat view, do NOT count in public chat!
+    if (activeSocietyMembers.has(socketId) && user && user.currentView !== 'chat') continue;
 
     const sock = io.sockets.sockets.get(socketId);
     if (sock && sock.connected) {
       if (user && user.alias) {
-        if (user.alias === 'James' || user.userId === 'bot_james' || isCreatorAlias(user.alias)) continue; // Exclude internal bot and creator
+        if (user.alias === 'James' || user.userId === 'bot_james') continue; // Exclude AI agent
         // Deduplicate using userId (unique per browser client) or alias
         const key = (user.userId || user.alias).toString().toLowerCase();
         uniqueUsers.add(key);
@@ -501,22 +497,15 @@ const getRealUserCount = () => {
 
 const getOnlineUserAliases = () => {
   const aliases = new Set();
-  const societyAliases = new Set();
-  const societyUserIds = new Set();
-  for (const m of activeSocietyMembers.values()) {
-    if (m && m.alias) societyAliases.add(m.alias.toLowerCase().trim());
-    if (m && m.userId) societyUserIds.add(m.userId.toString().toLowerCase().trim());
-  }
 
   for (const [socketId, user] of activeUsers.entries()) {
-    // If socket or member is inside secret society chamber, do NOT indicate in normal chat!
-    if (activeSocietyMembers.has(socketId)) continue;
-    if (user && user.alias && societyAliases.has(user.alias.toLowerCase().trim())) continue;
-    if (user && user.userId && societyUserIds.has(user.userId.toString().toLowerCase().trim())) continue;
+    if (user && user.currentView === 'admin') continue;
+    if (user && user.currentView === 'society') continue;
+    if (activeSocietyMembers.has(socketId) && user && user.currentView !== 'chat') continue;
 
     const sock = io.sockets.sockets.get(socketId);
     if (sock && sock.connected && user && user.alias) {
-      if (user.alias !== 'James' && user.userId !== 'bot_james' && !isCreatorAlias(user.alias)) {
+      if (user.alias !== 'James' && user.userId !== 'bot_james') {
         aliases.add(user.alias);
       }
     }
@@ -562,6 +551,45 @@ if (jamesBot && typeof jamesBot.broadcastNewsToRoom !== 'function') {
   jamesBot.broadcastNewsToRoom = (cat) => jamesBot.broadcastPeriodicWorldNews(cat || 'viral');
 }
 
+// --- Maintenance Mode System Service & Endpoints ---
+const { getMaintenanceState, setMaintenanceState, verifyMaintenanceOverridePassword } = require('./services/maintenanceService');
+const { createAdminSession, getClientIp, logAuditEvent } = require('./admin/adminAuthSession');
+
+app.get('/api/maintenance/status', (req, res) => {
+  res.json(getMaintenanceState());
+});
+
+app.post('/api/maintenance/override-login', (req, res) => {
+  const { password } = req.body || {};
+  const clientIp = getClientIp(req);
+  if (!password || typeof password !== 'string') {
+    return res.status(400).json({ success: false, error: '10-character emergency override key is required' });
+  }
+
+  const isValid = verifyMaintenanceOverridePassword(password.trim());
+  if (!isValid) {
+    logAuditEvent('MAINTENANCE_OVERRIDE_FAILED', { reason: 'Invalid emergency key' }, clientIp);
+    return res.status(401).json({ success: false, error: 'Invalid 10-character emergency override key' });
+  }
+
+  // Valid 10-character override key provided -> authenticate as Administrator
+  const session = createAdminSession('Administrator', clientIp);
+  res.cookie('st_admin_token', session.adminToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000
+  });
+
+  logAuditEvent('MAINTENANCE_OVERRIDE_SUCCESS', { admin: 'Administrator' }, clientIp);
+
+  res.json({
+    success: true,
+    adminToken: session.adminToken,
+    expiresAt: session.expiresAt
+  });
+});
+
 // --- Hidden Administrator System Routes & Protection ---
 const createAdminRouter = require('./admin/adminRoutes');
 app.use('/api/admin', createAdminRouter({
@@ -577,7 +605,9 @@ app.use('/api/admin', createAdminRouter({
   saveProfile,
   activeUsers,
   deleteUploadedFile,
-  jamesBot
+  jamesBot,
+  getMaintenanceState,
+  setMaintenanceState
 }));
 
 // Return 404 for direct manual navigation attempts to common admin paths
@@ -763,10 +793,12 @@ io.on('connection', (socket) => {
     alias: 'Visitor',
     userId: null,
     ip: clientIp,
+    currentView: 'chat',
     connectedAt: Date.now()
   });
   broadcastUserCount();
   socket.emit('onlineUsers', getOnlineUserAliases());
+  socket.emit('maintenance_state', getMaintenanceState());
 
   socket.on('pingTelemetry', (ack) => {
     if (typeof ack === 'function') ack({ pong: true, time: Date.now() });
@@ -867,6 +899,7 @@ io.on('connection', (socket) => {
         alias: userData.alias,
         userId: userId,
         ip: clientIp,
+        currentView: userData.currentView || 'chat',
         connectedAt: Date.now()
       });
       broadcastUserCount();
@@ -946,6 +979,17 @@ io.on('connection', (socket) => {
           jamesBot.welcomeUser(userData.alias, socket.id, userId, true);
         }
       }
+    }
+  });
+
+  // Client reports their active view (e.g. public chat, admin panel, or secret society chamber)
+  socket.on('userPresenceView', (data) => {
+    if (activeUsers.has(socket.id) && data && data.view) {
+      const u = activeUsers.get(socket.id);
+      u.currentView = data.view;
+      if (data.alias) u.alias = data.alias;
+      if (data.userId) u.userId = data.userId;
+      broadcastUserCount();
     }
   });
 
@@ -1274,6 +1318,9 @@ io.on('connection', (socket) => {
         clearance,
         isAdmin: clearance.includes('ROOT') || clearance.includes('OVERSEER')
       });
+      if (activeUser) {
+        activeUser.currentView = 'society';
+      }
       socket.emit('societyRoomJoined', {
         alias: memberAlias,
         clearance,
@@ -1313,6 +1360,10 @@ io.on('connection', (socket) => {
     if (activeSocietyMembers.has(socket.id)) {
       const mem = activeSocietyMembers.get(socket.id);
       activeSocietyMembers.delete(socket.id);
+      const activeUser = activeUsers.get(socket.id);
+      if (activeUser) {
+        activeUser.currentView = 'chat';
+      }
       broadcastSocietyCount();
       broadcastUserCount();
       if (mem && mem.alias && mem.alias !== 'James') {
@@ -1335,6 +1386,11 @@ io.on('connection', (socket) => {
       if (session) {
         socket.join('admin_telemetry_room');
         socket.join('secret_society_room');
+        const activeUser = activeUsers.get(socket.id);
+        if (activeUser) {
+          activeUser.currentView = 'admin';
+        }
+        broadcastUserCount();
         socket.emit('adminMonitoringActive', {
           status: 'CONNECTED',
           username: session.username,
@@ -1665,6 +1721,27 @@ CRITICAL IDENTITY & BEHAVIOR RULES:
                         const parsed = JSON.parse(toolResultStr);
                         if (parsed.success && parsed.imageUrl) {
                           attachment = { imageUrl: parsed.imageUrl, fileType: 'image/png', allowDownload: true };
+                        }
+                      } catch {}
+                    } else if (fnName === 'generate_video') {
+                      io.to('secret_society_room').emit('societyJamesStatus', {
+                        status: 'generating_video',
+                        generatingType: 'video',
+                        prompt: parsedArgs.prompt || parsedArgs.topic || '',
+                        text: `James is synthesizing AI video: "${(parsedArgs.prompt || parsedArgs.topic || '').slice(0, 40)}..."`
+                      });
+                      toolResultStr = await jamesBot.toolRegistry.executeTool(fnName, parsedArgs);
+                      try {
+                        const parsed = JSON.parse(toolResultStr);
+                        if (parsed.success && (parsed.videoUrl || parsed.fileUrl)) {
+                          attachment = {
+                            videoUrl: parsed.videoUrl || parsed.fileUrl,
+                            fileUrl: parsed.fileUrl || parsed.videoUrl,
+                            fileName: parsed.filename,
+                            fileSize: parsed.fileSize,
+                            fileType: parsed.fileType || 'video/mp4',
+                            allowDownload: true
+                          };
                         }
                       } catch {}
                     } else if (fnName === 'generate_pdf') {

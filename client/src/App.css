@@ -1343,7 +1343,8 @@
   margin-bottom: 0.75rem;
 }
 
-.auth-modal-title, .auth-title-row {
+.auth-modal-title,
+.auth-title-row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -9004,31 +9005,16 @@
 
 .handlable-dossier-card {
   width: 95%;
-  max-width: 680px;
-  max-height: 90vh;
+  max-width: 740px;
+  max-height: 88vh;
   background: #060b17;
   border: 1px solid rgba(0, 243, 255, 0.35);
   border-radius: 18px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(0, 243, 255, 0.15);
-  overflow-y: auto;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   animation: modalScaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 243, 255, 0.3) rgba(15, 23, 42, 0.6);
-}
-
-.handlable-dossier-card::-webkit-scrollbar {
-  width: 6px;
-}
-
-.handlable-dossier-card::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.6);
-}
-
-.handlable-dossier-card::-webkit-scrollbar-thumb {
-  background: rgba(0, 243, 255, 0.3);
-  border-radius: 3px;
 }
 
 .membership-modal-header {
@@ -9036,11 +9022,11 @@
   align-items: center;
   justify-content: space-between;
   padding: 1.25rem 1.6rem;
-  background: rgba(10, 18, 36, 0.95);
-  border-bottom: 1px solid rgba(0, 243, 255, 0.15);
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  background: #070d1a;
+  border-bottom: 1px solid rgba(0, 243, 255, 0.2);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 5;
 }
 
 .membership-header-left {
@@ -9098,10 +9084,29 @@
 }
 
 .dossier-form-body {
-  padding: 1.5rem 1.6rem;
+  padding: 1.4rem 1.8rem 1.8rem 1.6rem;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 243, 255, 0.3) rgba(15, 23, 42, 0.6);
+  box-sizing: border-box;
+}
+
+.dossier-form-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dossier-form-body::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+}
+
+.dossier-form-body::-webkit-scrollbar-thumb {
+  background: rgba(0, 243, 255, 0.3);
+  border-radius: 3px;
 }
 
 /* Notice Banner */
@@ -9154,6 +9159,8 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .dossier-fields-grid .full-width {
@@ -9164,6 +9171,9 @@
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .membership-label {
@@ -9185,6 +9195,8 @@
   outline: none;
   transition: all 0.2s ease;
   font-family: var(--font-sans, system-ui, sans-serif);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .membership-input:focus,
@@ -10550,4 +10562,1825 @@
 .telegram-presence-pill.left_room .presence-dot {
   background: #94a3b8;
   opacity: 0.6;
+}
+
+/* ==========================================================================
+   ENCLAVE INDUCTION DOSSIER FORM ENHANCEMENTS
+   (Separate Age & Location, Phone Number, Dropdowns, Multi-Social Handles)
+   ========================================================================== */
+
+.membership-dropdown-select {
+  background: rgba(10, 18, 34, 0.95) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  color: #00f3ff !important;
+  font-family: var(--font-mono, monospace) !important;
+  font-size: 0.85rem !important;
+  cursor: pointer;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.membership-dropdown-select:focus {
+  border-color: #00f3ff !important;
+  box-shadow: 0 0 14px rgba(0, 243, 255, 0.3) !important;
+}
+
+.membership-dropdown-select option {
+  background: #090e1a;
+  color: #f8fafc;
+}
+
+/* Phone Number Composite Input */
+.membership-phone-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.membership-phone-cc {
+  width: 110px;
+  flex-shrink: 0;
+  background: rgba(10, 18, 34, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #00f3ff;
+  border-radius: 8px;
+  padding: 0.65rem 0.5rem;
+  font-size: 0.82rem;
+  font-family: var(--font-mono, monospace);
+  outline: none;
+  cursor: pointer;
+}
+
+.membership-phone-cc option {
+  background: #090e1a;
+  color: #f8fafc;
+}
+
+.membership-phone-input {
+  flex: 1;
+}
+
+/* Multi-Social Handle Dynamic Container */
+.membership-social-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: 0.3rem;
+}
+
+.membership-social-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(10, 18, 34, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.membership-social-row:focus-within {
+  border-color: #00f3ff;
+  box-shadow: 0 0 10px rgba(0, 243, 255, 0.2);
+}
+
+.membership-social-platform-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  background: rgba(0, 243, 255, 0.08);
+  border: 1px solid rgba(0, 243, 255, 0.25);
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-family: var(--font-mono, monospace);
+  color: #00f3ff;
+  flex-shrink: 0;
+  min-width: 95px;
+  justify-content: center;
+  text-transform: capitalize;
+}
+
+.membership-social-row input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #ffffff;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.5rem;
+  font-family: var(--font-sans, system-ui, sans-serif);
+}
+
+.membership-social-remove-btn {
+  background: transparent;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  padding: 0.3rem;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.membership-social-remove-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.membership-add-social-btn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(0, 243, 255, 0.08);
+  border: 1px dashed rgba(0, 243, 255, 0.4);
+  border-radius: 6px;
+  color: #00f3ff;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.75rem;
+  padding: 0.45rem 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 0.25rem;
+}
+
+.membership-add-social-btn:hover {
+  background: rgba(0, 243, 255, 0.16);
+  border-color: #00f3ff;
+  transform: translateY(-1px);
+}
+
+/* ==========================================================================
+   404 NOT FOUND PAGE STYLING
+   ========================================================================== */
+
+.notfound-viewport {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #050811;
+  padding: 2rem 1rem;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.notfound-scanlines {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%,
+      rgba(0, 0, 0, 0.3) 50%), linear-gradient(90deg,
+      rgba(255, 0, 0, 0.03),
+      rgba(0, 255, 0, 0.01),
+      rgba(0, 0, 255, 0.03));
+  background-size: 100% 3px, 6px 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.notfound-glow-sphere {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 243, 255, 0.12) 0%, rgba(5, 8, 17, 0) 70%);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.notfound-card {
+  position: relative;
+  z-index: 2;
+  max-width: 620px;
+  width: 100%;
+  background: rgba(10, 16, 30, 0.88);
+  border: 1px solid rgba(0, 243, 255, 0.25);
+  border-radius: 14px;
+  backdrop-filter: blur(16px);
+  padding: 2.2rem;
+  box-shadow: 0 0 40px rgba(0, 243, 255, 0.12), inset 0 0 20px rgba(0, 243, 255, 0.04);
+  text-align: center;
+}
+
+.notfound-terminal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 0.9rem;
+  margin-bottom: 1.8rem;
+}
+
+.notfound-terminal-header .terminal-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.notfound-terminal-header .terminal-dots .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.notfound-terminal-header .dot.red {
+  background: #ef4444;
+}
+
+.notfound-terminal-header .dot.yellow {
+  background: #eab308;
+}
+
+.notfound-terminal-header .dot.green {
+  background: #10b981;
+}
+
+.notfound-terminal-header .terminal-title {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.72rem;
+  color: #94a3b8;
+  letter-spacing: 0.8px;
+}
+
+.notfound-terminal-header .terminal-status-tag {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.7rem;
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.notfound-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.notfound-icon {
+  color: #00f3ff;
+  filter: drop-shadow(0 0 10px rgba(0, 243, 255, 0.6));
+}
+
+.notfound-glitch-code {
+  font-family: var(--font-mono, monospace);
+  font-size: 4.8rem;
+  font-weight: 900;
+  color: #f8fafc;
+  letter-spacing: 3px;
+  line-height: 1;
+  margin-left: 1rem;
+  text-shadow: 0 0 20px rgba(0, 243, 255, 0.5);
+}
+
+.notfound-title {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0.5rem 0 0.5rem 0;
+  letter-spacing: -0.02em;
+}
+
+.notfound-desc {
+  font-size: 0.95rem;
+  color: #94a3b8;
+  margin: 0 0 1.5rem 0;
+  line-height: 1.6;
+}
+
+.notfound-trace-box {
+  background: #03060c;
+  border: 1px solid rgba(0, 243, 255, 0.2);
+  border-radius: 8px;
+  padding: 1rem 1.2rem;
+  text-align: left;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.78rem;
+  margin-bottom: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.notfound-trace-box .trace-line {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  color: #cbd5e1;
+}
+
+.notfound-trace-box .trace-prompt {
+  color: #00f3ff;
+  font-weight: bold;
+}
+
+.notfound-trace-box .trace-cmd {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.notfound-trace-box .trace-err {
+  color: #f87171;
+}
+
+.notfound-trace-box .trace-dim {
+  color: #64748b;
+}
+
+.notfound-actions {
+  display: flex;
+  gap: 0.8rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.notfound-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.3rem;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: var(--font-sans, system-ui, sans-serif);
+}
+
+.notfound-btn.primary {
+  background: #00f3ff;
+  color: #030816;
+  border: 1px solid #00f3ff;
+  box-shadow: 0 0 16px rgba(0, 243, 255, 0.4);
+}
+
+.notfound-btn.primary:hover {
+  background: #38bdf8;
+  transform: translateY(-2px);
+  box-shadow: 0 0 24px rgba(0, 243, 255, 0.6);
+}
+
+.notfound-btn.secondary {
+  background: rgba(15, 23, 42, 0.8);
+  color: #00f3ff;
+  border: 1px solid rgba(0, 243, 255, 0.4);
+}
+
+.notfound-btn.secondary:hover {
+  background: rgba(0, 243, 255, 0.12);
+  transform: translateY(-2px);
+}
+
+.notfound-btn.ghost {
+  background: transparent;
+  color: #94a3b8;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.notfound-btn.ghost:hover {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* ==========================================================================
+   Reddit-Style Retro Pixel-Art Maintenance Screen
+   ========================================================================== */
+
+.reddit-maintenance-viewport {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 36%, #1c3344 0%, #11222e 45%, #09131a 100%);
+  padding: 2.5rem 1rem;
+  box-sizing: border-box;
+  overflow: hidden;
+  font-family: 'Press Start 2P', -apple-system, BlinkMacSystemFont, monospace;
+}
+
+/* Retro Pixel Mosaic Background Grid & Scattered Floating Pixels */
+.pixel-mosaic-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.pixel-block {
+  position: absolute;
+  border-radius: 2px;
+  animation: pixelBlockPulse 4s ease-in-out infinite;
+}
+
+.pixel-block.pb1 {
+  width: 48px;
+  height: 48px;
+  top: 12%;
+  left: 8%;
+  background: rgba(33, 76, 148, 0.5);
+  animation-delay: 0s;
+}
+
+.pixel-block.pb2 {
+  width: 36px;
+  height: 36px;
+  top: 18%;
+  left: 16%;
+  background: rgba(43, 95, 179, 0.45);
+  animation-delay: 0.8s;
+}
+
+.pixel-block.pb3 {
+  width: 60px;
+  height: 60px;
+  top: 28%;
+  left: 6%;
+  background: rgba(28, 67, 133, 0.4);
+  animation-delay: 1.4s;
+}
+
+.pixel-block.pb4 {
+  width: 40px;
+  height: 40px;
+  top: 45%;
+  left: 12%;
+  background: rgba(53, 115, 214, 0.35);
+  animation-delay: 2.1s;
+}
+
+.pixel-block.pb5 {
+  width: 32px;
+  height: 32px;
+  top: 62%;
+  left: 9%;
+  background: rgba(33, 76, 148, 0.55);
+  animation-delay: 0.5s;
+}
+
+.pixel-block.pb6 {
+  width: 56px;
+  height: 56px;
+  top: 78%;
+  left: 15%;
+  background: rgba(28, 67, 133, 0.45);
+  animation-delay: 1.7s;
+}
+
+.pixel-block.pb7 {
+  width: 24px;
+  height: 24px;
+  top: 8%;
+  left: 28%;
+  background: rgba(43, 95, 179, 0.4);
+  animation-delay: 2.5s;
+}
+
+.pixel-block.pb8 {
+  width: 44px;
+  height: 44px;
+  top: 82%;
+  left: 26%;
+  background: rgba(53, 115, 214, 0.35);
+  animation-delay: 0.9s;
+}
+
+.pixel-block.pb9 {
+  width: 52px;
+  height: 52px;
+  top: 14%;
+  right: 10%;
+  background: rgba(33, 76, 148, 0.45);
+  animation-delay: 1.1s;
+}
+
+.pixel-block.pb10 {
+  width: 36px;
+  height: 36px;
+  top: 22%;
+  right: 18%;
+  background: rgba(53, 115, 214, 0.4);
+  animation-delay: 0.4s;
+}
+
+.pixel-block.pb11 {
+  width: 64px;
+  height: 64px;
+  top: 38%;
+  right: 7%;
+  background: rgba(28, 67, 133, 0.5);
+  animation-delay: 2.3s;
+}
+
+.pixel-block.pb12 {
+  width: 40px;
+  height: 40px;
+  top: 58%;
+  right: 14%;
+  background: rgba(43, 95, 179, 0.45);
+  animation-delay: 1.6s;
+}
+
+.pixel-block.pb13 {
+  width: 48px;
+  height: 48px;
+  top: 72%;
+  right: 8%;
+  background: rgba(33, 76, 148, 0.4);
+  animation-delay: 0.7s;
+}
+
+.pixel-block.pb14 {
+  width: 32px;
+  height: 32px;
+  top: 86%;
+  right: 20%;
+  background: rgba(53, 115, 214, 0.35);
+  animation-delay: 2.8s;
+}
+
+.pixel-block.pb15 {
+  width: 28px;
+  height: 28px;
+  top: 6%;
+  right: 25%;
+  background: rgba(28, 67, 133, 0.55);
+  animation-delay: 1.3s;
+}
+
+.pixel-block.pb16 {
+  width: 40px;
+  height: 40px;
+  top: 88%;
+  right: 35%;
+  background: rgba(43, 95, 179, 0.3);
+  animation-delay: 2.0s;
+}
+
+@keyframes pixelBlockPulse {
+
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 0.35;
+  }
+
+  50% {
+    transform: translateY(-8px) scale(1.05);
+    opacity: 0.75;
+  }
+}
+
+/* Center Content Layout */
+.reddit-maintenance-center {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 880px;
+  width: 100%;
+}
+
+/* ==========================================================================
+   Pixel Ghosts Roaming System & Mascot Trio
+   ========================================================================== */
+
+/* Full Viewport Roaming Ghosts Container */
+.roaming-ghosts-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 4;
+}
+
+.roaming-ghost {
+  position: absolute;
+  pointer-events: auto;
+  cursor: pointer;
+  user-select: none;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  transition: filter 0.25s ease, opacity 0.25s ease;
+  will-change: transform;
+}
+
+.roaming-ghost:hover {
+  filter: drop-shadow(0 0 16px rgba(0, 243, 255, 0.85)) drop-shadow(0 0 32px rgba(110, 227, 219, 0.65));
+  animation-play-state: paused !important;
+}
+
+.roaming-ghost-tag {
+  margin-top: 4px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.45rem;
+  color: #79aeb7;
+  letter-spacing: 1px;
+  background: rgba(10, 26, 34, 0.85);
+  border: 1px solid rgba(110, 227, 219, 0.35);
+  padding: 2px 6px;
+  border-radius: 2px;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.roaming-ghost:hover .roaming-ghost-tag {
+  opacity: 1;
+  transform: translateY(0);
+  color: #00f3ff;
+  border-color: #00f3ff;
+  box-shadow: 0 0 8px rgba(0, 243, 255, 0.5);
+}
+
+/* Roamer 1: Leader Ghost roaming upper-mid paths */
+.ghost-roamer-1 {
+  top: 10%;
+  left: 5%;
+  animation: roamPath1 28s infinite ease-in-out;
+}
+
+@keyframes roamPath1 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  25% {
+    transform: translate3d(32vw, -4vh, 0) scale(1.05) rotate(4deg);
+  }
+
+  50% {
+    transform: translate3d(68vw, 12vh, 0) scale(1) scaleX(-1);
+  }
+
+  75% {
+    transform: translate3d(36vw, 18vh, 0) scale(0.95) scaleX(-1) rotate(-3deg);
+  }
+
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+/* Roamer 2: Curious Ghost wandering lower-left and bottom */
+.ghost-roamer-2 {
+  bottom: 12%;
+  left: 6%;
+  animation: roamPath2 24s infinite ease-in-out;
+}
+
+@keyframes roamPath2 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  28% {
+    transform: translate3d(24vw, -12vh, 0) scale(1.06) rotate(-5deg);
+  }
+
+  55% {
+    transform: translate3d(58vw, -6vh, 0) scale(0.96) scaleX(-1);
+  }
+
+  80% {
+    transform: translate3d(35vw, 6vh, 0) scale(1.02) scaleX(-1) rotate(3deg);
+  }
+
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+/* Roamer 3: Sparkling Ghost floating across right side */
+.ghost-roamer-3 {
+  top: 18%;
+  right: 8%;
+  animation: roamPath3 20s infinite ease-in-out;
+}
+
+@keyframes roamPath3 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  30% {
+    transform: translate3d(-18vw, 24vh, 0) scale(1.08) rotate(5deg);
+  }
+
+  65% {
+    transform: translate3d(-6vw, 42vh, 0) scale(0.94) rotate(-4deg);
+  }
+
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+/* Roamer 4: Mini Ghost drifting deeply across background */
+.ghost-roamer-4 {
+  top: 45%;
+  left: -5%;
+  opacity: 0.55;
+  animation: roamPath4 36s infinite linear;
+}
+
+@keyframes roamPath4 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.85);
+    opacity: 0.1;
+  }
+
+  15% {
+    opacity: 0.6;
+  }
+
+  50% {
+    transform: translate3d(55vw, -15vh, 0) scale(0.9);
+  }
+
+  85% {
+    opacity: 0.6;
+  }
+
+  100% {
+    transform: translate3d(110vw, 5vh, 0) scale(0.85);
+    opacity: 0.1;
+  }
+}
+
+/* Center Mascot Pedestal with Pixel Ghost Trio */
+.pixel-ghosts-trio {
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1.6rem;
+  margin-bottom: 2rem;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.pixel-ghosts-trio:hover {
+  transform: scale(1.06);
+}
+
+.pixel-ghosts-trio:hover .pixel-ghost-svg {
+  filter: drop-shadow(0 0 20px rgba(0, 243, 255, 0.85)) drop-shadow(0 0 40px rgba(110, 227, 219, 0.55));
+}
+
+.pixel-ghosts-trio:active {
+  transform: scale(0.97);
+}
+
+.ghost-trio-member {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ghost-trio-center {
+  animation: ghostTrioBobCenter 3.2s infinite ease-in-out;
+  z-index: 2;
+}
+
+.ghost-trio-left {
+  animation: ghostTrioBobLeft 3.6s infinite ease-in-out;
+}
+
+.ghost-trio-right {
+  animation: ghostTrioBobRight 3.8s infinite ease-in-out;
+}
+
+@keyframes ghostTrioBobCenter {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes ghostTrioBobLeft {
+
+  0%,
+  100% {
+    transform: translateY(0) rotate(-4deg);
+  }
+
+  50% {
+    transform: translateY(-7px) rotate(-1deg);
+  }
+}
+
+@keyframes ghostTrioBobRight {
+
+  0%,
+  100% {
+    transform: translateY(0) rotate(4deg);
+  }
+
+  50% {
+    transform: translateY(-8px) rotate(1deg);
+  }
+}
+
+/* Crisp Pixel Rendering for Ghost SVGs */
+.pixel-ghost-svg {
+  shape-rendering: crispEdges;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.65));
+  transition: filter 0.25s ease;
+}
+
+/* Ghost Sparkles Flashing Animation */
+.ghost-sparkle {
+  transform-origin: center;
+}
+
+.ghost-sparkle.s1 {
+  animation: ghostSparklePulse 1.4s infinite alternate ease-in-out;
+}
+
+.ghost-sparkle.s2 {
+  animation: ghostSparklePulse 1.9s infinite alternate ease-in-out 0.3s;
+}
+
+.ghost-sparkle.s3 {
+  animation: ghostSparklePulse 1.6s infinite alternate ease-in-out 0.7s;
+}
+
+.ghost-sparkle.s4 {
+  animation: ghostSparklePulse 2.2s infinite alternate ease-in-out 0.2s;
+}
+
+@keyframes ghostSparklePulse {
+  0% {
+    opacity: 0.25;
+    transform: scale(0.75);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1.3);
+    filter: drop-shadow(0 0 4px #6fe3db);
+  }
+}
+
+/* ==========================================================================
+   Retro Arcade Terminal HUD: Live Date & Countdown Timer
+   ========================================================================== */
+
+.pixel-hud-terminal {
+  width: 100%;
+  max-width: 620px;
+  background: rgba(10, 24, 34, 0.88);
+  border: 2px solid #1c4856;
+  border-radius: 6px;
+  padding: 1.1rem 1.4rem;
+  margin: 1.4rem auto 1.8rem auto;
+  box-shadow: 0 0 24px rgba(10, 36, 46, 0.8), inset 0 0 16px rgba(0, 243, 255, 0.05);
+  backdrop-filter: blur(8px);
+  position: relative;
+  z-index: 6;
+}
+
+.pixel-hud-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.85rem;
+  border-bottom: 1px dashed rgba(110, 227, 219, 0.25);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.58rem;
+}
+
+.hud-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.hud-badge-cyan {
+  background: rgba(0, 243, 255, 0.12);
+  border: 1px solid rgba(0, 243, 255, 0.4);
+  color: #00f3ff;
+}
+
+.hud-blinking-dot {
+  width: 6px;
+  height: 6px;
+  background: #00f3ff;
+  border-radius: 50%;
+  display: inline-block;
+  animation: hudDotBlink 1s infinite ease-in-out;
+  box-shadow: 0 0 6px #00f3ff;
+}
+
+@keyframes hudDotBlink {
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.2;
+    transform: scale(0.7);
+  }
+}
+
+.hud-terminal-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #6fe3db;
+  letter-spacing: 0.8px;
+}
+
+.hud-term-icon {
+  color: #00f3ff;
+}
+
+.pixel-hud-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.pixel-hud-card {
+  background: rgba(14, 34, 46, 0.75);
+  border: 1px solid rgba(110, 227, 219, 0.2);
+  border-radius: 4px;
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.pixel-hud-card:hover {
+  border-color: rgba(0, 243, 255, 0.5);
+  box-shadow: 0 0 16px rgba(0, 243, 255, 0.15);
+}
+
+.hud-card-label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.44rem;
+  color: #79aeb7;
+  letter-spacing: 1px;
+  margin-bottom: 0.55rem;
+  text-transform: uppercase;
+}
+
+.hud-icon {
+  color: #00f3ff;
+}
+
+.hud-card-value {
+  font-family: 'Press Start 2P', monospace;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  margin-bottom: 0.45rem;
+  line-height: 1.4;
+}
+
+.date-glow {
+  font-size: 0.56rem;
+  color: #ffffff;
+  text-shadow: 0 0 10px rgba(110, 227, 219, 0.6), 2px 2px 0px #09131a;
+}
+
+.timer-glow {
+  font-size: 1.05rem;
+  color: #00f3ff;
+  text-shadow: 0 0 12px rgba(0, 243, 255, 0.7), 2px 2px 0px #09131a;
+}
+
+.timer-ticking-digits {
+  display: inline-block;
+  letter-spacing: 1px;
+}
+
+.hud-card-sub {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.46rem;
+  color: #618790;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.hud-sub-time {
+  color: #a5f3ee;
+  font-weight: 600;
+}
+
+/* 8-Bit Retro Titles */
+.pixel-main-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 1.95rem;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 2.5px;
+  line-height: 1.4;
+  margin: 0 0 0.85rem 0;
+  text-transform: uppercase;
+  text-shadow: 3px 3px 0px #040d21, 0 0 24px rgba(255, 255, 255, 0.25);
+  image-rendering: pixelated;
+}
+
+.pixel-sub-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 1.05rem;
+  font-weight: 100;
+  color: #dce7f9;
+  letter-spacing: 1.5px;
+  line-height: 1.5;
+  margin: 0 0 1.6rem 0;
+  margin-bottom: 1px;
+  text-transform: uppercase;
+  text-shadow: 2px 2px 0px #040d21;
+}
+
+/* Whisper Footer with Pixel Envelope */
+.pixel-whisper-text {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: #7998c5;
+  letter-spacing: 1.2px;
+  line-height: 1.7;
+  margin: 0 0 2.2rem 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.pixel-envelope-btn {
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s, filter 0.2s;
+  vertical-align: middle;
+}
+
+
+.pixel-envelope-icon {
+  font-size: 1.1rem;
+  color: #ffffff;
+  display: inline-block;
+  animation: envelopeBob 2.2s infinite ease-in-out;
+}
+
+@keyframes envelopeBob {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+/* Retro Arcade Recheck Relays Button */
+.pixel-status-action {
+  margin-top: 0.5rem;
+}
+
+.pixel-recheck-btn {
+  background: rgba(13, 39, 87, 0.85);
+  border: 2px solid #2b5fae;
+  color: #8fc2ff;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  padding: 0.85rem 1.6rem;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  box-shadow: 0 4px 0 #05132d, 0 0 16px rgba(43, 95, 174, 0.3);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  text-transform: uppercase;
+}
+
+.pixel-recheck-btn:hover:not(:disabled) {
+  background: #19468c;
+  border-color: #00f3ff;
+  color: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 0 #05132d, 0 0 24px rgba(0, 243, 255, 0.45);
+}
+
+.pixel-recheck-btn:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #05132d;
+}
+
+.pixel-recheck-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Responsive Scaling for Smaller Viewports */
+@media (max-width: 768px) {
+  .pixel-main-title {
+    font-size: 1.3rem;
+    letter-spacing: 1.5px;
+  }
+
+  .pixel-sub-title {
+    font-size: 0.82rem;
+    letter-spacing: 1px;
+  }
+
+  .pixel-whisper-text {
+    font-size: 0.58rem;
+    line-height: 1.8;
+  }
+
+  .pixel-mascot-svg {
+    width: 110px;
+    height: 138px;
+  }
+}
+
+/* Retro Arcade Theme for Emergency Override Modal */
+.pixel-override-theme {
+  background: #081736 !important;
+  border: 2px solid #ff4500 !important;
+  box-shadow: 0 0 60px rgba(0, 0, 0, 0.95), 0 0 30px rgba(255, 69, 0, 0.35) !important;
+}
+
+.pixel-override-theme .override-card-header {
+  background: rgba(5, 14, 34, 0.9) !important;
+  border-bottom: 2px solid rgba(255, 69, 0, 0.3) !important;
+}
+
+.pixel-override-theme .override-title {
+  font-family: 'Press Start 2P', monospace !important;
+  font-size: 0.8rem !important;
+  color: #ff5500 !important;
+  letter-spacing: 1px !important;
+}
+
+.pixel-override-theme .override-shield-wrap {
+  background: rgba(255, 69, 0, 0.15) !important;
+  border-color: #ff4500 !important;
+  color: #ff5500 !important;
+}
+
+.pixel-override-theme .override-key-input {
+  border-color: rgba(255, 69, 0, 0.4) !important;
+  color: #ff9100 !important;
+}
+
+.pixel-override-theme .override-key-input:focus {
+  border-color: #ff4500 !important;
+  box-shadow: 0 0 20px rgba(255, 69, 0, 0.4) !important;
+}
+
+.pixel-override-theme .override-submit-btn {
+  background: #ff4500 !important;
+  border-color: #ff4500 !important;
+  color: #ffffff !important;
+  font-family: 'Press Start 2P', monospace !important;
+  font-size: 0.72rem !important;
+  box-shadow: 0 0 20px rgba(255, 69, 0, 0.4) !important;
+}
+
+.pixel-override-theme .override-submit-btn:hover:not(:disabled) {
+  background: #ff5e1a !important;
+  box-shadow: 0 0 28px rgba(255, 69, 0, 0.6) !important;
+}
+
+
+/* ==========================================================================
+   Emergency Council Override Modal (Maintenance Page)
+   ========================================================================== */
+
+.maintenance-override-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 18, 0.88);
+  backdrop-filter: blur(14px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 1.25rem;
+  animation: maintenanceFadeIn 0.22s ease-out;
+}
+
+@keyframes maintenanceFadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.maintenance-override-card {
+  max-width: 490px;
+  width: 100%;
+  background: #081120;
+  border: 1.5px solid rgba(245, 158, 11, 0.45);
+  border-radius: 14px;
+  box-shadow: 0 0 50px rgba(0, 0, 0, 0.9), 0 0 30px rgba(245, 158, 11, 0.2);
+  overflow: hidden;
+  animation: maintenancePopIn 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes maintenancePopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.override-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.15rem 1.4rem;
+  background: rgba(15, 23, 42, 0.7);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.override-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.override-shield-wrap {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid #f59e0b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fbbf24;
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.25);
+}
+
+.override-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: 0.4px;
+}
+
+.override-subtitle {
+  font-size: 0.74rem;
+  color: #94a3b8;
+  font-family: var(--font-mono, monospace);
+  display: block;
+  margin-top: 2px;
+}
+
+.override-close-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.override-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.override-form {
+  padding: 1.4rem;
+}
+
+.override-prompt-text {
+  font-size: 0.88rem;
+  color: #cbd5e1;
+  line-height: 1.55;
+  margin: 0 0 1.25rem 0;
+}
+
+.override-prompt-text strong {
+  color: #fbbf24;
+}
+
+.override-input-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.override-lock-icon {
+  position: absolute;
+  left: 1rem;
+  color: #f59e0b;
+  pointer-events: none;
+}
+
+.override-key-input {
+  width: 100%;
+  padding: 0.85rem 1rem 0.85rem 2.75rem;
+  background: #030712;
+  border: 1.5px solid rgba(245, 158, 11, 0.4);
+  border-radius: 8px;
+  color: #fbbf24;
+  font-family: var(--font-mono, monospace);
+  font-size: 1.05rem;
+  letter-spacing: 2px;
+  outline: none;
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+
+.override-key-input:focus {
+  border-color: #f59e0b;
+  box-shadow: 0 0 18px rgba(245, 158, 11, 0.35);
+  background: #040914;
+}
+
+.override-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #f87171;
+  padding: 0.65rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  margin-bottom: 1.1rem;
+}
+
+.override-actions-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.override-cancel-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #cbd5e1;
+  padding: 0.65rem 1.2rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.override-cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.override-submit-btn {
+  background: #f59e0b;
+  border: 1px solid #f59e0b;
+  color: #030712;
+  padding: 0.65rem 1.35rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 0 18px rgba(245, 158, 11, 0.35);
+}
+
+.override-submit-btn:hover:not(:disabled) {
+  background: #fbbf24;
+  transform: translateY(-1px);
+  box-shadow: 0 0 22px rgba(245, 158, 11, 0.5);
+}
+
+.override-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   Admin Panel Emergency Key Display Box & Copy Action
+   ========================================================================== */
+
+.maintenance-key-popup-card {
+  border-color: rgba(245, 158, 11, 0.5) !important;
+  box-shadow: 0 0 60px rgba(0, 0, 0, 0.95), 0 0 30px rgba(245, 158, 11, 0.25) !important;
+}
+
+.emergency-key-display-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #030712;
+  border: 2px dashed rgba(245, 158, 11, 0.55);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin: 1.2rem 0;
+  gap: 1rem;
+}
+
+.emergency-key-text {
+  font-family: var(--font-mono, monospace);
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #fbbf24;
+  letter-spacing: 3.5px;
+  word-break: break-all;
+  text-shadow: 0 0 12px rgba(245, 158, 11, 0.4);
+}
+
+.emergency-key-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(245, 158, 11, 0.16);
+  border: 1px solid #f59e0b;
+  color: #fbbf24;
+  padding: 0.6rem 1.15rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.emergency-key-copy-btn:hover {
+  background: #f59e0b;
+  color: #030712;
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.45);
+  transform: translateY(-1px);
+}
+
+
+/* Text to Speech Button in Message Actions */
+.msg-tts-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  padding: 3px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  transition: all 0.2s;
+}
+
+.msg-tts-btn:hover {
+  color: #00f3ff;
+  background: rgba(0, 243, 255, 0.1);
+}
+
+.msg-tts-btn.speaking {
+  color: #00f3ff;
+  animation: pulseBeacon 1s infinite;
+}
+
+/* Candidate Social Chips in Admin Panel */
+.candidate-social-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+}
+
+.candidate-social-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.55rem;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(0, 243, 255, 0.25);
+  border-radius: 6px;
+  color: #00f3ff;
+  font-size: 0.75rem;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.candidate-social-chip:hover {
+  background: rgba(0, 243, 255, 0.15);
+  border-color: #00f3ff;
+  transform: translateY(-1px);
+}
+
+.candidate-phone-link {
+  color: #4ade80 !important;
+  text-decoration: none;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.candidate-phone-link:hover {
+  text-decoration: underline;
+}
+
+/* Candidate Verification Form Enhanced Input Styles */
+.phone-input-composite {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  width: 100%;
+}
+
+.phone-code-select-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: #081120;
+  border: 1px solid rgba(0, 243, 255, 0.25);
+  border-radius: 8px;
+  padding: 0 0.55rem;
+  flex: 0 0 100px;
+  width: 100px;
+  min-width: 100px;
+  max-width: 100px;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.phone-code-select-wrap:focus-within {
+  border-color: #00f3ff;
+  box-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
+}
+
+.phone-flag-img {
+  width: 22px;
+  height: 15px;
+  border-radius: 2px;
+  object-fit: cover;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.7);
+  flex-shrink: 0;
+}
+
+.phone-code-select {
+  background: transparent;
+  border: none;
+  color: #00f3ff;
+  padding: 0.65rem 0.15rem;
+  font-size: 0.82rem;
+  font-family: var(--font-mono, monospace);
+  outline: none;
+  cursor: pointer;
+  box-shadow: none;
+  width: 100%;
+}
+
+.phone-number-field-wrap {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+}
+
+.phone-icon-prefix {
+  position: absolute;
+  left: 0.85rem;
+  color: #64748b;
+  pointer-events: none;
+}
+
+.phone-number-field-wrap .membership-input {
+  padding-left: 2.35rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Multi-Handle Social Section */
+.social-handles-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.4rem;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.social-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(0, 243, 255, 0.08);
+  border: 1px solid rgba(0, 243, 255, 0.3);
+  color: #00f3ff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.28rem 0.65rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.social-add-btn:hover {
+  background: rgba(0, 243, 255, 0.2);
+  border-color: #00f3ff;
+  transform: translateY(-1px);
+}
+
+.social-handles-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.social-handle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.social-platform-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: #081120;
+  border: 1px solid rgba(0, 243, 255, 0.25);
+  border-radius: 8px;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.social-handle-input-box {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.social-handle-input-box .membership-input {
+  width: 100%;
+}
+
+.social-handle-remove-btn {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
+  width: 38px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.social-handle-remove-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: #ef4444;
+  color: #fff;
+}
+
+/* Enhanced Mobile Responsiveness for Candidate Dossier Modal */
+@media (max-width: 680px) {
+  .membership-modal-overlay {
+    padding: 0.5rem;
+    align-items: flex-end;
+  }
+
+  .handlable-dossier-card {
+    max-height: 94vh;
+    border-radius: 16px 16px 0 0;
+    width: 100%;
+  }
+
+  .membership-modal-header {
+    padding: 0.9rem 1rem;
+  }
+
+  .membership-modal-title {
+    font-size: 1.05rem;
+  }
+
+  .dossier-form-body {
+    padding: 1rem 0.85rem;
+    gap: 1rem;
+  }
+
+  .dossier-fields-grid {
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
+  }
+
+  .phone-input-composite {
+    gap: 0.35rem;
+  }
+
+  .phone-code-select-wrap {
+    flex: 0 0 96px;
+    width: 96px;
+    min-width: 96px;
+    max-width: 96px;
+    padding: 0 0.35rem;
+  }
+
+  .social-handle-row {
+    flex-wrap: nowrap;
+    gap: 0.4rem;
+  }
+
+  .social-platform-pill {
+    width: 38px;
+    height: 38px;
+  }
+
+  .social-handle-remove-btn {
+    width: 38px;
+    height: 38px;
+  }
+
+  .social-handle-input-box {
+    flex: 1 1 100%;
+    order: 4;
+  }
+
+  .membership-actions-row {
+    flex-direction: column-reverse;
+    gap: 0.6rem;
+  }
+
+  .membership-cancel-btn,
+  .membership-submit-btn {
+    width: 100%;
+    justify-content: center;
+  }
 }

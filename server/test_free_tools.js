@@ -63,6 +63,15 @@ A curated reference list of selected Prime Ministers around the world.
   assert(imgRes.imageUrl.endsWith('.png'), 'Should output a .png image URL');
   console.log('✓ AI Image generator verified.\n');
 
+  // Test 6: Free AI Video Generator (FLUX.1 keyframe + ffmpeg motion encoding)
+  console.log('[Test 6]: Testing Free AI Video Generator...');
+  const vidRes = await tools.generateVideo('futuristic neon hypercar');
+  console.log('Video result:', vidRes);
+  assert(vidRes.success, 'Video generation should succeed');
+  assert(vidRes.videoUrl.endsWith('.mp4'), 'Should output a .mp4 video URL');
+  assert(vidRes.fileSize > 10000, 'Video file should be non-empty');
+  console.log('✓ AI Video generator verified.\n');
+
   console.log('=== ALL FREE TOOLS VERIFIED SUCCESSFULLY! ===');
 }
 

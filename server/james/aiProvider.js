@@ -429,9 +429,83 @@ class FallbackProvider extends BaseAIProvider {
       };
     }
 
-    // Voice Note Fallback
-    if (/voice\s*note|voice\s*message|speak|say\s+hello\s+in\s+a\s+voice/i.test(lower) && tools.some(t => t.function?.name === 'generate_voice')) {
-      const textToSpeak = userText.replace(/.*?say\s+(.*)/i, '$1').replace(/in a voice.*$/i, '').trim() || 'Hello! Hope you are having a wonderful day.';
+    // Video Generation Request Fallback
+    if (/video|clip|motion\s*video|animation\s*video/i.test(lower) && tools.some(t => t.function?.name === 'generate_video')) {
+      const cleanPrompt = userText.replace(/generate\s+(?:a\s+)?video\s+(?:of|on|about)?|make\s+(?:a\s+)?video\s+(?:of|on|about)?|create\s+(?:a\s+)?video\s+(?:of|on|about)?|video\s+(?:of|on|about)?/i, '').trim();
+      return {
+        content: null,
+        toolCalls: [
+          {
+            id: `call_${Date.now()}_video`,
+            type: 'function',
+            function: {
+              name: 'generate_video',
+              arguments: JSON.stringify({
+                prompt: cleanPrompt || userText
+              })
+            }
+          }
+        ]
+      };
+    }
+
+    // Voice Note / Text to Voice Converter Fallback (supports "convert this message into voice", etc.)
+    const isVoiceRequest = /(?:convert|turn|make|synthesize|render|generate|speak|read).*(?:into|to|as)?\s*(?:voice|audio|speech)|voice\s*note|voice\s*message|text\s*to\s*voice|text\s*to\s*speech|\btts\b|voice\s*converter|read\s*aloud|\bspeak\b|voice\s*this/i.test(lower);
+    if (isVoiceRequest && tools.some(t => t.function?.name === 'generate_voice')) {
+      let textToSpeak = '';
+
+      // Check if message has reply context: [In reply to @user: "some text"]
+      const replyMatch = userText.match(/\[In reply to @[^:]+:\s*"([^"]+)"\]/);
+      const isShortCommand = userText.replace(/\[In reply to @[^:]+:\s*"[^"]+"\]/g, '').replace(/@?james/gi, '').trim().length < 80;
+      if (replyMatch && isShortCommand && replyMatch[1].trim().length > 3) {
+        textToSpeak = replyMatch[1].trim();
+      }
+
+      // Check for quotes ('...', "...", “...”)
+      if (!textToSpeak) {
+        const quoteMatch = userText.match(/['"`“]([\s\S]+?)['"`”]/);
+        if (quoteMatch && quoteMatch[1] && quoteMatch[1].trim().length > 5) {
+          textToSpeak = quoteMatch[1].trim();
+        }
+      }
+
+      // Check for trailing instruction (e.g. "... convert this message into voice")
+      if (!textToSpeak) {
+        const trailingPattern = /[\s,-]+(?:please\s+)?(?:can\s+you\s+)?(?:convert|turn|make|synthesize|read|generate)\s*(?:this\s+)?(?:message|text|quote|it)?\s*(?:into|to|as)?\s*(?:a\s+)?(?:voice|voice\s*note|audio|speech|voice\s*message|tts)\b.*$/i;
+        if (trailingPattern.test(userText)) {
+          const cleaned = userText.replace(trailingPattern, '').trim();
+          if (cleaned.length > 3) {
+            textToSpeak = cleaned.replace(/^['"`“]|['"`”]$/g, '').trim();
+          }
+        }
+      }
+
+      // Check for leading instruction (e.g. "convert this message into voice: ...")
+      if (!textToSpeak) {
+        const leadingPattern = /^(?:please\s+)?(?:can\s+you\s+)?(?:convert|turn|make|synthesize|read|generate|speak)\s*(?:this\s+)?(?:message|text|quote|it)?\s*(?:into|to|as)?\s*(?:a\s+)?(?:voice|voice\s*note|audio|speech|voice\s*message|tts)[:\s-]*/i;
+        if (leadingPattern.test(userText)) {
+          const cleaned = userText.replace(leadingPattern, '').trim();
+          if (cleaned.length > 3) {
+            textToSpeak = cleaned.replace(/^['"`“]|['"`”]$/g, '').trim();
+          }
+        }
+      }
+
+      // General fallback cleanup
+      if (!textToSpeak) {
+        textToSpeak = userText
+          .replace(/@?james/gi, '')
+          .replace(/convert\s*(?:this)?\s*(?:message)?\s*(?:into|to)?\s*(?:voice|audio|speech)/gi, '')
+          .replace(/text\s*to\s*(?:voice|speech)/gi, '')
+          .replace(/voice\s*(?:note|message|converter)/gi, '')
+          .replace(/^['"`“]|['"`”]$/g, '')
+          .trim();
+      }
+
+      if (!textToSpeak || textToSpeak.length < 3) {
+        textToSpeak = 'Hello from James AI, your autonomous neural assistant in ShadowTalk.';
+      }
+
       return {
         content: null,
         toolCalls: [

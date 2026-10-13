@@ -62,7 +62,10 @@ import {
   Video,
   Layers,
   Flame,
-  Zap
+  Zap,
+  Phone,
+  Plus,
+  VolumeX
 } from 'lucide-react';
 import { PRESET_AVATARS } from './avatars';
 import JAMES_AVATAR_IMG from './assets/ShadowTalk-IG.jpeg';
@@ -72,6 +75,69 @@ import { useSecretGesture } from './components/admin/SecretGestureDetector';
 import { HiddenVoiceActivator } from './components/admin/HiddenVoiceActivator';
 import { AdminPanel } from './components/admin/AdminPanel';
 import SecretSocietyChat from './components/society/SecretSocietyChat';
+import NotFound404 from './components/NotFound404';
+import MaintenanceScreen from './components/MaintenanceScreen';
+import { SocialIcon, detectSocialPlatform, PLATFORM_OPTIONS } from './components/SocialPlatformIcons';
+
+const CANDIDATE_COUNTRY_OPTIONS = [
+  'United States', 'United Kingdom', 'Germany', 'Canada', 'India',
+  'Australia', 'France', 'Japan', 'Singapore', 'Switzerland',
+  'Netherlands', 'Sweden', 'Norway', 'Brazil', 'South Korea',
+  'Israel', 'Ireland', 'Spain', 'Italy', 'Poland', 'Estonia',
+  'United Arab Emirates', 'Taiwan', 'New Zealand', 'South Africa',
+  'Other / Decentralized'
+];
+
+const CANDIDATE_PHONE_CODES = [
+  { code: '+1', iso: 'us', name: 'United States', label: 'US (+1)' },
+  { code: '+44', iso: 'gb', name: 'United Kingdom', label: 'UK (+44)' },
+  { code: '+91', iso: 'in', name: 'India', label: 'IN (+91)' },
+  { code: '+49', iso: 'de', name: 'Germany', label: 'DE (+49)' },
+  { code: '+1', iso: 'ca', name: 'Canada', label: 'CA (+1)' },
+  { code: '+61', iso: 'au', name: 'Australia', label: 'AU (+61)' },
+  { code: '+33', iso: 'fr', name: 'France', label: 'FR (+33)' },
+  { code: '+81', iso: 'jp', name: 'Japan', label: 'JP (+81)' },
+  { code: '+65', iso: 'sg', name: 'Singapore', label: 'SG (+65)' },
+  { code: '+41', iso: 'ch', name: 'Switzerland', label: 'CH (+41)' },
+  { code: '+31', iso: 'nl', name: 'Netherlands', label: 'NL (+31)' },
+  { code: '+46', iso: 'se', name: 'Sweden', label: 'SE (+46)' },
+  { code: '+47', iso: 'no', name: 'Norway', label: 'NO (+47)' },
+  { code: '+55', iso: 'br', name: 'Brazil', label: 'BR (+55)' },
+  { code: '+82', iso: 'kr', name: 'South Korea', label: 'KR (+82)' },
+  { code: '+971', iso: 'ae', name: 'United Arab Emirates', label: 'AE (+971)' },
+  { code: '+34', iso: 'es', name: 'Spain', label: 'ES (+34)' },
+  { code: '+39', iso: 'it', name: 'Italy', label: 'IT (+39)' },
+  { code: '+48', iso: 'pl', name: 'Poland', label: 'PL (+48)' },
+  { code: '+372', iso: 'ee', name: 'Estonia', label: 'EE (+372)' },
+  { code: '+886', iso: 'tw', name: 'Taiwan', label: 'TW (+886)' },
+  { code: '+64', iso: 'nz', name: 'New Zealand', label: 'NZ (+64)' },
+  { code: '+27', iso: 'za', name: 'South Africa', label: 'ZA (+27)' }
+];
+
+const CANDIDATE_FOCUS_AREAS = [
+  'Cybersecurity & Digital Privacy',
+  'Software & Web Development',
+  'Artificial Intelligence & Autonomous Tech',
+  'Cryptography & Blockchain Engineering',
+  'Cloud, Systems & DevOps Infrastructure',
+  'CS Student & Independent Learner',
+  'General Tech & Community Building'
+];
+
+const CANDIDATE_ROLE_OPTIONS = [
+  'Software Engineer / Architect',
+  'Cybersecurity & Cryptography Specialist',
+  'CS / Engineering Student (Undergraduate)',
+  'Postgraduate / PhD Researcher',
+  'Systems & Infrastructure / DevOps Engineer',
+  'AI / Machine Learning Engineer',
+  'Autodidact & Sovereign Builder',
+  'Founder / Tech Executive',
+  'Security Researcher / Ethical Hacker',
+  'Other (Custom Role)'
+];
+
+const CANDIDATE_AGE_OPTIONS = Array.from({ length: 60 }, (_, i) => String(16 + i)).concat(['75+']);
 
 const SERVER_URL = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? 'http://localhost:5000'
@@ -732,6 +798,56 @@ function JamesImageGenerationCard({ jamesStatus }) {
     <div className="dot-matrix-canvas">
       <div className="dot-matrix-top-bar">
         <span className="dot-matrix-header-title">Creating image</span>
+        {jamesStatus?.prompt && (
+          <span className="dot-matrix-prompt-hint" title={jamesStatus.prompt}>
+            &ldquo;{jamesStatus.prompt.length > 45 ? jamesStatus.prompt.slice(0, 45) + '...' : jamesStatus.prompt}&rdquo;
+          </span>
+        )}
+      </div>
+
+      <div className="dot-matrix-grid">
+        {dots.map(i => {
+          const row = Math.floor(i / 16);
+          const col = i % 16;
+          const delay = ((row + col) * 0.07).toFixed(2);
+          return (
+            <span
+              key={i}
+              className="dot-matrix-dot"
+              style={{ animationDelay: `${delay}s` }}
+            />
+          );
+        })}
+      </div>
+
+      <div className="dot-matrix-pill">
+        <span className="dot-matrix-percent">{percent}%</span>
+      </div>
+    </div>
+  );
+}
+
+function JamesVideoGenerationCard({ jamesStatus }) {
+  const [percent, setPercent] = useState(14);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPercent(prev => {
+        if (prev < 32) return prev + Math.floor(Math.random() * 4 + 2);
+        if (prev < 72) return prev + Math.floor(Math.random() * 3 + 1);
+        if (prev < 92) return prev + Math.floor(Math.random() * 2 + 1);
+        return 94;
+      });
+    }, 260);
+    return () => clearInterval(interval);
+  }, []);
+
+  const dots = useMemo(() => Array.from({ length: 256 }, (_, i) => i), []);
+
+  return (
+    <div className="dot-matrix-canvas">
+      <div className="dot-matrix-top-bar">
+        <span className="dot-matrix-header-title">Rendering video</span>
         {jamesStatus?.prompt && (
           <span className="dot-matrix-prompt-hint" title={jamesStatus.prompt}>
             &ldquo;{jamesStatus.prompt.length > 45 ? jamesStatus.prompt.slice(0, 45) + '...' : jamesStatus.prompt}&rdquo;
@@ -1427,13 +1543,57 @@ function App() {
   const [selectedUserProfile, setSelectedUserProfile] = useState(null);
   const [userProfilesMap, setUserProfilesMap] = useState({});
 
-  // --- View Routing State ('chat' | 'manifesto') ---
+  // --- Global Maintenance State & Speech Synthesis ---
+  const [maintenanceState, setMaintenanceState] = useState({ active: false });
+  const [speakingMsgId, setSpeakingMsgId] = useState(null);
+
+  const checkMaintenanceStatus = async () => {
+    try {
+      const res = await fetch(`${SERVER_URL}/api/maintenance/status`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && typeof data === 'object') {
+          setMaintenanceState(data);
+        }
+      }
+    } catch (err) {
+      console.warn('[Maintenance] check error:', err?.message);
+    }
+  };
+
+  useEffect(() => {
+    checkMaintenanceStatus();
+  }, []);
+
+  const handleSpeakMessage = (msgId, text) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    if (speakingMsgId === msgId) {
+      window.speechSynthesis.cancel();
+      setSpeakingMsgId(null);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    if (!text || !text.trim()) return;
+    const cleanText = text.replace(/[*_#`~[\]]/g, '').trim();
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.rate = 1.0;
+    utterance.pitch = 0.95;
+    utterance.onend = () => setSpeakingMsgId(null);
+    utterance.onerror = () => setSpeakingMsgId(null);
+    setSpeakingMsgId(msgId);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // --- View Routing State ('chat' | 'manifesto' | '404') ---
   const [currentView, setCurrentView] = useState(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname.toLowerCase();
       const hash = window.location.hash.toLowerCase();
       if (path === '/manifesto' || path === '/society' || hash === '#manifesto' || hash === '#society') {
         return 'manifesto';
+      }
+      if (path !== '/' && path !== '') {
+        return '404';
       }
     }
     return 'chat';
@@ -1445,8 +1605,10 @@ function App() {
       const hash = window.location.hash.toLowerCase();
       if (path === '/manifesto' || path === '/society' || hash === '#manifesto' || hash === '#society') {
         setCurrentView('manifesto');
-      } else {
+      } else if (path === '/' || path === '') {
         setCurrentView('chat');
+      } else {
+        setCurrentView('404');
       }
     };
 
@@ -1479,11 +1641,20 @@ function App() {
   const [membershipForm, setMembershipForm] = useState({
     fullName: '',
     email: '',
-    role: '',
-    ageLocation: '',
-    focusArea: 'Ecological & Planetary Resilience',
+    roleCategory: 'Software Engineer / Architect',
+    customRole: '',
+    role: 'Software Engineer / Architect',
+    age: '24',
+    country: 'United States',
+    city: '',
+    phoneCountryCode: '+1',
+    phoneCountryIso: 'us',
+    phoneNumber: '',
+    focusArea: 'Cybersecurity & Digital Privacy',
     purpose: '',
-    socialHandle: '',
+    socialHandles: [
+      { id: '1', platform: 'auto', url: '' }
+    ],
     pledgeAccepted: false
   });
   const [membershipLoading, setMembershipLoading] = useState(false);
@@ -2033,6 +2204,18 @@ function App() {
     }
   };
 
+  // Synchronize active view with server in real time (Public Chat vs Admin Panel vs Secret Society)
+  useEffect(() => {
+    if (socketRef.current?.connected) {
+      const activeView = showAdminPanel ? 'admin' : (showSocietyChat ? 'society' : (currentView === 'chat' ? 'chat' : 'other'));
+      socketRef.current.emit('userPresenceView', {
+        view: activeView,
+        alias: identity?.alias,
+        userId: identity?.userId
+      });
+    }
+  }, [showAdminPanel, showSocietyChat, currentView, identity?.alias, identity?.userId]);
+
   useEffect(() => {
     socketRef.current = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
@@ -2049,6 +2232,7 @@ function App() {
       const hasVisited = !!localStorage.getItem('shadowtalk_has_visited');
       localStorage.setItem('shadowtalk_has_visited', 'true');
 
+      const activeView = showAdminPanel ? 'admin' : (showSocietyChat ? 'society' : (currentView === 'chat' ? 'chat' : 'other'));
       socketRef.current.emit('userJoined', {
         alias: identityRef.current.alias,
         userId: identityRef.current.userId,
@@ -2057,9 +2241,16 @@ function App() {
         bio: identityRef.current.bio,
         status: identityRef.current.status,
         isVerified: identityRef.current.isVerified,
+        currentView: activeView,
         isRefresh: isRefresh,
         hasVisited: hasVisited
       });
+    });
+
+    socketRef.current.on('maintenance_state', (data) => {
+      if (data && typeof data === 'object') {
+        setMaintenanceState(data);
+      }
     });
 
     socketRef.current.on('profilesSync', (profiles) => {
@@ -2076,6 +2267,14 @@ function App() {
           }));
         }
       }
+    });
+
+    // Real-time synchronization of active user presence view (public chat vs admin panel vs secret society)
+    const activeView = showAdminPanel ? 'admin' : (showSocietyChat ? 'society' : (currentView === 'chat' ? 'chat' : 'other'));
+    socketRef.current.emit('userPresenceView', {
+      view: activeView,
+      alias: identityRef.current?.alias,
+      userId: identityRef.current?.userId
     });
 
     socketRef.current.on('userProfileUpdated', (profile) => {
@@ -2706,7 +2905,10 @@ function App() {
     setMembershipForm(prev => ({
       ...prev,
       email: identity.verifiedEmail || prev.email || '',
-      fullName: prev.fullName || identity.alias || ''
+      fullName: prev.fullName || identity.alias || '',
+      phoneCountryIso: prev.phoneCountryIso || 'us',
+      phoneCountryCode: prev.phoneCountryCode || '+1',
+      socialHandles: prev.socialHandles && prev.socialHandles.length > 0 ? prev.socialHandles : [{ id: '1', platform: 'auto', url: '' }]
     }));
   };
 
@@ -2715,6 +2917,43 @@ function App() {
     setMembershipStep('form');
     setMembershipError('');
     setMembershipLoading(false);
+  };
+
+  const handleAddSocialHandle = () => {
+    setMembershipForm(prev => ({
+      ...prev,
+      socialHandles: [
+        ...(prev.socialHandles || []),
+        { id: String(Date.now() + Math.random()), platform: 'auto', url: '' }
+      ]
+    }));
+  };
+
+  const handleRemoveSocialHandle = (idToRemove) => {
+    setMembershipForm(prev => ({
+      ...prev,
+      socialHandles: prev.socialHandles.filter(h => h.id !== idToRemove)
+    }));
+  };
+
+  const handleUpdateSocialHandle = (idToUpdate, field, value) => {
+    setMembershipForm(prev => ({
+      ...prev,
+      socialHandles: (prev.socialHandles || []).map(h => {
+        if (h.id !== idToUpdate) return h;
+        const updated = { ...h, [field]: value };
+        if (field === 'url') {
+          const detected = detectSocialPlatform(value);
+          if (h.platform === 'auto' || !h.userOverrodePlatform) {
+            updated.platform = detected;
+          }
+        }
+        if (field === 'platform') {
+          updated.userOverrodePlatform = true;
+        }
+        return updated;
+      })
+    }));
   };
 
   const handleSubmitMembershipApplication = async (e) => {
@@ -2727,14 +2966,47 @@ function App() {
       setMembershipError('Please provide a valid Primary Email Address.');
       return;
     }
-    if (!membershipForm.role?.trim()) {
+
+    // Role
+    const resolvedRole = membershipForm.roleCategory === 'Other (Custom Role)'
+      ? (membershipForm.customRole || '').trim()
+      : (membershipForm.roleCategory || membershipForm.role || '').trim();
+    if (!resolvedRole) {
       setMembershipError('Please specify your Student / Occupational Role.');
       return;
     }
-    if (!membershipForm.ageLocation?.trim()) {
-      setMembershipError('Please specify your Age & Current Location.');
+
+    // Age
+    if (!membershipForm.age) {
+      setMembershipError('Please select your Age.');
       return;
     }
+
+    // Location
+    const resolvedCity = (membershipForm.city || '').trim();
+    const resolvedCountry = (membershipForm.country || 'Global').trim();
+    if (!resolvedCity && !resolvedCountry) {
+      setMembershipError('Please provide your Current Location.');
+      return;
+    }
+    const resolvedLocation = resolvedCity ? `${resolvedCity}, ${resolvedCountry}` : resolvedCountry;
+
+    // Phone Number
+    const rawPhone = (membershipForm.phoneNumber || '').trim();
+    if (!rawPhone || rawPhone.length < 5) {
+      setMembershipError('Please provide a valid Phone Number for enclave verification.');
+      return;
+    }
+    const fullPhone = `${membershipForm.phoneCountryCode || '+1'} ${rawPhone}`;
+
+    // Social Handles
+    const validSocialHandles = (membershipForm.socialHandles || [])
+      .map(item => ({
+        platform: item.platform === 'auto' ? detectSocialPlatform(item.url) : item.platform,
+        url: (item.url || '').trim()
+      }))
+      .filter(item => Boolean(item.url));
+
     if (!membershipForm.purpose?.trim() || membershipForm.purpose.trim().length < 15) {
       setMembershipError('Please provide a meaningful statement of purpose (at least 15 characters).');
       return;
@@ -2752,7 +3024,18 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...membershipForm,
+          fullName: membershipForm.fullName.trim(),
+          email: membershipForm.email.trim(),
+          role: resolvedRole,
+          age: String(membershipForm.age),
+          location: resolvedLocation,
+          ageLocation: `${membershipForm.age}, ${resolvedLocation}`,
+          phone: fullPhone,
+          phoneNumber: fullPhone,
+          socialHandles: validSocialHandles,
+          socialHandle: validSocialHandles.map(h => h.url).join(', '),
+          focusArea: membershipForm.focusArea,
+          purpose: membershipForm.purpose.trim(),
           alias: identity.alias,
           userId: identity.userId
         }),
@@ -3796,7 +4079,17 @@ function App() {
 
   return (
     <div className="shadow-root">
-      {currentView === 'manifesto' ? (
+      {(maintenanceState?.active || maintenanceState?.enabled) && !adminToken && !showAdminPanel && !adminAuthFlow?.active ? (
+        <MaintenanceScreen
+          maintenance={maintenanceState}
+          onRefresh={checkMaintenanceStatus}
+          onOverrideSuccess={(token) => {
+            setAdminToken(token);
+            setShowAdminPanel(true);
+          }}
+          serverUrl={SERVER_URL}
+        />
+      ) : currentView === 'manifesto' ? (
         <SecretSociety
           onReturn={navigateToChat}
           onApply={() => {
@@ -3814,6 +4107,11 @@ function App() {
             });
             setShowSocietyChat(true);
           }}
+        />
+      ) : currentView === '404' ? (
+        <NotFound404
+          onNavigateChat={navigateToChat}
+          onNavigateManifesto={navigateToManifesto}
         />
       ) : (
         <>
@@ -4600,10 +4898,12 @@ function App() {
             })
           )}
 
-          {/* In-Chat Live Dynamic Status Bubble from James - Only for Interactive Media Generation (Image, PDF, QR, Voice, Code, Poll) */}
+          {/* In-Chat Live Dynamic Status Bubble from James - Only for Interactive Media Generation (Image, Video, PDF, QR, Voice, Code, Poll) */}
           {jamesStatus && (
             jamesStatus.status === 'generating_image' ||
             jamesStatus.generatingType === 'image' ||
+            jamesStatus.status === 'generating_video' ||
+            jamesStatus.generatingType === 'video' ||
             jamesStatus.status === 'generating_pdf' ||
             jamesStatus.generatingType === 'pdf' ||
             jamesStatus.status === 'generating_qr' ||
@@ -4638,6 +4938,11 @@ function App() {
                   {/* Modern AI Studio Canvas: Image Generation (Dot Matrix) */}
                   {(jamesStatus.status === 'generating_image' || jamesStatus.generatingType === 'image') && (
                     <JamesImageGenerationCard jamesStatus={jamesStatus} />
+                  )}
+
+                  {/* Modern AI Studio Canvas: Video Generation (Dot Matrix) */}
+                  {(jamesStatus.status === 'generating_video' || jamesStatus.generatingType === 'video') && (
+                    <JamesVideoGenerationCard jamesStatus={jamesStatus} />
                   )}
 
                   {/* Cybernetic Document Foundry: PDF Compilation */}
@@ -4695,6 +5000,11 @@ function App() {
                   </div>
                 )}
                 {(jamesStatus.status === 'generating_image' || jamesStatus.generatingType === 'image') && (
+                  <div className="status-icon-badge generating">
+                    <Sparkles size={14} className="status-pulse-sparkle" />
+                  </div>
+                )}
+                {(jamesStatus.status === 'generating_video' || jamesStatus.generatingType === 'video') && (
                   <div className="status-icon-badge generating">
                     <Sparkles size={14} className="status-pulse-sparkle" />
                   </div>
@@ -5015,7 +5325,7 @@ function App() {
                   </div>
                 </div>
 
-                {/* Handlable 2-Column Responsive Matrix */}
+                {/* Handlable Responsive Matrix */}
                 <div className="dossier-fields-grid">
                   <div className="membership-field-group">
                     <label className="membership-label">LEGAL / REAL FULL NAME *</label>
@@ -5043,54 +5353,174 @@ function App() {
 
                   <div className="membership-field-group">
                     <label className="membership-label">STUDENT / OCCUPATIONAL ROLE *</label>
-                    <input
-                      type="text"
-                      className="membership-input"
-                      placeholder="e.g. CS Student / Cryptography Researcher / Autodidact"
-                      value={membershipForm.role}
-                      onChange={e => setMembershipForm({ ...membershipForm, role: e.target.value })}
-                      required
-                    />
-                  </div>
-
-                  <div className="membership-field-group">
-                    <label className="membership-label">AGE &amp; CURRENT LOCATION *</label>
-                    <input
-                      type="text"
-                      className="membership-input"
-                      placeholder="e.g. 22, Berlin / 24, California"
-                      value={membershipForm.ageLocation}
-                      onChange={e => setMembershipForm({ ...membershipForm, ageLocation: e.target.value })}
-                      required
-                    />
-                  </div>
-
-                  <div className="membership-field-group">
-                    <label className="membership-label">PLANETARY RESILIENCE &amp; FOCUS AREA *</label>
                     <select
                       className="membership-input"
-                      value={membershipForm.focusArea || 'Ecological & Planetary Resilience'}
-                      onChange={e => setMembershipForm({ ...membershipForm, focusArea: e.target.value })}
+                      value={membershipForm.roleCategory}
+                      onChange={e => setMembershipForm({ ...membershipForm, roleCategory: e.target.value })}
                       style={{ background: '#0a101f', color: '#00f3ff' }}
                     >
-                      <option value="Ecological & Planetary Resilience">Ecological &amp; Planetary Resilience</option>
-                      <option value="Decentralized Energy & Solar Microgrids">Decentralized Energy &amp; Solar Microgrids</option>
-                      <option value="Sovereign Cryptography & Privacy">Sovereign Cryptography &amp; Privacy</option>
-                      <option value="Cognitive Liberty & Anti-Panopticon Tech">Cognitive Liberty &amp; Anti-Panopticon Tech</option>
-                      <option value="Macroeconomics & Post-Fiat Architecture">Macroeconomics &amp; Post-Fiat Architecture</option>
-                      <option value="Autonomous Agent Systems (James Core)">Autonomous Agent Systems (James Core)</option>
+                      {CANDIDATE_ROLE_OPTIONS.map(roleOpt => (
+                        <option key={roleOpt} value={roleOpt}>{roleOpt}</option>
+                      ))}
+                    </select>
+                    {membershipForm.roleCategory === 'Other (Custom Role)' && (
+                      <input
+                        type="text"
+                        className="membership-input"
+                        style={{ marginTop: '0.45rem' }}
+                        placeholder="Enter your custom role or vocation..."
+                        value={membershipForm.customRole}
+                        onChange={e => setMembershipForm({ ...membershipForm, customRole: e.target.value })}
+                        required
+                      />
+                    )}
+                  </div>
+
+                  <div className="membership-field-group">
+                    <label className="membership-label">AGE (YEARS) *</label>
+                    <select
+                      className="membership-input"
+                      value={membershipForm.age}
+                      onChange={e => setMembershipForm({ ...membershipForm, age: e.target.value })}
+                      style={{ background: '#0a101f', color: '#00f3ff' }}
+                      required
+                    >
+                      {CANDIDATE_AGE_OPTIONS.map(a => (
+                        <option key={a} value={a}>{a} years old</option>
+                      ))}
                     </select>
                   </div>
 
                   <div className="membership-field-group">
-                    <label className="membership-label">PUBLIC PROOF / SOCIAL HANDLE (OPTIONAL)</label>
+                    <label className="membership-label">COUNTRY OF RESIDENCE *</label>
+                    <select
+                      className="membership-input"
+                      value={membershipForm.country}
+                      onChange={e => setMembershipForm({ ...membershipForm, country: e.target.value })}
+                      style={{ background: '#0a101f', color: '#00f3ff' }}
+                      required
+                    >
+                      {CANDIDATE_COUNTRY_OPTIONS.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="membership-field-group">
+                    <label className="membership-label">CURRENT CITY / REGION *</label>
                     <input
                       type="text"
                       className="membership-input"
-                      placeholder="e.g. @github_handle, X / Twitter, or portfolio"
-                      value={membershipForm.socialHandle}
-                      onChange={e => setMembershipForm({ ...membershipForm, socialHandle: e.target.value })}
+                      placeholder="e.g. Berlin, San Francisco, London"
+                      value={membershipForm.city}
+                      onChange={e => setMembershipForm({ ...membershipForm, city: e.target.value })}
+                      required
                     />
+                  </div>
+
+                  <div className="membership-field-group full-width">
+                    <label className="membership-label">PHONE NUMBER (ENCLAVE VERIFICATION) *</label>
+                    <div className="phone-input-composite">
+                      <div className="phone-code-select-wrap">
+                        <img
+                          src={`https://flagcdn.com/w40/${membershipForm.phoneCountryIso || 'us'}.png`}
+                          alt="Country Flag"
+                          className="phone-flag-img"
+                          loading="lazy"
+                        />
+                        <select
+                          className="phone-code-select"
+                          value={membershipForm.phoneCountryIso || 'us'}
+                          onChange={e => {
+                            const selected = CANDIDATE_PHONE_CODES.find(p => p.iso === e.target.value);
+                            setMembershipForm({
+                              ...membershipForm,
+                              phoneCountryIso: e.target.value,
+                              phoneCountryCode: selected ? selected.code : '+1'
+                            });
+                          }}
+                          aria-label="Country calling code"
+                        >
+                          {CANDIDATE_PHONE_CODES.map(p => (
+                            <option key={p.iso} value={p.iso}>{p.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="phone-number-field-wrap">
+                        <Phone size={14} className="phone-icon-prefix" />
+                        <input
+                          type="tel"
+                          className="membership-input"
+                          placeholder="e.g. 555-0199 or 9876543210"
+                          value={membershipForm.phoneNumber}
+                          onChange={e => setMembershipForm({ ...membershipForm, phoneNumber: e.target.value })}
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="membership-field-group full-width">
+                    <label className="membership-label">PRIMARY DOMAIN &amp; AREA OF INTEREST *</label>
+                    <select
+                      className="membership-input"
+                      value={membershipForm.focusArea || 'Cybersecurity & Digital Privacy'}
+                      onChange={e => setMembershipForm({ ...membershipForm, focusArea: e.target.value })}
+                      style={{ background: '#0a101f', color: '#00f3ff' }}
+                    >
+                      {CANDIDATE_FOCUS_AREAS.map(area => (
+                        <option key={area} value={area}>{area}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Multi-Social Handle Dynamic Section with Real-Time Detection */}
+                  <div className="membership-field-group full-width">
+                    <div className="social-handles-header">
+                      <label className="membership-label" style={{ marginBottom: 0 }}>
+                        PUBLIC PROOF &amp; SOCIAL HANDLES (ADD MULTIPLE)
+                      </label>
+                      <button
+                        type="button"
+                        className="social-add-btn"
+                        onClick={handleAddSocialHandle}
+                      >
+                        <Plus size={13} />
+                        <span>Add Another Handle</span>
+                      </button>
+                    </div>
+
+                    <div className="social-handles-list">
+                      {(membershipForm.socialHandles || []).map((h) => {
+                        const detectedPlatform = detectSocialPlatform(h.url);
+                        return (
+                          <div key={h.id} className="social-handle-row">
+                            <div className="social-platform-pill" title={`Platform: ${detectedPlatform}`}>
+                              <SocialIcon platform={detectedPlatform} size={18} />
+                            </div>
+                            <div className="social-handle-input-box">
+                              <input
+                                type="text"
+                                className="membership-input"
+                                placeholder="Paste handle or profile URL (e.g. instagram.com/username, github.com/user, x.com/...)"
+                                value={h.url}
+                                onChange={e => handleUpdateSocialHandle(h.id, 'url', e.target.value)}
+                              />
+                            </div>
+                            {membershipForm.socialHandles.length > 1 && (
+                              <button
+                                type="button"
+                                className="social-handle-remove-btn"
+                                onClick={() => handleRemoveSocialHandle(h.id)}
+                                title="Remove handle"
+                              >
+                                <X size={15} />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <div className="membership-field-group full-width">

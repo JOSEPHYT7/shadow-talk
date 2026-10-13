@@ -59,6 +59,7 @@ import {
   Edit3
 } from 'lucide-react';
 import GeoGlobe3D from './GeoGlobe3D';
+import { SocialIcon, detectSocialPlatform } from '../SocialPlatformIcons';
 import './AdminPanel.css';
 
 export function AdminPanel({
@@ -167,6 +168,8 @@ export function AdminPanel({
   const [societySearch, setSocietySearch] = useState('');
   const [generatedCredentialModal, setGeneratedCredentialModal] = useState(null);
   const [copiedPass, setCopiedPass] = useState(false);
+  const [emergencyKeyModal, setEmergencyKeyModal] = useState(null);
+  const [copiedEmergencyKey, setCopiedEmergencyKey] = useState(false);
   const [showDirectInductModal, setShowDirectInductModal] = useState(false);
   const [directForm, setDirectForm] = useState({
     alias: '',
@@ -629,6 +632,10 @@ export function AdminPanel({
       if (res.ok) {
         const data = await res.json();
         setMaintenanceActive(Boolean(data.maintenanceActive));
+        if (data.maintenanceActive && data.overridePassword) {
+          setEmergencyKeyModal(data.overridePassword);
+          setCopiedEmergencyKey(false);
+        }
         flashNotice(`Traffic Shield / Maintenance ${data.maintenanceActive ? 'ENGAGED' : 'DISENGAGED'}`);
         fetchTelemetry();
         fetchLiveEvents();
@@ -637,6 +644,66 @@ export function AdminPanel({
       flashNotice(`Error: ${err.message}`, 'error');
     } finally {
       setTogglingMaintenance(false);
+    }
+  };
+
+  const handleCopyEmergencyKey = (key) => {
+    if (!key) return;
+    navigator.clipboard.writeText(key).then(() => {
+      setCopiedEmergencyKey(true);
+      setTimeout(() => setCopiedEmergencyKey(false), 2500);
+    }).catch(() => {});
+  };
+
+  const [purgingTempFiles, setPurgingTempFiles] = useState(false);
+  const [emergencyDisconnecting, setEmergencyDisconnecting] = useState(false);
+
+  const handlePurgeTempFiles = async () => {
+    setPurgingTempFiles(true);
+    try {
+      const res = await fetch(`${serverUrl}/api/admin/dashboard/system/purge-temp-files`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        flashNotice(data.message || `Purged ${data.purgedCount} temporary files.`);
+        fetchTelemetry();
+      } else {
+        flashNotice(data.error || 'Failed to purge temp files', 'error');
+      }
+    } catch (err) {
+      flashNotice(`Error: ${err.message}`, 'error');
+    } finally {
+      setPurgingTempFiles(false);
+    }
+  };
+
+  const handleEmergencyDisconnect = async () => {
+    if (!window.confirm('WARNING: Force disconnect all active public chat clients? This will reset all non-admin client socket sessions.')) return;
+    setEmergencyDisconnecting(true);
+    try {
+      const res = await fetch(`${serverUrl}/api/admin/dashboard/system/emergency-disconnect`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        flashNotice(`Emergency disconnect executed: ${data.disconnectedCount} client sockets reset.`);
+        fetchTelemetry();
+      } else {
+        flashNotice(data.error || 'Failed to execute emergency disconnect', 'error');
+      }
+    } catch (err) {
+      flashNotice(`Error: ${err.message}`, 'error');
+    } finally {
+      setEmergencyDisconnecting(false);
     }
   };
 
@@ -1179,6 +1246,16 @@ export function AdminPanel({
             )}
             <button
               type="button"
+              className={`admin-maintenance-header-btn ${maintenanceActive ? 'active' : ''}`}
+              onClick={handleToggleMaintenance}
+              disabled={togglingMaintenance}
+              title={maintenanceActive ? "Maintenance Mode is ENGAGED (website stopped). Click to resume services." : "Services are ONLINE. Click to halt services and show Maintenance screen."}
+            >
+              <span className={`admin-maintenance-status-dot ${maintenanceActive ? 'warn' : 'live'}`} />
+              <span>{maintenanceActive ? 'MAINTENANCE: ACTIVE' : 'SERVICES: ONLINE'}</span>
+            </button>
+            <button
+              type="button"
               className="admin-btn-secondary"
               onClick={onClose}
               title="Return to public terminal (ESC)"
@@ -1317,10 +1394,33 @@ export function AdminPanel({
                     className={`ops-action-btn shield ${maintenanceActive ? 'engaged' : ''}`}
                     disabled={togglingMaintenance}
                     onClick={handleToggleMaintenance}
-                    title="Toggle traffic shield to protect server during heavy loads"
+                    title="Toggle site maintenance mode. When active, all regular users are shown the Under Maintenance screen."
                   >
                     <Shield size={13} />
-                    <span>{maintenanceActive ? '⚠️ Traffic Shield: ENGAGED' : '🛡️ Traffic Shield: DISENGAGED'}</span>
+                    <span>{maintenanceActive ? '⚠️ Maintenance: ACTIVE (HALTED)' : '🛡️ Maintenance: STANDBY (ONLINE)'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="ops-action-btn cache"
+                    disabled={purgingTempFiles}
+                    onClick={handlePurgeTempFiles}
+                    title="Purge temporary scratch files, debug artifacts, and unreferenced uploads"
+                  >
+                    {purgingTempFiles ? <RefreshCw size={13} className="spin-icon" /> : <Trash2 size={13} />}
+                    <span>{purgingTempFiles ? 'Purging Temp Files...' : 'Purge Temp Uploads & Scratch'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="ops-action-btn danger"
+                    disabled={emergencyDisconnecting}
+                    onClick={handleEmergencyDisconnect}
+                    title="Emergency disconnect of all active public client socket connections"
+                    style={{ background: 'rgba(239, 68, 68, 0.12)', borderColor: 'rgba(239, 68, 68, 0.35)', color: '#f87171' }}
+                  >
+                    <AlertTriangle size={13} />
+                    <span>{emergencyDisconnecting ? 'Disconnecting Sockets...' : 'Emergency Sockets Reset'}</span>
                   </button>
 
                   <button
@@ -1745,20 +1845,80 @@ export function AdminPanel({
 
                         <div className="candidate-grid-info">
                           <div className="info-cell">
-                            <span className="cell-lbl">ROLE / STATUS:</span>
-                            <span className="cell-val">{app.role}</span>
+                            <span className="cell-lbl">ROLE / OCCUPATION:</span>
+                            <span className="cell-val">{app.role || 'Unspecified'}</span>
                           </div>
                           <div className="info-cell">
-                            <span className="cell-lbl">AGE &amp; LOCATION:</span>
-                            <span className="cell-val">{app.ageLocation}</span>
+                            <span className="cell-lbl">AGE:</span>
+                            <span className="cell-val">{app.age || (app.ageLocation ? app.ageLocation.split(',')[0]?.trim() : 'N/A')}</span>
+                          </div>
+                          <div className="info-cell">
+                            <span className="cell-lbl">CURRENT LOCATION:</span>
+                            <span className="cell-val">{app.location || (app.ageLocation?.includes(',') ? app.ageLocation.split(',').slice(1).join(',').trim() : app.ageLocation || 'N/A')}</span>
+                          </div>
+                          <div className="info-cell">
+                            <span className="cell-lbl">PHONE NUMBER:</span>
+                            <span className="cell-val">
+                              {app.phone ? (
+                                <a href={`tel:${app.phone}`} className="candidate-phone-link" title="Call or copy number">
+                                  📞 {app.phone}
+                                </a>
+                              ) : (
+                                <span style={{ color: '#64748b' }}>Not Provided</span>
+                              )}
+                            </span>
+                          </div>
+                          <div className="info-cell">
+                            <span className="cell-lbl">FOCUS AREA:</span>
+                            <span className="cell-val" style={{ color: '#00f3ff' }}>{app.focusArea || 'Planetary Resilience'}</span>
                           </div>
                           <div className="info-cell">
                             <span className="cell-lbl">SUBMITTED AT:</span>
                             <span className="cell-val">{new Date(app.timestamp || app.submittedAt).toLocaleString()}</span>
                           </div>
-                          <div className="info-cell">
-                            <span className="cell-lbl">PUBLIC HANDLE:</span>
-                            <span className="cell-val">{app.socialHandle || 'None'}</span>
+                          <div className="info-cell full-span">
+                            <span className="cell-lbl">PUBLIC PROOFS &amp; SOCIAL HANDLES:</span>
+                            <div className="candidate-social-chips-row">
+                              {Array.isArray(app.socialHandles) && app.socialHandles.length > 0 ? (
+                                app.socialHandles.map((h, hIdx) => {
+                                  const rawUrl = typeof h === 'string' ? h : h.url;
+                                  const plat = typeof h === 'string' ? detectSocialPlatform(h) : (h.platform === 'auto' ? detectSocialPlatform(h.url) : h.platform);
+                                  const fullHref = rawUrl.startsWith('http') ? rawUrl : (plat === 'twitter' || plat === 'x' ? `https://x.com/${rawUrl.replace(/^@/, '')}` : (plat === 'instagram' ? `https://instagram.com/${rawUrl.replace(/^@/, '')}` : (plat === 'github' ? `https://github.com/${rawUrl.replace(/^@/, '')}` : `https://${rawUrl}`)));
+                                  return (
+                                    <a
+                                      key={hIdx}
+                                      href={fullHref}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="candidate-social-chip"
+                                      title={`Open ${plat}: ${rawUrl}`}
+                                    >
+                                      <SocialIcon platform={plat} size={14} />
+                                      <span>{rawUrl}</span>
+                                    </a>
+                                  );
+                                })
+                              ) : app.socialHandle && app.socialHandle !== 'None' ? (
+                                app.socialHandle.split(',').map((item, idx) => {
+                                  const trimmed = item.trim();
+                                  const plat = detectSocialPlatform(trimmed);
+                                  return (
+                                    <a
+                                      key={idx}
+                                      href={trimmed.startsWith('http') ? trimmed : `https://${trimmed}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="candidate-social-chip"
+                                    >
+                                      <SocialIcon platform={plat} size={14} />
+                                      <span>{trimmed}</span>
+                                    </a>
+                                  );
+                                })
+                              ) : (
+                                <span style={{ color: '#64748b', fontSize: '0.8rem' }}>None Provided</span>
+                              )}
+                            </div>
                           </div>
                         </div>
 
@@ -3012,6 +3172,57 @@ export function AdminPanel({
             <div className="credential-modal-footer">
               <button type="button" className="modal-done-btn" onClick={() => setSelectedAuditLog(null)}>
                 Close Inspector
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- POPUP MODAL: Maintenance Emergency 10-Character Override Key --- */}
+      {emergencyKeyModal && (
+        <div className="society-modal-backdrop" onClick={() => setEmergencyKeyModal(null)}>
+          <div className="society-credential-card maintenance-key-popup-card" onClick={e => e.stopPropagation()}>
+            <div className="credential-modal-header">
+              <div className="header-seal-wrap" style={{ borderColor: '#f59e0b', background: 'rgba(245, 158, 11, 0.12)' }}>
+                <KeyRound size={20} color="#f59e0b" />
+              </div>
+              <div>
+                <h3 style={{ color: '#f59e0b' }}>EMERGENCY OVERRIDE KEY GENERATED</h3>
+                <span>10-Character Council Maintenance Bypass Key</span>
+              </div>
+              <button type="button" className="close-modal-btn" onClick={() => setEmergencyKeyModal(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="credential-modal-body" style={{ textAlign: 'center', padding: '1.8rem 1.5rem' }}>
+              <p style={{ color: '#cbd5e1', fontSize: '0.88rem', lineHeight: '1.6', margin: '0 0 1.25rem 0' }}>
+                Maintenance mode is now <strong>ACTIVATED</strong> across all public channels. If you log out or leave, click the secret icon on the Maintenance Screen and enter this 10-character key to regain immediate Admin Panel access.
+              </p>
+
+              <div className="emergency-key-display-box">
+                <span className="emergency-key-text">{emergencyKeyModal}</span>
+                <button
+                  type="button"
+                  className="emergency-key-copy-btn"
+                  onClick={() => handleCopyEmergencyKey(emergencyKeyModal)}
+                >
+                  {copiedEmergencyKey ? (
+                    <>
+                      <Check size={15} color="#10b981" />
+                      <span style={{ color: '#10b981' }}>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={15} />
+                      <span>Copy Key</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+            <div className="credential-modal-footer">
+              <button type="button" className="modal-done-btn" onClick={() => setEmergencyKeyModal(null)}>
+                I Have Saved This Key
               </button>
             </div>
           </div>

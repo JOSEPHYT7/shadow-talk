@@ -4629,3 +4629,59 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Header Maintenance Mode Master Toggle Button */
+.admin-maintenance-header-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.85rem;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 8px;
+  color: #34d399;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: all 0.2s ease;
+}
+
+.admin-maintenance-header-btn:hover {
+  background: rgba(16, 185, 129, 0.22);
+  border-color: #34d399;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
+}
+
+.admin-maintenance-header-btn.active {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: #f59e0b;
+  color: #fbbf24;
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.25);
+  animation: pulseMaintenanceBtn 1.8s infinite;
+}
+
+@keyframes pulseMaintenanceBtn {
+  0%, 100% { box-shadow: 0 0 10px rgba(245, 158, 11, 0.2); }
+  50% { box-shadow: 0 0 20px rgba(245, 158, 11, 0.45); }
+}
+
+.admin-maintenance-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.admin-maintenance-status-dot.live {
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+}
+
+.admin-maintenance-status-dot.warn {
+  background: #f59e0b;
+  box-shadow: 0 0 8px #f59e0b;
+  animation: pulseBeacon 1.2s infinite;
+}

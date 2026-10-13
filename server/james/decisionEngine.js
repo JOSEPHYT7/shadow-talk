@@ -73,7 +73,7 @@ class DecisionEngine {
     // Comprehensive query detection: commands, generation requests, questions, tech queries, greetings
     const isQuestion = /\?|how|what|why|who|where|when|which|is|are|can|could|would|should|do|does|did|will/i.test(text);
     const isGreeting = /^(hi|hello|hey|yo|greetings|morning|evening|sup|good)\b/i.test(text);
-    const isActionOrRequest = /generate|create|make|draw|build|write|search|find|calculate|summarize|show|tell|give|convert|format|design|pdf|qr|image|photo|picture|code|script|test|explain|help|solve|compare|review/i.test(text);
+    const isActionOrRequest = /generate|create|make|draw|build|write|search|find|calculate|summarize|show|tell|give|convert|format|design|pdf|qr|image|photo|picture|video|clip|animation|render|code|script|test|explain|help|solve|compare|review|voice|audio|speak|speech|tts/i.test(text);
     const isTechHelp = /error|bug|issue|react|node|javascript|python|deploy|css|html|api|database|syntax|docker|git/i.test(text);
     const isMeaningfulQuery = text.trim().length > 2;
 

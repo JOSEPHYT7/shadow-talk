@@ -424,13 +424,14 @@ CRITICAL FREE TOOLS CAPABILITY (100% FREE):
   * get_crypto_prices: Live cryptocurrency prices and 24h market metrics.
   * inspect_github_repo: Inspect GitHub repository stats, stargazers, and tech stack.
   * get_wiki_summary: Verified Wikipedia briefs and abstracts.
-  * generate_image: Generate high-quality digital artwork or photos.
-  * generate_pdf: Create downloadable formatted PDF documents.
+  * generate_image: Generate high-quality digital artwork or photos using FLUX.1.
+  * generate_video: Generate or retrieve authentic high-definition video clips on any topic or theme.
+  * generate_pdf: Create downloadable formatted PDF documents with executive design, watermarks, and embedded topic photography.
   * calculate: Compute math expressions accurately.
   * generate_qr_code: Generate a downloadable QR code image.
   * web_search & web_fetch: Live web research and page reading.
   * run_code: Safely execute JavaScript code in an isolated live sandbox.
-  * generate_voice: Synthesize a playable spoken audio voice note.
+  * generate_voice: Convert text to voice (TTS) or synthesize a playable spoken audio voice note.
   * create_poll: Launch an interactive community poll for people to vote on.
   * set_reminder: Set a timed reminder or countdown timer for a user.
   * summarize_chat: Summarize recent room messages and conversation highlights.
@@ -444,6 +445,10 @@ CRITICAL INTERNET ACCESS & WEB SEARCH RULES:
 - You have live, unrestricted access to the internet via web_search, web_fetch, and get_world_news.
 - When asked about current events, news, sports scores, weather, people, real-time facts, release versions, website info, or anything that requires up-to-date internet knowledge, YOU MUST ALWAYS CALL web_search or get_world_news first.
 - If the user gives you a link or says "go through this site", immediately call web_fetch on that URL.
+
+CRITICAL TEXT TO VOICE & AUDIO PLAY CARD RULES:
+- When a user gives text (or quotes/replies to a message) and asks to convert it into voice, e.g. "'<text>' convert this message into voice", "convert this into voice", "turn this into audio", "read this aloud", or "speak this", YOU MUST IMMEDIATELY CALL generate_voice with the exact text to speak!
+- NEVER respond with just plain text without invoking generate_voice. Calling generate_voice automatically delivers a playable audio card directly in the chat message.
 
 Social & Community Context:
 - Current Online Users: ${socialState.userCount} (Social Mode: ${socialState.mode})
@@ -613,6 +618,7 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
       'web_search',
       'web_fetch',
       'generate_image',
+      'generate_video',
       'generate_pdf',
       'calculate',
       'get_weather',
@@ -703,6 +709,14 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
                 generatingType: 'image',
                 text: `Creating image: "${(parsedArgs.prompt || '').slice(0, 50)}..."`,
                 prompt: parsedArgs.prompt
+              });
+            } else if (fnName === 'generate_video') {
+              this.io.emit('jamesStatus', {
+                alias: 'James',
+                status: 'generating_video',
+                generatingType: 'video',
+                text: `Rendering video: "${(parsedArgs.prompt || parsedArgs.topic || '').slice(0, 50)}..."`,
+                prompt: parsedArgs.prompt || parsedArgs.topic
               });
             } else if (fnName === 'generate_pdf') {
               this.io.emit('jamesStatus', {
@@ -804,6 +818,20 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
                 };
               }
             } catch (e) { }
+          } else if (fnName === 'generate_video') {
+            try {
+              const parsed = JSON.parse(toolOutput);
+              if (parsed.success && (parsed.videoUrl || parsed.fileUrl)) {
+                capturedAttachment = {
+                  videoUrl: parsed.videoUrl || parsed.fileUrl,
+                  fileUrl: parsed.fileUrl || parsed.videoUrl,
+                  fileName: parsed.filename,
+                  fileSize: parsed.fileSize,
+                  fileType: parsed.fileType || 'video/mp4',
+                  allowDownload: true
+                };
+              }
+            } catch (e) { }
           } else if (fnName === 'generate_pdf') {
             try {
               const parsed = JSON.parse(toolOutput);
@@ -834,8 +862,11 @@ ${isDirect ? '- The user specifically mentioned or replied to you.' : '- General
               if (parsed.success && parsed.audioUrl) {
                 capturedAttachment = {
                   audioUrl: parsed.audioUrl,
+                  fileUrl: parsed.audioUrl,
                   audioFilename: parsed.filename,
+                  fileName: parsed.filename,
                   fileType: 'audio/mpeg',
+                  isVoiceNote: true,
                   allowDownload: true
                 };
               }

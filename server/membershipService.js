@@ -75,9 +75,15 @@ async function submitApplication(candidateData = {}) {
     fullName,
     email,
     role,
+    age,
+    location,
     ageLocation,
-    purpose,
-    socialHandle
+    phone,
+    phoneNumber,
+    socialHandle,
+    socialHandles,
+    focusArea,
+    purpose
   } = candidateData;
 
   if (!fullName || !fullName.trim()) {
@@ -90,6 +96,24 @@ async function submitApplication(candidateData = {}) {
     throw new Error('Please share a meaningful reason for joining (at least 10 characters)');
   }
 
+  // Normalize age and location
+  const resolvedAge = age ? String(age).trim() : (ageLocation?.split(',')[0]?.trim() || 'Unspecified');
+  const resolvedLocation = location ? String(location).trim() : (ageLocation?.includes(',') ? ageLocation.split(',').slice(1).join(',').trim() : (ageLocation || 'Unspecified'));
+  const combinedAgeLocation = `${resolvedAge}, ${resolvedLocation}`;
+
+  // Normalize phone number
+  const resolvedPhone = (phone || phoneNumber || '').trim();
+
+  // Normalize social handles list
+  let handlesList = [];
+  if (Array.isArray(socialHandles)) {
+    handlesList = socialHandles
+      .map(item => (typeof item === 'string' ? { platform: 'auto', url: item.trim() } : { platform: item.platform || 'auto', url: (item.url || '').trim() }))
+      .filter(item => item.url);
+  } else if (socialHandle && socialHandle.trim()) {
+    handlesList = socialHandle.split(',').map(u => ({ platform: 'auto', url: u.trim() })).filter(u => u.url);
+  }
+
   const applicationId = 'app_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
   const newApp = {
     id: applicationId,
@@ -98,9 +122,14 @@ async function submitApplication(candidateData = {}) {
     fullName: fullName.trim(),
     email: email.trim().toLowerCase(),
     role: (role || 'Independent Learner').trim(),
-    ageLocation: (ageLocation || 'Unspecified').trim(),
+    age: resolvedAge,
+    location: resolvedLocation,
+    ageLocation: combinedAgeLocation,
+    phone: resolvedPhone || null,
+    socialHandles: handlesList,
+    socialHandle: handlesList.map(h => h.url).join(', ') || 'None',
+    focusArea: (focusArea || 'Ecological & Planetary Resilience').trim(),
     purpose: purpose.trim(),
-    socialHandle: (socialHandle || 'None').trim(),
     status: 'pending',
     submittedAt: new Date().toISOString(),
     timestamp: Date.now()
@@ -110,7 +139,7 @@ async function submitApplication(candidateData = {}) {
   const allApps = loadApplications();
   allApps.push(newApp);
   saveApplications(allApps);
-  console.log(`[Membership Service]: Stored new candidate application: ${newApp.fullName} (@${newApp.alias})`);
+  console.log(`[Membership Service]: Stored new candidate application: ${newApp.fullName} (@${newApp.alias}) - Phone: ${newApp.phone || 'N/A'}`);
 
   // Send email to EMAIL_USER (Host)
   const hostUser = (process.env.EMAIL_USER || '').trim();
@@ -125,6 +154,10 @@ async function submitApplication(candidateData = {}) {
       message: 'Application recorded for council review.'
     };
   }
+
+  const socialLinksHtml = newApp.socialHandles.length > 0
+    ? newApp.socialHandles.map(h => `<a href="${h.url.startsWith('http') ? h.url : 'https://' + h.url}" target="_blank" style="display: inline-block; margin-right: 8px; margin-bottom: 4px; padding: 4px 8px; background: rgba(0, 243, 255, 0.1); border: 1px solid rgba(0, 243, 255, 0.3); border-radius: 6px; color: #00f3ff; text-decoration: none; font-size: 12px;">🔗 ${h.url}</a>`).join('')
+    : '<span style="color: #64748b;">None provided</span>';
 
   const htmlEmail = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 580px; margin: 0 auto; background: #080c16; border: 1px solid #1e293b; border-radius: 16px; padding: 28px; color: #f8fafc;">
@@ -151,16 +184,28 @@ async function submitApplication(candidateData = {}) {
             <td style="padding: 8px 0; color: #f8fafc;"><a href="mailto:${newApp.email}" style="color: #38bdf8; text-decoration: none;">${newApp.email}</a></td>
           </tr>
           <tr>
+            <td style="padding: 8px 0; color: #94a3b8;"><strong>Phone Number:</strong></td>
+            <td style="padding: 8px 0; color: #f8fafc;">${newApp.phone ? `<a href="tel:${newApp.phone}" style="color: #4ade80; text-decoration: none;">📞 ${newApp.phone}</a>` : '<span style="color: #64748b;">Not provided</span>'}</td>
+          </tr>
+          <tr>
             <td style="padding: 8px 0; color: #94a3b8;"><strong>Role / Status:</strong></td>
             <td style="padding: 8px 0; color: #cbd5e1;">${newApp.role}</td>
           </tr>
           <tr>
-            <td style="padding: 8px 0; color: #94a3b8;"><strong>Age / Location:</strong></td>
-            <td style="padding: 8px 0; color: #cbd5e1;">${newApp.ageLocation}</td>
+            <td style="padding: 8px 0; color: #94a3b8;"><strong>Age:</strong></td>
+            <td style="padding: 8px 0; color: #cbd5e1;">${newApp.age}</td>
           </tr>
           <tr>
-            <td style="padding: 8px 0; color: #94a3b8;"><strong>Social Handle:</strong></td>
-            <td style="padding: 8px 0; color: #cbd5e1;">${newApp.socialHandle}</td>
+            <td style="padding: 8px 0; color: #94a3b8;"><strong>Current Location:</strong></td>
+            <td style="padding: 8px 0; color: #cbd5e1;">${newApp.location}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #94a3b8;"><strong>Focus Area:</strong></td>
+            <td style="padding: 8px 0; color: #a855f7;">${newApp.focusArea}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #94a3b8; vertical-align: top;"><strong>Social Handles:</strong></td>
+            <td style="padding: 8px 0; color: #cbd5e1;">${socialLinksHtml}</td>
           </tr>
           <tr>
             <td style="padding: 8px 0; color: #94a3b8;"><strong>Application ID:</strong></td>

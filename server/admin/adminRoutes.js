@@ -806,8 +806,13 @@ module.exports = function createAdminRouter(serverContext) {
     return ev;
   }
 
-  // Maintenance mode state
-  let maintenanceModeActive = false;
+  // Maintenance mode state backed by persistent maintenanceService
+  const getPersistentMaintenance = () => {
+    if (typeof serverContext.getMaintenanceState === 'function') {
+      return serverContext.getMaintenanceState();
+    }
+    return { enabled: false, message: 'Maintenance in progress', updatedAt: Date.now() };
+  };
 
   /**
    * System Cache & Buffer Purge
@@ -839,45 +844,114 @@ module.exports = function createAdminRouter(serverContext) {
   });
 
   /**
-   * Toggle Server Maintenance / Traffic Shield Mode
+   * Toggle Server Maintenance / Traffic Shield Mode (Persistent & Broadcast to all clients)
    */
   router.post('/dashboard/system/toggle-maintenance', requireAdminAuth, (req, res) => {
-    maintenanceModeActive = !maintenanceModeActive;
-    const { reason = 'Scheduled system infrastructure maintenance in progress' } = req.body || {};
+    const current = getPersistentMaintenance();
+    const { reason, headline, enabled: explicitEnabled } = req.body || {};
+    const nextEnabled = typeof explicitEnabled === 'boolean' ? explicitEnabled : !current.enabled;
+    const updateReason = reason || (nextEnabled ? 'Administrative maintenance active // Node upgrades in progress' : 'Maintenance completed');
+
+    let updatedState = { enabled: nextEnabled, message: updateReason, headline: headline || undefined };
+    if (typeof serverContext.setMaintenanceState === 'function') {
+      updatedState = serverContext.setMaintenanceState({
+        enabled: nextEnabled,
+        message: updateReason,
+        headline: headline || undefined,
+        updatedBy: req.adminUsername
+      });
+    }
 
     io.emit('maintenanceNotice', {
-      active: maintenanceModeActive,
-      reason,
+      active: updatedState.enabled,
+      reason: updatedState.message,
+      headline: updatedState.headline,
       activatedBy: req.adminUsername,
       timestamp: Date.now()
     });
 
+    io.emit('maintenance_state', updatedState);
+
     logAuditEvent('MAINTENANCE_MODE_TOGGLED', {
-      active: maintenanceModeActive,
-      reason,
+      active: updatedState.enabled,
+      reason: updatedState.message,
       admin: req.adminUsername
     }, getClientIp(req));
 
     pushServerEvent(
-      maintenanceModeActive ? 'MAINTENANCE_ENGAGED' : 'MAINTENANCE_DISENGAGED',
-      `Maintenance mode ${maintenanceModeActive ? 'ACTIVATED' : 'DEACTIVATED'} by @${req.adminUsername}.`,
-      maintenanceModeActive ? 'warning' : 'success'
+      updatedState.enabled ? 'MAINTENANCE_ENGAGED' : 'MAINTENANCE_DISENGAGED',
+      `Maintenance mode ${updatedState.enabled ? 'ACTIVATED' : 'DEACTIVATED'} by @${req.adminUsername}.`,
+      updatedState.enabled ? 'warning' : 'success'
     );
 
     res.json({
       success: true,
-      maintenanceActive: maintenanceModeActive,
-      reason
+      maintenanceActive: updatedState.enabled,
+      maintenance: updatedState,
+      overridePassword: updatedState.overridePassword || null,
+      reason: updatedState.message
     });
+  });
+
+  /**
+   * Purge Temporary Uploads & Stale Files
+   */
+  router.post('/dashboard/system/purge-temp-files', requireAdminAuth, (req, res) => {
+    try {
+      const uploadsDir = path.join(__dirname, '..', 'uploads');
+      let purgedCount = 0;
+      let freedBytes = 0;
+      if (fs.existsSync(uploadsDir)) {
+        const files = fs.readdirSync(uploadsDir);
+        for (const file of files) {
+          if (file.startsWith('test_') || file.startsWith('temp_') || file.startsWith('debug_')) {
+            const fp = path.join(uploadsDir, file);
+            try {
+              const st = fs.statSync(fp);
+              freedBytes += st.size;
+              fs.unlinkSync(fp);
+              purgedCount++;
+            } catch {}
+          }
+        }
+      }
+      const freedMb = (freedBytes / (1024 * 1024)).toFixed(2);
+      pushServerEvent('TEMP_FILES_PURGED', `Purged ${purgedCount} temporary files (${freedMb} MB).`, 'info');
+      res.json({ success: true, purgedCount, freedMb, message: `Removed ${purgedCount} temporary scratch files.` });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  /**
+   * Emergency Disconnect All Active Public Connections
+   */
+  router.post('/dashboard/system/emergency-disconnect', requireAdminAuth, (req, res) => {
+    try {
+      let count = 0;
+      const allSockets = Array.from(io.sockets.sockets.values());
+      for (const s of allSockets) {
+        s.emit('force_disconnect', { reason: 'Emergency network reset commanded by Inner Council.' });
+        s.disconnect(true);
+        count++;
+      }
+      logAuditEvent('EMERGENCY_DISCONNECT', { count, admin: req.adminUsername }, getClientIp(req));
+      pushServerEvent('EMERGENCY_RESET', `Forced disconnect of ${count} network sockets.`, 'warning');
+      res.json({ success: true, disconnectedCount: count });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
   });
 
   /**
    * Real-Time Server Event Stream
    */
   router.get('/dashboard/telemetry/live-stream', requireAdminAuth, (req, res) => {
+    const currentM = getPersistentMaintenance();
     res.json({
       events: liveServerEvents,
-      maintenanceActive: maintenanceModeActive
+      maintenanceActive: currentM.enabled,
+      maintenance: currentM
     });
   });
 

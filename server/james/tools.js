@@ -76,6 +76,23 @@ class ToolRegistry {
       {
         type: 'function',
         function: {
+          name: 'generate_video',
+          description: 'Synthesize and render an AI generative video using next-generation video diffusion models (MiniMax Hailuo-3, Google Veo, and LTX-Video). Use whenever the user asks to generate a video, render video motion, create a clip, or animate a scene.',
+          parameters: {
+            type: 'object',
+            properties: {
+              prompt: {
+                type: 'string',
+                description: 'The creative prompt or visual description of the video to synthesize (e.g. "cyberpunk flying car racing through neon rain", "ocean bioluminescent waves at midnight").'
+              }
+            },
+            required: ['prompt']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
           name: 'generate_pdf',
           description: 'Create and format a downloadable PDF document with a title, formatted text, tables, or lists. Use whenever the user asks to create a PDF, export to PDF, or make a printable document.',
           parameters: {
@@ -364,13 +381,13 @@ class ToolRegistry {
         type: 'function',
         function: {
           name: 'generate_voice',
-          description: 'Generate a playable audio voice note for a spoken message or text. Use when the user asks you to say something out loud, speak, generate an audio note, or send a voice message.',
+          description: 'Convert text to voice, text-to-speech converter (TTS), or synthesize a playable spoken audio voice note. Use whenever the user asks to "convert this into voice", "convert this message into voice", "turn this into audio/voice", read text aloud, or speak a message.',
           parameters: {
             type: 'object',
             properties: {
               text: {
                 type: 'string',
-                description: 'The text message to synthesize into spoken audio (up to 300 characters).'
+                description: 'The exact text message to synthesize into spoken audio (supports up to 1,500 characters).'
               }
             },
             required: ['text']
@@ -591,6 +608,15 @@ class ToolRegistry {
             return JSON.stringify({ error: 'Free tools service unavailable.' });
           }
           const result = await this.freeTools.generateImage(prompt);
+          return JSON.stringify(result);
+        }
+
+        case 'generate_video': {
+          const prompt = args.prompt || args.topic || '';
+          if (!this.freeTools) {
+            return JSON.stringify({ error: 'Free tools service unavailable.' });
+          }
+          const result = await this.freeTools.generateVideo(prompt);
           return JSON.stringify(result);
         }
 

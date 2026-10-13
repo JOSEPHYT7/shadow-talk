@@ -256,6 +256,56 @@ function JamesImageGenerationCard({ jamesStatus }) {
   );
 }
 
+function JamesVideoGenerationCard({ jamesStatus }) {
+  const [percent, setPercent] = useState(14);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPercent(prev => {
+        if (prev < 32) return prev + Math.floor(Math.random() * 4 + 2);
+        if (prev < 72) return prev + Math.floor(Math.random() * 3 + 1);
+        if (prev < 92) return prev + Math.floor(Math.random() * 2 + 1);
+        return 94;
+      });
+    }, 260);
+    return () => clearInterval(interval);
+  }, []);
+
+  const dots = useMemo(() => Array.from({ length: 256 }, (_, i) => i), []);
+
+  return (
+    <div className="dot-matrix-canvas">
+      <div className="dot-matrix-top-bar">
+        <span className="dot-matrix-header-title">Rendering video</span>
+        {jamesStatus?.prompt && (
+          <span className="dot-matrix-prompt-hint" title={jamesStatus.prompt}>
+            &ldquo;{jamesStatus.prompt.length > 45 ? jamesStatus.prompt.slice(0, 45) + '...' : jamesStatus.prompt}&rdquo;
+          </span>
+        )}
+      </div>
+
+      <div className="dot-matrix-grid">
+        {dots.map(i => {
+          const row = Math.floor(i / 16);
+          const col = i % 16;
+          const delay = ((row + col) * 0.07).toFixed(2);
+          return (
+            <span
+              key={i}
+              className="dot-matrix-dot"
+              style={{ animationDelay: `${delay}s` }}
+            />
+          );
+        })}
+      </div>
+
+      <div className="dot-matrix-pill">
+        <span className="dot-matrix-percent">{percent}%</span>
+      </div>
+    </div>
+  );
+}
+
 function JamesPdfGenerationCard({ jamesStatus }) {
   const [percent, setPercent] = useState(18);
 
@@ -1992,6 +2042,8 @@ export default function SecretSocietyChat({
         {jamesStatus && (
           jamesStatus.status === 'generating_image' ||
           jamesStatus.generatingType === 'image' ||
+          jamesStatus.status === 'generating_video' ||
+          jamesStatus.generatingType === 'video' ||
           jamesStatus.status === 'generating_pdf' ||
           jamesStatus.generatingType === 'pdf' ||
           jamesStatus.status === 'generating_qr' ||
@@ -2022,6 +2074,9 @@ export default function SecretSocietyChat({
             <div className="society-message-body james-status-body">
               {(jamesStatus.status === 'generating_image' || jamesStatus.generatingType === 'image') && (
                 <JamesImageGenerationCard jamesStatus={jamesStatus} />
+              )}
+              {(jamesStatus.status === 'generating_video' || jamesStatus.generatingType === 'video') && (
+                <JamesVideoGenerationCard jamesStatus={jamesStatus} />
               )}
               {(jamesStatus.status === 'generating_pdf' || jamesStatus.generatingType === 'pdf') && (
                 <JamesPdfGenerationCard jamesStatus={jamesStatus} />
@@ -2112,6 +2167,11 @@ export default function SecretSocietyChat({
                   </div>
                 )}
                 {(jamesStatus.status === 'generating_image' || jamesStatus.generatingType === 'image') && (
+                  <div className="status-icon-badge generating">
+                    <Sparkles size={14} className="status-pulse-sparkle" />
+                  </div>
+                )}
+                {(jamesStatus.status === 'generating_video' || jamesStatus.generatingType === 'video') && (
                   <div className="status-icon-badge generating">
                     <Sparkles size={14} className="status-pulse-sparkle" />
                   </div>
