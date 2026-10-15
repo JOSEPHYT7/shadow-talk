@@ -13,6 +13,7 @@ dist/
 dist-ssr/
 *.local
 *.apk
+!public/*.apk
 
 # Environment & Secret files
 .env

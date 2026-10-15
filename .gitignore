@@ -30,6 +30,7 @@ dist/
 dist-ssr/
 build/
 *.apk
+!client/public/*.apk
 
 # Uploaded media files & temporary scratch files (preserve directory via .gitkeep)
 server/uploads/*

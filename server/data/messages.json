@@ -43,5 +43,18 @@
       "text": "Hello ShadowTalk!"
     },
     "reactions": {}
+  },
+  {
+    "id": "msg_1792068315990_ni65n8t",
+    "timestamp": 1792068315990,
+    "alias": "James",
+    "userId": "bot_james",
+    "color": "#00f3ff",
+    "avatar": "/uploads/ShadowTalk-IG.jpeg",
+    "isVerified": true,
+    "text": "Hope everyone's having a productive session today! Anyone working on anything interesting? 🚀",
+    "sources": [],
+    "replyTo": null,
+    "reactions": {}
   }
 ]

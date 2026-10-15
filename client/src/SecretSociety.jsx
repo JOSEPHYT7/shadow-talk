@@ -25,6 +25,8 @@ import {
   Zap,
   Download,
   ExternalLink,
+  Smartphone,
+  Info,
   X
 } from 'lucide-react';
 import VectorWordmark from './components/VectorWordmark';
@@ -1173,6 +1175,55 @@ export default function SecretSociety({
                     <ExternalLink size={14} />
                     <span>Open in New Tab</span>
                   </a>
+                </div>
+              </div>
+
+              {/* Official ShadowTalk Native Android App APK Download Card */}
+              <div className="shadowtalk-apk-card" id="shadowtalk-mobile-apk-download">
+                <div className="dossier-pdf-badge-strip">
+                  <span className="dossier-badge emerald">
+                    <Smartphone size={12} />
+                    OFFICIAL ANDROID APP // NATIVE CLIENT v2.4
+                  </span>
+                  <span className="dossier-meta-badge">STANDALONE APK // 5.7 MB</span>
+                  <span className="dossier-meta-badge">ZERO BROWSER OVERHEAD</span>
+                </div>
+
+                <div className="dossier-pdf-main-row">
+                  <div className="dossier-pdf-icon-wrap apk-icon-wrap">
+                    <Smartphone size={32} className="dossier-pdf-icon apk-icon" />
+                    <div className="dossier-pdf-ext apk-ext">APK</div>
+                  </div>
+                  <div className="dossier-pdf-details">
+                    <h3 className="dossier-pdf-title">
+                      ShadowTalk Mobile: Dedicated Android Application
+                    </h3>
+                    <p className="dossier-pdf-description">
+                      Skip opening a browser every time you chat. Install the standalone ShadowTalk Android application directly on your phone for ultra-fast, zero-overhead encrypted communication, instant voice note recording, persistent background sessions, and sovereign privacy.
+                    </p>
+                    <div className="dossier-features-chips">
+                      <span className="feat-chip">1-Tap Direct Launch</span>
+                      <span className="feat-chip">Full Mesh &amp; Voice Parity</span>
+                      <span className="feat-chip">Low-Latency Stream</span>
+                      <span className="feat-chip">Direct Download (No Play Store)</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="dossier-pdf-actions apk-actions-row">
+                  <a
+                    href="/ShadowTalk.apk"
+                    download="ShadowTalk.apk"
+                    className="dossier-btn download apk-download-primary"
+                    title="Download official ShadowTalk Android APK installer"
+                  >
+                    <Download size={15} />
+                    <span>Download Android App (APK • 5.7 MB)</span>
+                  </a>
+                  <div className="apk-install-tip">
+                    <Info size={13} />
+                    <span>Direct install: If prompted by Android, select &quot;Allow installation from this source&quot;.</span>
+                  </div>
                 </div>
               </div>
 
