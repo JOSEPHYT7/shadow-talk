@@ -10,7 +10,7 @@
 ![Three.js](https://img.shields.io/badge/Three.js-black?style=for-the-badge&logo=three.js&logoColor=white)
 ![Security](https://img.shields.io/badge/OWASP_Hardened-10b981?style=for-the-badge&logo=shield&logoColor=white)
 
-**A next-generation sovereign communication platform engineered for high-security ephemeral mesh messaging, autonomous community intelligence, 3D planetary visitor telemetry, clandestine enclave operations, and hardened multi-factor root administration.**
+**A next-generation sovereign communication platform engineered for high-security ephemeral mesh messaging, autonomous community intelligence, clandestine enclave operations, and hardened multi-factor root administration.**
 
 [Key Features](#-core-capabilities) • [Architecture](#-system-architecture) • [Security Hardening](#-20-point-security-hardening) • [Quick Start](#-quick-start-guide) • [Environment Setup](#-environment-configuration)
 
