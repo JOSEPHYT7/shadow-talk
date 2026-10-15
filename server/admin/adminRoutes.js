@@ -6,6 +6,8 @@
 const express = require('express');
 const router = express.Router();
 const os = require('os');
+const path = require('path');
+const fs = require('fs');
 const {
   createTemporarySession,
   getSession,
@@ -327,6 +329,32 @@ module.exports = function createAdminRouter(serverContext) {
         onlineMap.get(k).push(sockId);
       }
     }
+
+    // Always include the Root Administrator profile at the very top of usersList
+    const adminSockets = [
+      ...(onlineMap.get('joseph') || []),
+      ...(onlineMap.get('joseph_creator') || []),
+      ...(onlineMap.get('root_admin_joseph') || [])
+    ];
+    usersList.push({
+      userId: 'root_admin_joseph',
+      alias: 'joseph',
+      maskedFrom: 'joseph_creator',
+      role: 'admin',
+      isAdmin: true,
+      clearance: 'LEVEL-0 ROOT // OVERSEER',
+      isVerified: true,
+      color: '#ffd700',
+      bio: 'Platform Creator & System Administrator (Root Authority)',
+      isOnline: adminSockets.length > 0,
+      activeSocketsCount: adminSockets.length,
+      isCurrentlyConnected: adminSockets.length > 0,
+      createdAt: 1789000000000,
+      updatedAt: Date.now()
+    });
+    seen.add('joseph');
+    seen.add('joseph_creator');
+    seen.add('root_admin_joseph');
 
     for (const profile of userProfiles.values()) {
       if (!profile || !profile.alias) continue;
@@ -901,24 +929,45 @@ module.exports = function createAdminRouter(serverContext) {
       const uploadsDir = path.join(__dirname, '..', 'uploads');
       let purgedCount = 0;
       let freedBytes = 0;
+      const PROTECTED_FILES = new Set([
+        '.gitkeep',
+        'shadowtalk-ig.jpeg',
+        'shadowtalk-ig.jpg',
+        'james_autonomous_intelligence_dossier.pdf'
+      ]);
+
       if (fs.existsSync(uploadsDir)) {
         const files = fs.readdirSync(uploadsDir);
         for (const file of files) {
-          if (file.startsWith('test_') || file.startsWith('temp_') || file.startsWith('debug_')) {
-            const fp = path.join(uploadsDir, file);
-            try {
-              const st = fs.statSync(fp);
+          const lower = file.toLowerCase();
+          if (PROTECTED_FILES.has(lower)) continue;
+
+          const fp = path.join(uploadsDir, file);
+          try {
+            const st = fs.statSync(fp);
+            if (st.isFile()) {
               freedBytes += st.size;
               fs.unlinkSync(fp);
               purgedCount++;
-            } catch {}
+            }
+          } catch (unlinkErr) {
+            console.error(`[Purge Temp Files]: Could not unlink ${file}:`, unlinkErr.message);
           }
         }
       }
+
       const freedMb = (freedBytes / (1024 * 1024)).toFixed(2);
-      pushServerEvent('TEMP_FILES_PURGED', `Purged ${purgedCount} temporary files (${freedMb} MB).`, 'info');
-      res.json({ success: true, purgedCount, freedMb, message: `Removed ${purgedCount} temporary scratch files.` });
+      pushServerEvent('TEMP_FILES_PURGED', `Purged ${purgedCount} temporary files (${freedMb} MB freed).`, 'info');
+      res.json({
+        success: true,
+        purgedCount,
+        freedMb,
+        message: purgedCount > 0
+          ? `Purged ${purgedCount} temporary files (${freedMb} MB freed).`
+          : 'Upload storage is already clean. No temporary files found.'
+      });
     } catch (err) {
+      console.error('[Purge Temp Files Error]:', err.message);
       res.status(500).json({ success: false, error: err.message });
     }
   });
@@ -1013,8 +1062,16 @@ module.exports = function createAdminRouter(serverContext) {
                            {};
 
           // Determine user Tier & Color strictly by authenticated identity
+          const isCreatorOrAdmin = (al) => {
+            if (!al) return false;
+            const l = String(al).toLowerCase().replace(/^@/, '').trim();
+            return l === 'joseph_creator' || l === 'joseph' || l === 'administrator' || l === 'root_admin_joseph';
+          };
+
           const isAdmin = Boolean(
             (req.adminUsername && u?.alias && u.alias.toLowerCase() === req.adminUsername.toLowerCase()) ||
+            isCreatorOrAdmin(u?.alias) ||
+            isCreatorOrAdmin(u?.userId) ||
             u?.isAdmin === true ||
             userProf.role === 'admin' ||
             userProf.isAdmin === true
@@ -1098,6 +1155,8 @@ module.exports = function createAdminRouter(serverContext) {
             source: geo.source,
             isLocal: Boolean(geo.isLocal),
             isCurrentAdmin: isAdmin,
+            isAdmin: isAdmin,
+            role: isAdmin ? 'admin' : (userProf?.role || 'user'),
             exactVerified: Boolean(geo.exactVerified),
             connectedAt: u?.connectedAt || Date.now(),
             userTier,

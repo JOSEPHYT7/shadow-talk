@@ -42,7 +42,6 @@ function checkActivationPhrase(transcript) {
  */
 function verifySecretVoicePhrase(transcript) {
   if (!transcript || typeof transcript !== 'string') return false;
-  if (transcript.trim() === 'voice_skip_fallback') return true;
 
   const candidate = normalizeSpeech(transcript);
   const expected = normalizeSpeech(ADMIN_CONFIG.secretVoicePhrase);
@@ -50,7 +49,7 @@ function verifySecretVoicePhrase(transcript) {
   // Exact match or candidate contains the expected phrase sequence
   if (candidate === expected) return true;
   if (candidate.includes(expected)) return true;
-  if (candidate.includes('back buddy') || candidate.includes('back money')) return true;
+  if (candidate.includes('back buddy')) return true;
 
   // Also check without spaces in case speech engine compressed words
   const candidateNoSpaces = candidate.replace(/\s+/g, '');

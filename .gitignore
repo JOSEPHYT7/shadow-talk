@@ -1,33 +1,53 @@
-# Environment variables (CRITICAL: Do NOT commit email passwords/secrets)
+# =============================================================================
+# Git Ignore Configuration for ShadowTalk
+# Protects private secrets, keys, session state, dependencies, and build artifacts
+# =============================================================================
+
+# Environment variables & secrets (CRITICAL: Never commit credentials)
 .env
 .env.*
-!.env.example
 *.env
+!.env.example
 server/.env
+server/.env.*
+client/.env
+client/.env.*
 
-# Dependencies
+# Private cryptographic keys & SSL certificates
+*.pem
+*.key
+*.cert
+*.crt
+
+# Node.js Dependencies (Keep repository clean and fast)
 node_modules/
 **/node_modules/
+server/node_modules/
+client/node_modules/
 
-# Production builds
+# Production builds & compiled frontend bundles
 dist/
 dist-ssr/
 build/
 
-# Uploaded media files
+# Uploaded media files & temporary scratch files (preserve directory via .gitkeep)
 server/uploads/*
 !server/uploads/.gitkeep
 
-# Logs and system files
-*.log
-npm-debug.log*
-yarn-debug.log*
-pnpm-debug.log*
+# Admin runtime session data & sensitive server states
+server/data/.session_secret
+server/data/.cli_secret
+server/data/admin_sessions.json
+server/data/maintenance_config.json
+
+# Operating System & IDE Artifacts
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
 
-# Admin runtime session data
-server/data/.session_secret
-server/data/admin_sessions.json
+# Logs and runtime dumps
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*

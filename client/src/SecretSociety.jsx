@@ -22,7 +22,10 @@ import {
   Radio,
   Cpu,
   ShieldCheck,
-  Zap
+  Zap,
+  Download,
+  ExternalLink,
+  X
 } from 'lucide-react';
 import VectorWordmark from './components/VectorWordmark';
 import './SecretSociety.css';
@@ -655,6 +658,7 @@ export default function SecretSociety({
   const [authError, setAuthError] = useState('');
   const [accessGrantedAnim, setAccessGrantedAnim] = useState(false);
   const [sealPulseAnim, setSealPulseAnim] = useState(false);
+  const [showJamesPdfViewer, setShowJamesPdfViewer] = useState(false);
 
   // Hidden Cadence Gesture Detector: exactly 2 clicks -> wait 3s -> 4 clicks
   const gestureTimestampsRef = useRef([]);
@@ -760,7 +764,9 @@ export default function SecretSociety({
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
-        if (showMemberAuthModal) {
+        if (showJamesPdfViewer) {
+          setShowJamesPdfViewer(false);
+        } else if (showMemberAuthModal) {
           setShowMemberAuthModal(false);
         } else if (typeof onReturn === 'function') {
           onReturn();
@@ -769,7 +775,7 @@ export default function SecretSociety({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onReturn, showMemberAuthModal]);
+  }, [onReturn, showMemberAuthModal, showJamesPdfViewer]);
 
   return (
     <div ref={viewportRef} className="society-manifesto-viewport">
@@ -1103,6 +1109,70 @@ export default function SecretSociety({
                   <p>
                     Inside the Secret Society Chat, James has access to additional capabilities, including internet access, to help investigate topics and explore available online information.
                   </p>
+                </div>
+              </div>
+
+              {/* Official James Comprehensive Intelligence Dossier (PDF Showcase Card) */}
+              <div className="james-dossier-pdf-card" id="james-official-dossier-pdf">
+                <div className="dossier-pdf-badge-strip">
+                  <span className="dossier-badge gold">
+                    <FileText size={12} />
+                    OFFICIAL ARCHITECTURAL WHITEPAPER // DOSSIER v4.8
+                  </span>
+                  <span className="dossier-meta-badge">LEVEL-0 ROOT CLASSIFIED</span>
+                  <span className="dossier-meta-badge">3 PAGES // HIGH-DENSITY PDF</span>
+                </div>
+
+                <div className="dossier-pdf-main-row">
+                  <div className="dossier-pdf-icon-wrap">
+                    <FileText size={32} className="dossier-pdf-icon" />
+                    <div className="dossier-pdf-ext">PDF</div>
+                  </div>
+                  <div className="dossier-pdf-details">
+                    <h3 className="dossier-pdf-title">
+                      James: Autonomous Intelligence Architecture &amp; Capability Dossier
+                    </h3>
+                    <p className="dossier-pdf-description">
+                      A complete multi-page technical specification and sovereign intelligence guide covering the genesis of Entity James, dual-enclave operational topology, 6 autonomous tool subsystems, context topology, zero-telemetry ethics, and interactive directive handbook.
+                    </p>
+                    <div className="dossier-features-chips">
+                      <span className="feat-chip">Dual Chamber (Public &amp; Enclave)</span>
+                      <span className="feat-chip">6 Autonomous Engines</span>
+                      <span className="feat-chip">Zero-Telemetry Privacy</span>
+                      <span className="feat-chip">Cryptographic Seals</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="dossier-pdf-actions">
+                  <button
+                    type="button"
+                    className="dossier-btn preview"
+                    onClick={() => setShowJamesPdfViewer(true)}
+                    title="Read the complete James Intelligence Dossier in the in-page interactive viewer"
+                  >
+                    <Eye size={14} />
+                    <span>Read PDF Dossier</span>
+                  </button>
+                  <a
+                    href="/James_Autonomous_Intelligence_Dossier.pdf"
+                    download="James_Autonomous_Intelligence_Dossier.pdf"
+                    className="dossier-btn download"
+                    title="Download official James PDF whitepaper"
+                  >
+                    <Download size={14} />
+                    <span>Download PDF</span>
+                  </a>
+                  <a
+                    href="/James_Autonomous_Intelligence_Dossier.pdf"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="dossier-btn external"
+                    title="Open PDF in a new browser tab"
+                  >
+                    <ExternalLink size={14} />
+                    <span>Open in New Tab</span>
+                  </a>
                 </div>
               </div>
 
@@ -1506,6 +1576,64 @@ export default function SecretSociety({
             <div className="granted-telemetry-meta">
               <span>ALIAS: @{memberAlias}</span>
               <span>CLEARANCE: LEVEL-4 (INDUCTED)</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================
+          JAMES INTELLIGENCE DOSSIER PDF INTERACTIVE VIEWER MODAL
+          ================================================================== */}
+      {showJamesPdfViewer && (
+        <div className="james-pdf-viewer-overlay" onClick={() => setShowJamesPdfViewer(false)}>
+          <div className="james-pdf-viewer-card" onClick={(e) => e.stopPropagation()}>
+            <div className="james-pdf-viewer-header">
+              <div className="james-pdf-header-info">
+                <div className="james-pdf-header-icon-box">
+                  <FileText size={18} color="#00f3ff" />
+                </div>
+                <div>
+                  <h3 className="james-pdf-modal-title">James: Autonomous Intelligence Architecture Dossier</h3>
+                  <div className="james-pdf-modal-sub">Official Specification v4.8 &bull; Document ID: ST-JAMES-SPEC-2026 &bull; Verified PDF</div>
+                </div>
+              </div>
+              <div className="james-pdf-header-actions">
+                <a
+                  href="/James_Autonomous_Intelligence_Dossier.pdf"
+                  download="James_Autonomous_Intelligence_Dossier.pdf"
+                  className="pdf-modal-action-btn"
+                  title="Download official PDF document"
+                >
+                  <Download size={14} />
+                  <span>Download</span>
+                </a>
+                <a
+                  href="/James_Autonomous_Intelligence_Dossier.pdf"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="pdf-modal-action-btn external"
+                  title="Open PDF in a full browser tab"
+                >
+                  <ExternalLink size={14} />
+                  <span>Full Tab</span>
+                </a>
+                <button
+                  type="button"
+                  className="pdf-modal-close-btn"
+                  onClick={() => setShowJamesPdfViewer(false)}
+                  title="Close PDF viewer (ESC)"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="james-pdf-viewer-frame-wrap">
+              <iframe
+                src="/James_Autonomous_Intelligence_Dossier.pdf#toolbar=1&navpanes=0"
+                title="James Autonomous Intelligence Dossier"
+                className="james-pdf-iframe"
+              />
             </div>
           </div>
         </div>

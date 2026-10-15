@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { uploadLimiter } = require('./middleware/rateLimiter');
 const router = express.Router();
 
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
@@ -9,21 +10,42 @@ if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
+// Prohibited executable and server-side script extensions
+const DANGEROUS_EXTENSIONS = new Set([
+  '.exe', '.bat', '.cmd', '.sh', '.bash', '.ps1', '.vbs',
+  '.js', '.mjs', '.cjs', '.php', '.phtml', '.php3', '.php4', '.php5',
+  '.cgi', '.pl', '.py', '.asp', '.aspx', '.jsp', '.jspx',
+  '.dll', '.so', '.dylib', '.com', '.scr', '.msi', '.hta', '.jar'
+]);
+
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, UPLOADS_DIR);
   },
   filename: function (req, file, cb) {
+    const rawExt = path.extname(file.originalname || '').toLowerCase();
+    const cleanExt = DANGEROUS_EXTENSIONS.has(rawExt) ? '.bin' : rawExt;
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const cleanExt = path.extname(file.originalname || '') || '';
     cb(null, uniqueSuffix + cleanExt);
   }
 });
 
+function fileFilter(req, file, cb) {
+  const rawExt = path.extname(file.originalname || '').toLowerCase();
+  if (DANGEROUS_EXTENSIONS.has(rawExt)) {
+    return cb(new Error('Executable and server-side script file uploads are prohibited for security.'));
+  }
+  cb(null, true);
+}
+
+const maxUploadMb = parseInt(process.env.UPLOAD_MAX_MB, 10) || 50;
+
 const upload = multer({
   storage,
+  fileFilter,
   limits: {
-    fileSize: 100 * 1024 * 1024 // 100MB max file size
+    fileSize: maxUploadMb * 1024 * 1024, // 50MB default
+    files: 5
   }
 });
 
@@ -33,11 +55,13 @@ const handleUpload = (req, res) => {
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
-  let safeOriginalName = file.originalname || 'file';
+  let safeOriginalName = 'file';
   try {
-    safeOriginalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+    const raw = Buffer.from(file.originalname || 'file', 'latin1').toString('utf8');
+    // Strip path separators, null bytes, and control characters
+    safeOriginalName = path.basename(raw).replace(/[\0\r\n\t]/g, '').trim() || 'file';
   } catch {
-    // fallback
+    safeOriginalName = 'file';
   }
 
   const fileUrl = `/uploads/${file.filename}`;
@@ -51,16 +75,16 @@ const handleUpload = (req, res) => {
   });
 };
 
-// Accept any field name (file, image, attachment, etc.)
-router.post('/', upload.any(), handleUpload);
-router.post('/image', upload.any(), handleUpload);
+// Accept uploads with rate limiting protection
+router.post('/', uploadLimiter, upload.any(), handleUpload);
+router.post('/image', uploadLimiter, upload.any(), handleUpload);
 
 // Multer error handling middleware
 router.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     return res.status(400).json({ error: `Upload error: ${err.message}` });
   } else if (err) {
-    return res.status(500).json({ error: `Server error: ${err.message}` });
+    return res.status(400).json({ error: err.message || 'File upload rejected' });
   }
   next();
 });

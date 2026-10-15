@@ -2,6 +2,7 @@ const nodemailer = require('nodemailer');
 const path = require('path');
 const fs = require('fs');
 const dns = require('dns');
+const crypto = require('crypto');
 
 // Force IPv4 resolution to prevent ENETUNREACH errors on cloud hosting (Render, Heroku, AWS)
 if (typeof dns.setDefaultResultOrder === 'function') {
@@ -55,7 +56,7 @@ function createTransporter(host, port, secure, user, pass) {
     socketTimeout: 4000,
     tls: {
       servername: 'smtp.gmail.com', // Ensures SNI certificate matches smtp.gmail.com even when connecting to raw IP
-      rejectUnauthorized: false
+      rejectUnauthorized: process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0' ? false : true
     }
   });
 }
@@ -70,13 +71,15 @@ async function sendOtp(email) {
 
   const normalizedEmail = email.trim().toLowerCase();
 
-  // Generate a clean 4-digit numeric OTP (e.g. 7482)
-  const otp = Math.floor(1000 + Math.random() * 9000).toString();
+  // Generate a cryptographically secure 4-digit numeric OTP (e.g. 7482)
+  const otp = crypto.randomInt(1000, 10000).toString();
   const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes expiry
 
   otpStore.set(normalizedEmail, { otp, expiresAt, attempts: 0 });
 
-  console.log(`[Email OTP Service]: Generated 4-digit OTP for ${normalizedEmail} -> ${otp}`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[Email OTP Service]: Generated OTP for ${normalizedEmail.slice(0, 3)}***@***`);
+  }
 
   const htmlContent = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; background: #0b111e; border: 1px solid #1e293b; border-radius: 16px; padding: 28px; color: #f8fafc;">
@@ -185,7 +188,19 @@ function verifyOtp(email, enteredOtp) {
     throw new Error('Too many invalid attempts. Please request a new code.');
   }
 
-  if (record.otp.trim() !== enteredOtp.trim()) {
+  const entered = enteredOtp ? String(enteredOtp).trim() : '';
+  const expected = record.otp.trim();
+
+  let isMatch = false;
+  try {
+    const bufExpected = Buffer.from(expected);
+    const bufEntered = Buffer.from(entered);
+    isMatch = bufExpected.length === bufEntered.length && crypto.timingSafeEqual(bufExpected, bufEntered);
+  } catch (e) {
+    isMatch = false;
+  }
+
+  if (!isMatch) {
     throw new Error('Incorrect 4-digit verification code. Please check and try again.');
   }
 
@@ -197,22 +212,47 @@ function verifyOtp(email, enteredOtp) {
 }
 
 /**
- * Save / update email credentials in server/.env and reload
+ * Save / update email credentials in server/.env and reload (preserving all other variables)
  */
 function updateEmailConfig(user, pass) {
   if (!user || !pass) {
     throw new Error('Both email and app password are required.');
   }
 
-  process.env.EMAIL_USER = user.trim();
-  process.env.EMAIL_APP_PASSWORD = pass.trim();
+  const cleanUser = user.trim();
+  const cleanPass = pass.trim();
 
-  // Persist to server/.env
-  const content = `PORT=5000\nEMAIL_USER=${user.trim()}\nEMAIL_APP_PASSWORD=${pass.trim()}\n`;
-  fs.writeFileSync(envPath, content, 'utf8');
+  process.env.EMAIL_USER = cleanUser;
+  process.env.EMAIL_APP_PASSWORD = cleanPass;
 
-  console.log(`[Email OTP Service]: Updated Gmail SMTP credentials in .env -> ${user}`);
-  return { success: true, emailUser: user.trim() };
+  // Persist to server/.env preserving other variables
+  let envLines = [];
+  if (fs.existsSync(envPath)) {
+    envLines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
+  }
+
+  let userFound = false;
+  let passFound = false;
+
+  const updatedLines = envLines.map(line => {
+    if (line.trim().startsWith('EMAIL_USER=')) {
+      userFound = true;
+      return `EMAIL_USER=${cleanUser}`;
+    }
+    if (line.trim().startsWith('EMAIL_APP_PASSWORD=')) {
+      passFound = true;
+      return `EMAIL_APP_PASSWORD=${cleanPass}`;
+    }
+    return line;
+  });
+
+  if (!userFound) updatedLines.push(`EMAIL_USER=${cleanUser}`);
+  if (!passFound) updatedLines.push(`EMAIL_APP_PASSWORD=${cleanPass}`);
+
+  fs.writeFileSync(envPath, updatedLines.join('\n'), 'utf8');
+
+  console.log(`[Email OTP Service]: Updated Gmail SMTP credentials in .env -> ${cleanUser}`);
+  return { success: true, emailUser: cleanUser };
 }
 
 module.exports = {

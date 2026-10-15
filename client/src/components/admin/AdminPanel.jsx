@@ -659,6 +659,7 @@ export function AdminPanel({
   const [emergencyDisconnecting, setEmergencyDisconnecting] = useState(false);
 
   const handlePurgeTempFiles = async () => {
+    if (!window.confirm('WARNING: Purge all temporary uploads, media attachments, and scratch files from server storage? This cannot be undone.')) return;
     setPurgingTempFiles(true);
     try {
       const res = await fetch(`${serverUrl}/api/admin/dashboard/system/purge-temp-files`, {
@@ -669,8 +670,8 @@ export function AdminPanel({
         }
       });
       const data = await res.json();
-      if (res.ok) {
-        flashNotice(data.message || `Purged ${data.purgedCount} temporary files.`);
+      if (res.ok && data.success) {
+        flashNotice(data.message || `Purged ${data.purgedCount || 0} temporary files (${data.freedMb || 0} MB freed).`);
         fetchTelemetry();
       } else {
         flashNotice(data.error || 'Failed to purge temp files', 'error');
@@ -1208,7 +1209,7 @@ export function AdminPanel({
             </div>
             <div className="admin-auth-indicator">
               <Shield size={12} className="shield-active-icon" />
-              <span>AUTHENTICATED: @{adminUsername}</span>
+              <span>AUTHENTICATED: @{adminUsername || 'joseph'} [ROOT CREATOR]</span>
             </div>
           </div>
 
@@ -2227,16 +2228,24 @@ export function AdminPanel({
                   </thead>
                   <tbody>
                     {filteredUsers.map((u) => {
-                      const isAdm = u.role === 'admin' || u.isAdmin;
+                      const isAdm = Boolean(
+                        u.role === 'admin' ||
+                        u.isAdmin ||
+                        u.clearance?.includes('ROOT') ||
+                        u.clearance?.includes('OVERSEER') ||
+                        u.alias?.toLowerCase() === 'joseph' ||
+                        u.alias?.toLowerCase() === 'joseph_creator' ||
+                        u.userId === 'root_admin_joseph'
+                      );
                       const isMem = u.isSocietyMember || (u.isVerified && !isAdm);
 
                       return (
                         <tr key={u.userId || u.alias}>
                           <td>
                             <div className="user-cell">
-                              <span className="user-dot" style={{ background: u.color || '#00f3ff' }} />
+                              <span className="user-dot" style={{ background: isAdm ? '#fbbf24' : (u.color || '#00f3ff') }} />
                               <strong>@{u.alias}</strong>
-                              {u.isVerified && <span className="verified-chip" title="Verified Badge">✓</span>}
+                              {(u.isVerified || isAdm) && <span className="verified-chip" title="Verified Badge">✓</span>}
                             </div>
                           </td>
                           <td><code>{u.userId}</code></td>
@@ -2258,7 +2267,9 @@ export function AdminPanel({
                           </td>
                           <td>
                             {isAdm ? (
-                              <span className="admin-chip">ROOT ADMIN</span>
+                              <span className="admin-chip" style={{ background: 'rgba(251, 191, 36, 0.16)', borderColor: '#fbbf24', color: '#fbbf24', fontWeight: 700 }}>
+                                👑 ROOT ADMIN
+                              </span>
                             ) : isMem ? (
                               <span className="member-chip">SOCIETY MEMBER</span>
                             ) : (
@@ -2266,26 +2277,28 @@ export function AdminPanel({
                             )}
                           </td>
                           <td>
-                            <span className={u.isVerified ? 'verified-tag true' : 'verified-tag false'}>
-                              {u.isVerified ? '✓ VERIFIED' : 'UNVERIFIED'}
+                            <span className={u.isVerified || isAdm ? 'verified-tag true' : 'verified-tag false'}>
+                              {u.isVerified || isAdm ? '✓ VERIFIED' : 'UNVERIFIED'}
                             </span>
                           </td>
                           <td>
                             <div className="table-actions">
                               <button
                                 type="button"
-                                className={`action-btn ${u.isVerified ? 'warn' : 'primary'}`}
+                                className={`action-btn ${u.isVerified || isAdm ? 'warn' : 'primary'}`}
+                                disabled={isAdm}
                                 onClick={() => handleToggleVerify(u.userId, u.alias, u.isVerified)}
-                                title={u.isVerified ? 'Revoke verified badge' : 'Grant verified blue tick badge'}
+                                title={isAdm ? 'Root Administrator status is permanent' : u.isVerified ? 'Revoke verified badge' : 'Grant verified blue tick badge'}
                               >
                                 <ShieldCheck size={12} />
-                                <span>{u.isVerified ? 'Unverify' : 'Verify'}</span>
+                                <span>{u.isVerified || isAdm ? 'Verified' : 'Verify'}</span>
                               </button>
                               <button
                                 type="button"
                                 className="action-btn warn"
+                                disabled={isAdm}
                                 onClick={() => handleKickUser(u.userId, u.alias)}
-                                title="Disconnect active socket connections"
+                                title={isAdm ? 'Root Administrator cannot be disconnected' : 'Disconnect active socket connections'}
                               >
                                 <UserX size={12} />
                                 <span>Kick</span>
@@ -2293,8 +2306,9 @@ export function AdminPanel({
                               <button
                                 type="button"
                                 className="action-btn danger"
+                                disabled={isAdm}
                                 onClick={() => handleDeleteUser(u.userId, u.alias)}
-                                title="Permanently delete user profile"
+                                title={isAdm ? 'Root Administrator profile cannot be deleted' : 'Permanently delete user profile'}
                               >
                                 <Trash2 size={12} />
                                 <span>Delete</span>

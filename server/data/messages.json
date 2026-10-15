@@ -1,1 +1,47 @@
-[]
+[
+  {
+    "id": "msg_1792063746619_y2wcgfe",
+    "timestamp": 1792063746619,
+    "alias": "James",
+    "userId": "bot_james",
+    "color": "#00f3ff",
+    "avatar": "/uploads/ShadowTalk-IG.jpeg",
+    "isVerified": true,
+    "text": "Hope everyone's having a productive session today! Anyone working on anything interesting? 🚀",
+    "sources": [],
+    "replyTo": null,
+    "reactions": {}
+  },
+  {
+    "id": "msg_1792065911470_10nbijj",
+    "text": "Hello ShadowTalk!",
+    "userId": "usr_bupie4fm0",
+    "alias": "diya",
+    "color": "#00a8ff",
+    "avatar": "data:image/svg+xml;utf8,<svg viewBox=\"0 0 100 100\" xmlns=\"http://www.w3.org/2000/svg\">\n      <circle cx=\"50\" cy=\"50\" r=\"48\" fill=\"%2310b981\"/>\n      <ellipse cx=\"50\" cy=\"98\" rx=\"32\" ry=\"22\" fill=\"%23047857\"/>\n      <circle cx=\"24\" cy=\"42\" r=\"10\" fill=\"%23064e3b\"/>\n      <circle cx=\"76\" cy=\"42\" r=\"10\" fill=\"%23064e3b\"/>\n      <rect x=\"44\" y=\"62\" width=\"12\" height=\"14\" rx=\"3\" fill=\"%23ffedd5\"/>\n      <circle cx=\"50\" cy=\"48\" r=\"22\" fill=\"%23ffedd5\"/>\n      <circle cx=\"43\" cy=\"48\" r=\"2.5\" fill=\"%23064e3b\"/>\n      <circle cx=\"57\" cy=\"48\" r=\"2.5\" fill=\"%23064e3b\"/>\n      <circle cx=\"43\" cy=\"47\" r=\"0.8\" fill=\"%23ffffff\"/>\n      <circle cx=\"57\" cy=\"47\" r=\"0.8\" fill=\"%23ffffff\"/>\n      <path d=\"M45 56 Q50 61 55 56\" stroke=\"%23047857\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/>\n      <path d=\"M30 40 C32 26, 44 20, 64 20 C72 20, 74 28, 70 36 C62 30, 48 30, 36 38 Z\" fill=\"%23064e3b\"/>\n      <path d=\"M30 38 Q50 36 70 38\" stroke=\"%23064e3b\" stroke-width=\"6\" stroke-linecap=\"round\"/>\n    </svg>",
+    "bio": "crazy girl",
+    "status": "Online",
+    "isVerified": true,
+    "timestamp": 1792065911470,
+    "reactions": {},
+    "replyTo": null
+  },
+  {
+    "id": "msg_1792065920347_k49gjr6",
+    "timestamp": 1792065920347,
+    "alias": "James",
+    "userId": "bot_james",
+    "color": "#00f3ff",
+    "avatar": "/uploads/ShadowTalk-IG.jpeg",
+    "isVerified": true,
+    "text": "Hey Diya! 👋 Welcome to ShadowTalk — good to see you in here. How's your day going?",
+    "sources": [],
+    "replyTo": {
+      "id": "msg_1792065911470_10nbijj",
+      "alias": "diya",
+      "color": "#00a8ff",
+      "text": "Hello ShadowTalk!"
+    },
+    "reactions": {}
+  }
+]

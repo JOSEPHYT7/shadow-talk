@@ -12,8 +12,12 @@ function getPersistentSecret() {
   if (process.env.ADMIN_SESSION_SECRET) {
     return process.env.ADMIN_SESSION_SECRET;
   }
-  const secretPath = path.join(__dirname, '../data/.session_secret');
+  const secretDir = path.join(__dirname, '../data');
+  const secretPath = path.join(secretDir, '.session_secret');
   try {
+    if (!fs.existsSync(secretDir)) {
+      fs.mkdirSync(secretDir, { recursive: true });
+    }
     if (fs.existsSync(secretPath)) {
       const saved = fs.readFileSync(secretPath, 'utf8').trim();
       if (saved && saved.length >= 32) return saved;
@@ -22,7 +26,8 @@ function getPersistentSecret() {
     fs.writeFileSync(secretPath, newSecret, 'utf8');
     return newSecret;
   } catch {
-    return 'shadowtalk_sec_core_admin_secret_key_8f29d47a_9b61_48e7_bc32_fa5e01d29381';
+    // Ephemeral dynamic 256-bit cryptographic fallback
+    return crypto.randomBytes(32).toString('hex');
   }
 }
 

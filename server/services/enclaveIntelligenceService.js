@@ -13,6 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const PDFDocument = require('pdfkit');
+const { validateSafeExternalUrl } = require('../utils/ssrfGuard');
 
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) {
@@ -381,6 +382,9 @@ class EnclaveIntelligenceService {
     let isLiveFetchSuccess = false;
 
     try {
+      // Validate outbound URL against private LAN / cloud metadata SSRF
+      await validateSafeExternalUrl(gatewayUrl);
+
       const response = await fetch(gatewayUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; rv:109.0) Gecko/20100101 Firefox/115.0 Tor/12.5',
@@ -410,8 +414,11 @@ class EnclaveIntelligenceService {
         .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
         .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
         .replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, '')
-        .replace(/on\w+="[^"]*"/gi, '')
-        .replace(/on\w+='[^']*'/gi, '');
+        .replace(/<meta\b[^>]*>/gi, '')
+        .replace(/on\w+\s*=\s*(['"]).*?\1/gi, '')
+        .replace(/on\w+\s*=\s*[^\s>]+/gi, '')
+        .replace(/javascript:/gi, 'blocked-javascript:')
+        .replace(/data:text\/html/gi, 'blocked-data:');
     } else {
       // Build authentic Enclave OpSec Snapshot view
       const archiveTitle = matchedArchive?.title || 'Decentralized Tor Hidden Service';

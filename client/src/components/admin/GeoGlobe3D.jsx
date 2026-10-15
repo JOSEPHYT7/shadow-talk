@@ -147,6 +147,16 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
     }
   }, []);
 
+  const checkIsAdmin = useCallback((v) => Boolean(
+    v?.isCurrentAdmin ||
+    v?.role === 'admin' ||
+    v?.isAdmin ||
+    v?.userTier === 'admin' ||
+    v?.alias?.toLowerCase() === 'joseph' ||
+    v?.alias?.toLowerCase() === 'joseph_creator' ||
+    v?.alias?.toLowerCase() === 'administrator'
+  ), []);
+
   // Generate high-resolution circular canvas texture for the 3D avatar badge
   const createAvatarTexture = useCallback((v, isSelected) => {
     const canvas = document.createElement('canvas');
@@ -154,7 +164,7 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
     canvas.height = 256;
     const ctx = canvas.getContext('2d');
 
-    const isAdmin = Boolean(v.isCurrentAdmin || v.role === 'admin' || v.isAdmin);
+    const isAdmin = checkIsAdmin(v);
     const isMember = Boolean(!isAdmin && (v.userTier === 'member' || v.isSocietyMember));
     const strokeColor = isSelected ? '#f97316' : isAdmin ? '#ef4444' : isMember ? '#ffd700' : '#00f3ff';
 
@@ -290,7 +300,7 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
       const tangentX = new THREE.Vector3().crossVectors(normal, up).normalize();
       const tangentY = new THREE.Vector3().crossVectors(normal, tangentX).normalize();
 
-      const hasAdmin = cluster.visitors.some((v) => v.isCurrentAdmin || v.role === 'admin' || v.isAdmin);
+      const hasAdmin = cluster.visitors.some(checkIsAdmin);
       const hasMember = cluster.visitors.some((v) => v.userTier === 'member' || v.isSocietyMember);
       const clusterColor = hasAdmin ? 0xef4444 : hasMember ? 0xffd700 : 0x00f3ff;
 
@@ -342,7 +352,7 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
         const direction = topPosition.clone().sub(groundOrigin).normalize();
         const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
 
-        const isAdmin = Boolean(d.isCurrentAdmin || d.role === 'admin' || d.isAdmin);
+        const isAdmin = checkIsAdmin(d);
         const isMember = Boolean(!isAdmin && (d.userTier === 'member' || d.isSocietyMember));
         const color = isAdmin ? 0xef4444 : isMember ? 0xffd700 : 0x00f3ff;
         const isSelected = selectedVisitor?.id === d.id;
@@ -402,7 +412,7 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
 
     // 2. Pulsing Radar Sensor Rings on ground coordinates (unique locations)
     const uniqueRingLocations = clusters.map((c) => {
-      const hasAdmin = c.visitors.some((v) => v.isCurrentAdmin || v.role === 'admin' || v.isAdmin);
+      const hasAdmin = c.visitors.some(checkIsAdmin);
       const hasMember = c.visitors.some((v) => v.userTier === 'member' || v.isSocietyMember);
       return {
         latitude: c.lat,
@@ -719,7 +729,7 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
   // Filter visitors by roster tab and search query
   const filteredVisitors = useMemo(() => {
     return visitors.filter((v) => {
-      const isAdmin = Boolean(v.isCurrentAdmin || v.role === 'admin' || v.isAdmin);
+      const isAdmin = checkIsAdmin(v);
       const isMember = Boolean(!isAdmin && (v.userTier === 'member' || v.isSocietyMember));
 
       if (filterType === 'members' && !isMember) return false;
@@ -734,18 +744,16 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
         (v.ip && v.ip.toLowerCase().includes(q))
       );
     });
-  }, [visitors, filterType, searchQuery]);
+  }, [visitors, filterType, searchQuery, checkIsAdmin]);
 
   const membersCount = visitors.filter(
-    (v) => !v.isCurrentAdmin && !v.isAdmin && (v.userTier === 'member' || v.isSocietyMember)
+    (v) => !checkIsAdmin(v) && (v.userTier === 'member' || v.isSocietyMember)
   ).length;
   const normalUsersCount = visitors.filter(
-    (v) => !v.isCurrentAdmin && !v.isAdmin && v.userTier !== 'member' && !v.isSocietyMember
+    (v) => !checkIsAdmin(v) && v.userTier !== 'member' && !v.isSocietyMember
   ).length;
 
-  const isSelectedAdmin = Boolean(
-    selectedVisitor?.isCurrentAdmin || selectedVisitor?.role === 'admin' || selectedVisitor?.isAdmin
-  );
+  const isSelectedAdmin = checkIsAdmin(selectedVisitor);
   const isSelectedMember = Boolean(
     !isSelectedAdmin && (selectedVisitor?.userTier === 'member' || selectedVisitor?.isSocietyMember)
   );
@@ -1157,7 +1165,7 @@ export default function GeoGlobe3D({ adminToken, serverUrl }) {
           ) : (
             filteredVisitors.map((v) => {
               const isSelected = selectedVisitor?.id === v.id;
-              const isAdmin = Boolean(v.isCurrentAdmin || v.role === 'admin' || v.isAdmin);
+              const isAdmin = checkIsAdmin(v);
               const isMember = Boolean(!isAdmin && (v.userTier === 'member' || v.isSocietyMember));
 
               return (

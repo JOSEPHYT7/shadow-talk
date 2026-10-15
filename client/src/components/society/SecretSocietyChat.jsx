@@ -36,6 +36,7 @@ import {
   QrCode
 } from 'lucide-react';
 import { VerifiedBlueTick, renderAvatar } from '../../App';
+import { sanitizeHtml } from '../../utils/sanitizeHtml';
 import './SecretSocietyChat.css';
 
 const QUICK_REACTIONS = ['👍', '🔥', '💡', '🛡️'];
@@ -2444,7 +2445,7 @@ export default function SecretSocietyChat({
                     {darkWebData.content?.html ? (
                       <div
                         className="sandbox-sanitized-html"
-                        dangerouslySetInnerHTML={{ __html: darkWebData.content.html }}
+                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(darkWebData.content.html) }}
                       />
                     ) : (
                       <div className="sandbox-raw-text">
@@ -2693,7 +2694,7 @@ export default function SecretSocietyChat({
                   ) : darkWebData?.content ? (
                     <div
                       className="inapp-sandbox-html"
-                      dangerouslySetInnerHTML={{ __html: darkWebData.content }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(typeof darkWebData.content === 'string' ? darkWebData.content : darkWebData.content?.html || '') }}
                     />
                   ) : (
                     <div className="inapp-sandbox-fallback">

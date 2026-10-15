@@ -37,6 +37,17 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 
+// Security & Defense Middlewares
+const {
+  globalApiLimiter,
+  authLimiter,
+  otpSendLimiter,
+  proxyLimiter
+} = require('./middleware/rateLimiter');
+const { sanitizeInputMiddleware } = require('./middleware/sanitizeInput');
+const { validateSafeExternalUrl } = require('./utils/ssrfGuard');
+const { verifyAdminToken } = require('./admin/adminAuthSession');
+
 // Utility to safely delete an uploaded file from disk
 function deleteUploadedFile(fileUrl) {
   if (!fileUrl || typeof fileUrl !== 'string') return;
@@ -60,28 +71,84 @@ function deleteUploadedFile(fileUrl) {
 const app = express();
 const server = http.createServer(app);
 
-// Configure Socket.io with 100MB buffer and generous timeouts to prevent mobile/cloud disconnections
+// Whitelist authorized origins
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:5000',
+  'http://127.0.0.1:5000',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim()) : []),
+  ...(process.env.CLIENT_URL ? [process.env.CLIENT_URL.trim()] : [])
+].filter(Boolean);
+
+const checkCorsOrigin = (origin, callback) => {
+  // Allow requests with no origin (e.g. mobile apps, curl, same-origin)
+  if (!origin) return callback(null, true);
+  if (allowedOrigins.includes(origin)) {
+    return callback(null, true);
+  }
+  // In development, also allow localhost with any port
+  if (process.env.NODE_ENV !== 'production' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+    return callback(null, true);
+  }
+  return callback(new Error(`CORS blocked: Origin '${origin}' is not authorized.`), false);
+};
+
+// Configure Socket.io with strict CORS and robust buffers
 const io = new Server(server, {
   cors: {
-    origin: (origin, callback) => callback(null, true),
+    origin: checkCorsOrigin,
     credentials: true,
     methods: ['GET', 'POST']
   },
-  maxHttpBufferSize: 1e8, // 100 MB
+  maxHttpBufferSize: 5e7, // 50 MB
   pingInterval: 25000,
   pingTimeout: 30000
 });
 
-// Configure CORS to support credentialed cross-origin requests (HttpOnly cookies + headers)
+// Disable Express fingerprinting header
+app.disable('x-powered-by');
+
+// Global HTTP Security Headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(self), geolocation=(self)');
+  if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  }
+  next();
+});
+
+// Configure CORS to support credentialed cross-origin requests from whitelisted origins
 app.use(cors({
-  origin: (origin, callback) => callback(null, true),
+  origin: checkCorsOrigin,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-requested-with']
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-requested-with', 'x-cli-secret']
 }));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Scalable body limits & input sanitization
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+app.use(sanitizeInputMiddleware);
+
+// Mount global rate limiter on all API routes
+app.use('/api', globalApiLimiter);
+
+// Secure static uploads with execution defense and dotfile prevention
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  const ext = path.extname(req.path).toLowerCase();
+  if (['.html', '.htm', '.xhtml', '.svg', '.xml', '.shtml'].includes(ext)) {
+    res.setHeader('Content-Disposition', 'attachment');
+  }
+  next();
+}, express.static(path.join(__dirname, 'uploads'), { dotfiles: 'ignore' }));
 
 // Health check endpoint (used by 24/7 James keep-alive heartbeat)
 app.get('/health', (req, res) => {
@@ -133,15 +200,21 @@ app.use('/upload', uploadRouter);
 const { sendOtp, verifyOtp, updateEmailConfig, isConfigured } = require('./otpService');
 
 app.get('/api/otp/status', (req, res) => {
+  const rawEmail = process.env.EMAIL_USER || '';
+  let maskedEmail = null;
+  if (rawEmail && rawEmail.includes('@')) {
+    const [user, domain] = rawEmail.split('@');
+    maskedEmail = user.slice(0, 2) + '***@' + domain;
+  }
   res.json({
     configured: isConfigured(),
-    emailUser: process.env.EMAIL_USER || null
+    emailUser: maskedEmail
   });
 });
 
-app.post('/api/otp/send', async (req, res) => {
+app.post('/api/otp/send', otpSendLimiter, async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email } = req.body || {};
     const result = await sendOtp(email);
     res.json(result);
   } catch (err) {
@@ -151,7 +224,7 @@ app.post('/api/otp/send', async (req, res) => {
 
 app.post('/api/otp/verify', (req, res) => {
   try {
-    const { email, otp, alias, userId } = req.body;
+    const { email, otp, alias, userId } = req.body || {};
     const result = verifyOtp(email, otp);
     if (result.verified && (alias || userId)) {
       io.emit('userVerified', { alias, email: result.email, isVerified: true });
@@ -167,8 +240,14 @@ app.post('/api/otp/verify', (req, res) => {
 });
 
 app.post('/api/otp/config', (req, res) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader ? authHeader.replace(/^Bearer\s+/i, '').trim() : '';
+  if (!token || !verifyAdminToken(token)) {
+    return res.status(403).json({ success: false, error: 'Unauthorized: Admin authentication required to configure mail credentials.' });
+  }
+
   try {
-    const { emailUser, appPassword } = req.body;
+    const { emailUser, appPassword } = req.body || {};
     const result = updateEmailConfig(emailUser, appPassword);
     res.json(result);
   } catch (err) {
@@ -189,6 +268,11 @@ app.post('/api/membership/apply', async (req, res) => {
 });
 
 app.get('/api/membership/applications', (req, res) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader ? authHeader.replace(/^Bearer\s+/i, '').trim() : '';
+  if (!token || !verifyAdminToken(token)) {
+    return res.status(403).json({ error: 'Unauthorized: Admin authentication required to inspect membership applications.' });
+  }
   res.json(loadApplications());
 });
 
@@ -559,7 +643,7 @@ app.get('/api/maintenance/status', (req, res) => {
   res.json(getMaintenanceState());
 });
 
-app.post('/api/maintenance/override-login', (req, res) => {
+app.post('/api/maintenance/override-login', authLimiter, (req, res) => {
   const { password } = req.body || {};
   const clientIp = getClientIp(req);
   if (!password || typeof password !== 'string') {
@@ -618,14 +702,12 @@ app.get(['/admin', '/admin-panel', '/secret-admin', '/admin/dashboard'], (req, r
 // --- Clear Chat Maintenance Endpoint (used by clearChat.js and Admin operations) ---
 app.post('/api/chat/clear', (req, res) => {
   try {
-    const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-                     req.socket?.remoteAddress ||
-                     req.ip ||
-                     '127.0.0.1';
-    const isLocal = clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === '::ffff:127.0.0.1' || clientIp.includes('127.0.0.1');
+    // Only trust raw socket remoteAddress for local CLI connection to prevent X-Forwarded-For header spoofing
+    const socketIp = req.socket?.remoteAddress || '';
+    const isDirectLocalSocket = (socketIp === '127.0.0.1' || socketIp === '::1' || socketIp === '::ffff:127.0.0.1') && !req.headers['x-forwarded-for'];
 
     const authHeader = req.headers['authorization'];
-    let authorized = isLocal;
+    let authorized = isDirectLocalSocket;
     if (!authorized && authHeader) {
       const token = authHeader.replace(/^Bearer\s+/i, '').trim();
       try {
@@ -635,7 +717,7 @@ app.post('/api/chat/clear', (req, res) => {
     }
 
     if (!authorized) {
-      return res.status(403).json({ error: 'Unauthorized: Chat clearance is restricted to localhost CLI or authenticated administrators.' });
+      return res.status(403).json({ error: 'Unauthorized: Chat clearance is restricted to local system CLI or authenticated administrators.' });
     }
 
     const keepUploads = req.body?.keepUploads === true;
@@ -681,22 +763,27 @@ app.post('/api/chat/clear', (req, res) => {
 });
 
 // --- Internal Protected Dark Web / Onion Sandbox Proxy Endpoint ---
-app.get('/api/darkweb/sandbox-fetch', async (req, res) => {
+app.get('/api/darkweb/sandbox-fetch', proxyLimiter, async (req, res) => {
   try {
     const rawUrl = req.query.url;
     if (!rawUrl) {
       return res.status(400).json({ success: false, error: 'URL query parameter required' });
     }
+
+    // SSRF Check: strictly block private and cloud metadata IPs
+    const serverPort = process.env.PORT || 5000;
+    await validateSafeExternalUrl(rawUrl, serverPort);
+
     const result = await enclaveIntel.fetchDarkWebUrl(rawUrl);
     res.json(result);
   } catch (err) {
     console.error('[Dark Web Sandbox Fetch Error]:', err.message);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(err.message.includes('SSRF Guard') ? 403 : 500).json({ success: false, error: err.message });
   }
 });
 
-// Live In-App Browser Renderer & Proxy (Bypasses X-Frame-Options & CSP for in-app browser)
-app.get('/api/browser/render', async (req, res) => {
+// Live In-App Browser Renderer & Proxy (Protected against SSRF & internal network scanning)
+app.get('/api/browser/render', proxyLimiter, async (req, res) => {
   try {
     let targetUrl = req.query.url;
     if (!targetUrl) return res.status(400).send('URL query parameter required');
@@ -706,6 +793,10 @@ app.get('/api/browser/render', async (req, res) => {
     if (fetchUrl.includes('.onion')) {
       fetchUrl = fetchUrl.replace(/([a-z0-9-]+)\.onion(\/|$|:)/i, '$1.onion.pet$2');
     }
+
+    // SSRF Check: strictly block loopback, cloud metadata (169.254.169.254), and internal IPs
+    const serverPort = process.env.PORT || 5000;
+    await validateSafeExternalUrl(fetchUrl, serverPort);
 
     const response = await fetch(fetchUrl, {
       headers: {
@@ -720,12 +811,14 @@ app.get('/api/browser/render', async (req, res) => {
     if (!contentType.includes('text/html')) {
       const buffer = await response.arrayBuffer();
       res.setHeader('Content-Type', contentType);
+      res.setHeader('X-Content-Type-Options', 'nosniff');
       return res.send(Buffer.from(buffer));
     }
 
     let html = await response.text();
     html = html.replace(/<meta[^>]*http-equiv=["']?X-Frame-Options["']?[^>]*>/gi, '');
     html = html.replace(/<meta[^>]*http-equiv=["']?Content-Security-Policy["']?[^>]*>/gi, '');
+    html = html.replace(/<meta[^>]*http-equiv=["']?refresh["']?[^>]*>/gi, '');
 
     const parsedOrigin = new URL(fetchUrl).origin;
     if (html.includes('<head>')) {
@@ -739,6 +832,7 @@ app.get('/api/browser/render', async (req, res) => {
     res.removeHeader('X-Frame-Options');
     res.removeHeader('Content-Security-Policy');
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.send(html);
   } catch (err) {
@@ -1089,6 +1183,20 @@ io.on('connection', (socket) => {
   // Handle new message (text, files, links, replies)
   socket.on('message', (msg) => {
     if (!msg) return;
+
+    // Rate Limiting on socket message ingestion (max 5 messages per second per socket)
+    const now = Date.now();
+    if (!socket._msgThrottle) socket._msgThrottle = { count: 0, resetTime: now + 1000 };
+    if (now > socket._msgThrottle.resetTime) {
+      socket._msgThrottle = { count: 1, resetTime: now + 1000 };
+    } else {
+      socket._msgThrottle.count += 1;
+      if (socket._msgThrottle.count > 5) {
+        socket.emit('errorNotice', { message: 'Message rate limit exceeded. Transmissions throttled.' });
+        return;
+      }
+    }
+
     const senderUser = activeUsers.get(socket.id);
     const resolvedUserId = msg.userId || (senderUser ? senderUser.userId : null);
 
@@ -1097,22 +1205,32 @@ io.on('connection', (socket) => {
     if (cleanBio && PROFANITY_REGEX.test(cleanBio)) {
       cleanBio = isCreatorAlias(msg.alias) ? 'Creator & Architect of Shadow Talk' : 'Encrypted mesh developer';
     }
+    if (cleanBio && typeof cleanBio === 'string' && cleanBio.length > 200) {
+      cleanBio = cleanBio.slice(0, 200);
+    }
 
-    const publicAlias = maskAdminDisplayAlias(msg.alias || (senderUser ? senderUser.alias : ''));
+    let publicAlias = maskAdminDisplayAlias(msg.alias || (senderUser ? senderUser.alias : ''));
+    if (publicAlias && publicAlias.length > 30) {
+      publicAlias = publicAlias.slice(0, 30);
+    }
+
+    let cleanText = msg.text;
+    if (cleanText && typeof cleanText === 'string') {
+      if (cleanText.length > 5000) cleanText = cleanText.slice(0, 5000);
+      cleanText = cleanText.replace(/@joseph_creator\b/gi, '@joseph');
+    }
 
     let message = {
       ...msg,
       userId: resolvedUserId,
       alias: publicAlias,
       bio: cleanBio,
+      text: cleanText,
       id: msg.id || ('msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9)),
       timestamp: msg.timestamp || Date.now(),
       reactions: msg.reactions || {}
     };
 
-    if (message.text && typeof message.text === 'string') {
-      message.text = message.text.replace(/@joseph_creator\b/gi, '@joseph');
-    }
     if (message.replyTo && message.replyTo.alias) {
       message.replyTo.alias = maskAdminDisplayAlias(message.replyTo.alias);
       if (message.replyTo.text && typeof message.replyTo.text === 'string') {
@@ -1164,6 +1282,10 @@ io.on('connection', (socket) => {
       messages[existingIdx] = { ...messages[existingIdx], ...message };
     } else {
       messages.push(message);
+      // Large Scale User Protection: Cap maximum messages in RAM and disk to 1000 items
+      if (messages.length > 1000) {
+        messages.splice(0, messages.length - 1000);
+      }
     }
     saveMessages(messages);
 
@@ -1993,6 +2115,21 @@ CRITICAL IDENTITY & BEHAVIOR RULES:
       saveSocietyMessages(msgs);
       io.to('secret_society_room').emit('societyMessageReaction', { messageId, reactions: msg.reactions });
     }
+  });
+});
+
+// Centralized Express Error Handling Middleware (prevents leaking internal stack traces)
+app.use((err, req, res, next) => {
+  if (res.headersSent) {
+    return next(err);
+  }
+  const isDev = process.env.NODE_ENV !== 'production';
+  console.error('[Server Error Handler]:', err.message);
+  if (isDev && err.stack) console.error(err.stack);
+
+  res.status(err.status || 500).json({
+    success: false,
+    error: isDev ? err.message : 'Internal Server Error'
   });
 });
 

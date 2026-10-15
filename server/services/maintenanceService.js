@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const configFilePath = path.join(__dirname, '..', 'data', 'maintenance_config.json');
 
@@ -92,12 +93,16 @@ function setMaintenanceState({ enabled, message, headline, estimatedEnd, updated
   const nextEnabled = typeof enabled === 'boolean' ? enabled : current.enabled;
 
   let resolvedPassword = current.overridePassword;
+  let resolvedPasswordHash = current.overridePasswordHash || (current.overridePassword ? crypto.createHash('sha256').update(current.overridePassword.trim()).digest('hex') : null);
+
   if (nextEnabled) {
     // Generate fresh random 10-character key on every engagement, or use specified key
     resolvedPassword = overridePassword || generateMaintenanceOverridePassword();
+    resolvedPasswordHash = crypto.createHash('sha256').update(resolvedPassword.trim()).digest('hex');
   } else {
     // Clear password when maintenance is disengaged
     resolvedPassword = null;
+    resolvedPasswordHash = null;
   }
 
   const updated = {
@@ -108,6 +113,7 @@ function setMaintenanceState({ enabled, message, headline, estimatedEnd, updated
     headline: typeof headline === 'string' && headline.trim() ? headline.trim() : current.headline,
     estimatedEnd: estimatedEnd || null,
     overridePassword: resolvedPassword,
+    overridePasswordHash: resolvedPasswordHash,
     updatedAt: Date.now(),
     updatedBy
   };
@@ -125,8 +131,22 @@ function setMaintenanceState({ enabled, message, headline, estimatedEnd, updated
 function verifyMaintenanceOverridePassword(candidate) {
   if (!candidate || typeof candidate !== 'string') return false;
   const current = getMaintenanceState(true);
-  if (!current.enabled || !current.overridePassword) return false;
-  return current.overridePassword.trim() === candidate.trim();
+  if (!current.enabled) return false;
+
+  const targetHash = current.overridePasswordHash || (current.overridePassword ? crypto.createHash('sha256').update(current.overridePassword.trim()).digest('hex') : null);
+  if (!targetHash) return false;
+
+  const candidateHash = crypto.createHash('sha256').update(candidate.trim()).digest('hex');
+
+  try {
+    const bufTarget = Buffer.from(targetHash, 'hex');
+    const bufCandidate = Buffer.from(candidateHash, 'hex');
+
+    if (bufTarget.length !== bufCandidate.length) return false;
+    return crypto.timingSafeEqual(bufTarget, bufCandidate);
+  } catch (e) {
+    return false;
+  }
 }
 
 module.exports = {
