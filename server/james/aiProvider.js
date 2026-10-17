@@ -37,8 +37,12 @@ class OpenRouterProvider extends BaseAIProvider {
   constructor(config = {}) {
     super(config);
     this.apiKey = config.apiKey || process.env.OPENROUTER_API_KEY;
-    // Default to DeepSeek V4 Flash Free as configured in models.js
-    this.model = config.model || process.env.JAMES_MODEL || DEFAULT_MODEL;
+    // Default to DeepSeek V4 Flash as configured in models.js
+    let configuredModel = config.model || process.env.JAMES_MODEL || DEFAULT_MODEL;
+    if (configuredModel === 'deepseek/deepseek-v4-flash-0731:free') {
+      configuredModel = 'deepseek/deepseek-v4-flash';
+    }
+    this.model = configuredModel;
     this.baseUrl = config.baseUrl || 'https://openrouter.ai/api/v1/chat/completions';
     // 85s timeout so free tier queue on OpenRouter never aborts prematurely
     this.timeoutMs = config.timeoutMs || 85000;
@@ -64,7 +68,15 @@ class OpenRouterProvider extends BaseAIProvider {
           ...FALLBACK_CHAIN
         ];
 
-    const uniqueCandidates = candidateModels.filter((m, idx, arr) => m && arr.indexOf(m) === idx);
+    // Sanitize any legacy / retired model slugs (e.g. 0731:free)
+    const sanitizeSlug = (slug) => {
+      if (slug === 'deepseek/deepseek-v4-flash-0731:free') return 'deepseek/deepseek-v4-flash';
+      return slug;
+    };
+
+    const uniqueCandidates = candidateModels
+      .map(sanitizeSlug)
+      .filter((m, idx, arr) => m && arr.indexOf(m) === idx);
 
     let lastError = null;
 
