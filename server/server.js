@@ -72,28 +72,64 @@ const app = express();
 const server = http.createServer(app);
 
 // Whitelist authorized origins
-const allowedOrigins = [
+const normalizeOrigin = (url) => {
+  if (!url || typeof url !== 'string') return '';
+  return url.trim().replace(/\/+$/, '').toLowerCase();
+};
+
+const defaultAllowedOrigins = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://localhost:5000',
   'http://127.0.0.1:5000',
   'http://localhost:3000',
   'http://127.0.0.1:3000',
-  ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim()) : []),
-  ...(process.env.CLIENT_URL ? [process.env.CLIENT_URL.trim()] : [])
+  'https://shadow-talk-ten.vercel.app',
+  'https://shadow-talk.vercel.app',
+  'https://shadow-talk-kryk.onrender.com'
+];
+
+const envAllowedOrigins = [
+  ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map(normalizeOrigin) : []),
+  ...(process.env.CLIENT_URL ? [normalizeOrigin(process.env.CLIENT_URL)] : [])
 ].filter(Boolean);
 
+const allowedOrigins = Array.from(new Set([...defaultAllowedOrigins.map(normalizeOrigin), ...envAllowedOrigins]));
+
 const checkCorsOrigin = (origin, callback) => {
-  // Allow requests with no origin (e.g. mobile apps, curl, same-origin)
+  // Allow requests with no origin (e.g. mobile apps, curl, same-origin, server-to-server)
   if (!origin) return callback(null, true);
-  if (allowedOrigins.includes(origin)) {
+
+  const cleanOrigin = normalizeOrigin(origin);
+
+  // 1. Check exact match in configured whitelist or wildcard '*'
+  if (allowedOrigins.includes(cleanOrigin) || allowedOrigins.includes('*')) {
     return callback(null, true);
   }
-  // In development, also allow localhost with any port
-  if (process.env.NODE_ENV !== 'production' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+
+  // 2. Allow any localhost / 127.0.0.1 on any port (HTTP or HTTPS)
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(cleanOrigin)) {
     return callback(null, true);
   }
-  return callback(new Error(`CORS blocked: Origin '${origin}' is not authorized.`), false);
+
+  // 3. Allow Vercel deployments (production domain, custom subdomains, preview branch deployments)
+  if (/^https:\/\/[a-z0-9_-]+\.vercel\.app$/.test(cleanOrigin)) {
+    return callback(null, true);
+  }
+
+  // 4. Allow Render deployments (backend & frontend)
+  if (/^https:\/\/[a-z0-9_-]+\.onrender\.com$/.test(cleanOrigin)) {
+    return callback(null, true);
+  }
+
+  // 5. Allow hybrid/mobile app schemes (Capacitor, Ionic, Electron, Android/iOS WebViews, file:)
+  if (/^(capacitor|ionic|file):\/\//i.test(cleanOrigin) || cleanOrigin === 'null') {
+    return callback(null, true);
+  }
+
+  // Deny gracefully without throwing an unhandled 500 error in Express
+  console.warn(`[CORS Blocked]: Origin '${origin}' is not authorized.`);
+  return callback(null, false);
 };
 
 // Configure Socket.io with strict CORS and robust buffers
@@ -111,6 +147,27 @@ const io = new Server(server, {
 // Disable Express fingerprinting header
 app.disable('x-powered-by');
 
+// Configure CORS to support credentialed cross-origin requests from whitelisted origins
+const corsOptions = {
+  origin: checkCorsOrigin,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH', 'HEAD'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'x-requested-with',
+    'x-cli-secret',
+    'Accept',
+    'Origin',
+    'Cache-Control',
+    'Pragma'
+  ],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  optionsSuccessStatus: 204
+};
+app.use(cors(corsOptions));
+
 // Global HTTP Security Headers
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -123,14 +180,6 @@ app.use((req, res, next) => {
   }
   next();
 });
-
-// Configure CORS to support credentialed cross-origin requests from whitelisted origins
-app.use(cors({
-  origin: checkCorsOrigin,
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-requested-with', 'x-cli-secret']
-}));
 
 // Scalable body limits & input sanitization
 app.use(express.json({ limit: '2mb' }));

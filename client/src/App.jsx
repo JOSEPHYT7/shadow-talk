@@ -139,9 +139,11 @@ const CANDIDATE_ROLE_OPTIONS = [
 
 const CANDIDATE_AGE_OPTIONS = Array.from({ length: 60 }, (_, i) => String(16 + i)).concat(['75+']);
 
-const SERVER_URL = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-  ? 'http://localhost:5000'
-  : 'https://shadow-talk-kryk.onrender.com';
+const SERVER_URL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_SERVER_URL)
+  ? import.meta.env.VITE_SERVER_URL
+  : (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:5000'
+    : 'https://shadow-talk-kryk.onrender.com');
 
 const SOCKET_URL = SERVER_URL;
 const UPLOAD_URL = `${SERVER_URL}/upload`;
